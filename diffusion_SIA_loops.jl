@@ -92,11 +92,12 @@ end
     qx   = zeros(Float64, nx+1,ny)
     qy   = zeros(Float64, nx, ny+1)
 
+    dt = 0.0
     # time loop
     for it = 1:nt
         dt = min(dx^2, dy^2) ./(ρg/3μ.*maximum(H.^n))./4.1
-        @btime update_H!($H, $qx, $qy, $rock, $dx, $dy, $dt, $ρg, $μ, $n, $mode)
-
+        update_H!(H, qx, qy, rock, dx, dy, dt, ρg, μ, n, mode)
+        
         if (it % nvis)==0
             mass = sum(H)*dx*dy
             p1 = heatmap(xc, yc, H'; xlims = (0,lx), ylims = (0,ly), aspect_ratio = 1.0, xlabel = "lx", ylabel = "ly", title = "time = $(round(it*dt,digits=1))", c=:turbo)
@@ -104,6 +105,8 @@ end
             display(plot(p1,p2,layout=(1,2)))
         end
     end 
+
+    @btime update_H!($H, $qx, $qy, $rock, $dx, $dy, $dt, $ρg, $μ, $n, $mode)
 end
 
 nonlinear_diffusion_1D()
