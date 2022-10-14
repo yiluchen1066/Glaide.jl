@@ -1,4 +1,4 @@
-using Plots,Plots.Measures,Printf, BenchmarkTools
+using Plots,Plots.Measures,Printf, CUDA
 default(size=(2500,1000),framestyle=:box,label=false,grid=false,margin=10mm,lw=6,labelfontsize=20,tickfontsize=20,titlefontsize=24)
 @views avx(A) = 0.5.*(A[1:end-1,:].+A[2:end,:])
 @views avy(A) = 0.5.*(A[:,1:end-1].+A[:,2:end])
@@ -6,15 +6,13 @@ default(size=(2500,1000),framestyle=:box,label=false,grid=false,margin=10mm,lw=6
 function update_flux_v1!(qx, qy, H, rock, dx, dy, ρg, μ, n)
     nx, ny = size(H)
 
-    Threads.@threads for j = 1:ny
-        for i = 1:nx
-            if i <= nx-1
-                qx[i+1,j] = ρg/3μ * ((H[i+1,j]+H[i,j])/2)^n * (H[i+1,j]+rock[i+1, j]-H[i,j]-rock[i,j])/dx
-            end 
-            if j <= ny-1
-                qy[i,j+1] = ρg/3μ * ((H[i,j+1]+H[i,j])/2)^n * (H[i,j+1]+rock[i, j+1]-H[i,j]-rock[i,j])/dy
-            end 
-        end 
+    ix = (blockIdx().x-1) * blockDim().x +threadIdx().x
+    iy = (blockIdx().y-1) * blockDim().y +threadIdx().y
+    if ix <= nx-1 
+        qx[ix+1, iy] = ρg/3μ * ((H[ix+1,iy]+H[ix,iy])/2)^n * (H[ix+1,iy]+rock[ix+1, iy]-H[ix,iy]-rock[ix,iy])/dx
+    end 
+    if iy <= ny-1 
+        qy[ix, iy+1] = ρg/3μ * ((H[ix,iy+1]+H[ix,iy])/2)^n * (H[ix,iy+1]+rock[ix, iy+1]-H[ix,iy]-rock[ix,iy])/dy
     end 
 
     return 
@@ -27,15 +25,14 @@ function update_flux_v2!(qx, qy, H, rock, dx, dy, ρg, μ, n)
     #qy[:,2:end-1] .= ρg/3μ .* (1.0./(1+n).*diff(H.^(n+1), dims=2)./dy .+ avy(H.^n) .* diff(rock, dims =2 )./dy)
     nx, ny = size(H) 
 
-    Threads.@threads for j = 1:ny
-        for i = 1:nx
-           if i <= nx-1
-                qx[i+1, j] = ρg/3μ * (1.0/(1+n)*(H.^(n+1)[i+1,j]-H.^(n+1)[i,j])/dx + ((H[i+1,j]+H[i,j])/2)^n*(rock[i+1,j]-rock[i,j])/dx)
-           end 
-           if j <= ny -1 
-                qy[i,j+1] = ρg/3μ * (1.0/(1+n)*(H.^(n+1)[i,j+1]-H.^(n+1)[i,j])/dy + ((H[i,j+1]+H[i,j])/2)^n*(rock[i,j+1]-rock[i,j])/dy)
-           end 
-        end 
+    ix = (blockIdx().x-1) * blockDim().x +threadIdx().x
+    iy = (blockIdx().y-1) * blockDim().y +threadIdx().y 
+
+    if ix <= nx-1
+        qx[ix+1, iy] = ρg/3μ * (1.0/(1+n)*(H.^(n+1)[ix+1,iy]-H.^(n+1)[ix,iy])/dx + ((H[ix+1,iy]+H[ix,iy])/2)^n*(rock[ix+1,iy]-rock[ix,iy])/dx)
+    end 
+    if iy <= ny -1 
+        qy[ix,iy+1] = ρg/3μ * (1.0/(1+n)*(H.^(n+1)[ix,iy+1]-H.^(n+1)[ix,iy])/dy + ((H[ix,iy+1]+H[ix,iy])/2)^n*(rock[ix,iy+1]-rock[ix,iy])/dy)
     end 
 
     return 
@@ -46,27 +43,13 @@ function update_height!(qx, qy, H, dx, dy, dt)
     #H .+= dt.*(diff(qx, dims=1)./dx .+ diff(qy, dims=2)./dy)
     nx, ny = size(H) 
 
-    Threads.@threads for j = 1:ny 
-        for i = 1:nx
-            H[i,j] += dt*((qx[i+1,j]-qx[i,j])/dx+(qy[i,j+1]-qy[i,j])/dy)
-        end 
-    end 
+    ix = (blockIdx().x-1)*blockDim().x+threadIdx().x
+    iy = (blockIdx().y-1)*blockDim().y+threadIdx().y
+
+    H[ix, iy] += dt*((qx[ix+1,iy]-qx[ix,iy])/dx+(qy[ix,iy+1]-qy[ix,iy])/dy)
 
     return 
 end 
-
-function update_H!(H, qx, qy, rock, dx, dy, dt, ρg, μ, n, mode)
-
-    #dt = min(dx^2, dy^2) ./(ρg/3μ.*maximum(H.^n))./4.1
-    if mode == :v1
-        update_flux_v1!(qx, qy, H, rock, dx, dy, ρg, μ, n)
-    else 
-        update_flux_v2!(qx, qy, H, rock, dx, dy, ρg, μ, n)
-    end              
-    update_height!(qx, qy, H, dx, dy, dt)
-
-    return 
-end
 
 @views function nonlinear_diffusion_1D()
     # physics
@@ -75,8 +58,8 @@ end
     ρg   = 970*9.8
     μ    = 1e13   # viscousity of ice
     # numerics
-    nx   = 100
-    ny   = 100 
+    nx,ny   = 256, 256
+    threads = (32,32)
     nvis = 50
     mode = :v1
     # derived numerics
@@ -89,13 +72,22 @@ end
     H    = @. exp(-(xc-lx/2)^2 - (yc'-ly/2)^2); H_i = copy(H)
     rock    = @. (0.5*xc+1.0) + (0.3*yc'+1.0); rock_i = copy(rock)
     init_mass= sum(H_i)*dx*dy
-    qx   = zeros(Float64, nx+1,ny)
-    qy   = zeros(Float64, nx, ny+1)
+    #qx   = zeros(Float64, nx+1,ny)
+    #qy   = zeros(Float64, nx, ny+1)
+    qx   = CUDA.zeros(Float64, nx+1,ny)
+    qy   = CUDA.zeros(Float64, nx, ny+1)
+
+    blocks =@.  ceil(Int, (nx,ny)/threads)
 
     # time loop
     for it = 1:nt
         dt = min(dx^2, dy^2) ./(ρg/3μ.*maximum(H.^n))./4.1
-        @btime update_H!($H, $qx, $qy, $rock, $dx, $dy, $dt, $ρg, $μ, $n, $mode)
+        if mode == :v1
+            CUDA.@sync @cuda threads blocks update_flux_v1!(qx, qy, H, rock, dx, dy, ρg, μ, n)
+        else 
+            CUDA.@sync @cuda threads blocks update_flux_v2!(qx, qy, H, rock, dx, dy, ρg, μ, n)
+        end              
+        CUDA.@sync @cuda threads blocks update_height!(qx, qy, H, dx, dy, dt)
 
         if (it % nvis)==0
             mass = sum(H)*dx*dy
@@ -107,4 +99,3 @@ end
 end
 
 nonlinear_diffusion_1D()
-
