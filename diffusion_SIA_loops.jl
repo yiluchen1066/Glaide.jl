@@ -75,8 +75,8 @@ end
     ρg   = 970*9.8
     μ    = 1e13   # viscousity of ice
     # numerics
-    nx   = 100
-    ny   = 100 
+    nx   = 1000
+    ny   = 1000
     nvis = 50
     mode = :v1
     # derived numerics
@@ -92,10 +92,10 @@ end
     qx   = zeros(Float64, nx+1,ny)
     qy   = zeros(Float64, nx, ny+1)
 
-    dt = 0.0
+    dt = 0.0; nt = 0
     # time loop
     for it = 1:nt
-        dt = min(dx^2, dy^2) ./(ρg/3μ.*maximum(H.^n))./4.1
+        dt = min(dx^2, dy^2) ./(ρg/(3μ).*maximum(H.^n))./4.1
         update_H!(H, qx, qy, rock, dx, dy, dt, ρg, μ, n, mode)
         
         if (it % nvis)==0
@@ -105,8 +105,16 @@ end
             display(plot(p1,p2,layout=(1,2)))
         end
     end 
+    dt = min(dx^2, dy^2) ./(ρg/(3μ).*maximum(H.^n))./4.1
 
-    @btime update_H!($H, $qx, $qy, $rock, $dx, $dy, $dt, $ρg, $μ, $n, $mode)
+    t_it = @belapsed update_H!($H, $qx, $qy, $rock, $dx, $dy, $dt, $ρg, $μ, $n, $mode)
+
+
+    A_eff = (1+2+4)*nx*ny*8/1e9
+
+    T_eff = A_eff/t_it
+
+    @printf("effective memory throuput = %1.3f GB/s\n", T_eff)
 end
 
 nonlinear_diffusion_1D()

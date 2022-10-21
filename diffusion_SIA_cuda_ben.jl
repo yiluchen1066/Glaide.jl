@@ -67,11 +67,12 @@ end
 
 @views function nonlinear_diffusion_1D()
     # physics
-    lx,ly  = 10.0, 10.0
+    lx,ly  = 30.0, 30.0 #lx, ly = 30 km
     n    = 3
     ρg   = 970*9.8
     μ    = 1e13   # viscousity of ice
     ttot = 10e10
+    b_0 = 500 # 500m 
     # numerics
     nx,ny   = 1000, 1000
     threads = (32,32)
@@ -82,12 +83,18 @@ end
     dy   = ly/ny 
     xc   = LinRange(dx/2,lx-dx/2,nx)
     yc   = LinRange(dy/2,ly-dy/2,ny)
+    print(xc)
     # array initialisation: Gaussian distribution 
-    H    = @. exp(-(xc-lx/2)^2 - (yc'-ly/2)^2); H_i = copy(H)
-    rock    = @. (0.5*xc+1.0) + (0.3*yc'+1.0); rock_i = copy(rock)
+    #H    = @. exp(-(xc-lx/2)^2 - (yc'-ly/2)^2); H_i = copy(H)
+    H = ones(nx,ny); H_i = copy(H)
+    # define bed vector. 
+    B = zeros(size(H))
+    B[xc.<7, yc.<7] .= b_0
+    B[2:end-1,2:end-1] .= B[2:end-1,2:end-1] .+ 1.0./4.1.*(diff(diff(B[:,2:end-1], dims=1), dims=1) .+ diff(diff(B[2:end-1,:], dims=2), dims=2))
+
 
     H = CuArray(H) 
-    rock = CuArray(rock)
+    B = CuArray(B)
 
     init_mass= sum(H_i)*dx*dy
     #qx   = zeros(Float64, nx+1,ny)
@@ -105,13 +112,13 @@ end
     
         dt = min(dx^2, dy^2) ./(ρg/3μ.*maximum(H.^n))./4.1
         
-        update_H!(H, qx, qy, rock, dx, dy, dt, ρg, μ, n, mode, threads, blocks)
+        update_H!(H, qx, qy, B, dx, dy, dt, ρg, μ, n, mode, threads, blocks)
 
 
         if (it % nvis)==0
             mass = sum(H)*dx*dy
-            p1 = heatmap(xc, yc, Array(H'); xlims = (0,lx), ylims = (0,ly), aspect_ratio = 1.0, xlabel = "lx", ylabel = "ly", title = "time = $(round(t,digits=1))", c=:turbo)
-            p2 = plot(yc, Array(H[round(Int,nx/2),:]);  ylims = (0,1.0), xlabel = "y", ylabel = "H", title = "mass balance is $(mass - init_mass)")
+            p1 = heatmap(xc, yc, Array((H.+B)'); xlims = (0,lx), ylims = (0,ly), aspect_ratio = 1.0, xlabel = "lx", ylabel = "ly", title = "time = $(round(t,digits=1))", c=:turbo)
+            p2 = plot(yc, Array(H[round(Int,nx/2),:].+B[round(Int, nx/2),:]);  ylims = (0,1.0), xlabel = "y", ylabel = "H", title = "mass balance is $(mass - init_mass)")
             display(plot(p1,p2,layout=(1,2)))
         end
         t += dt
@@ -120,7 +127,7 @@ end
 
     dt = min(dx^2, dy^2) ./(ρg/3μ.*maximum(H.^n))./4.1
 
-    t_it = @belapsed update_H!($H, $qx, $qy, $rock, $dx, $dy, $dt, $ρg, $μ, $n, $mode, $threads, $blocks)
+    t_it = @belapsed update_H!($H, $qx, $qy, $B, $dx, $dy, $dt, $ρg, $μ, $n, $mode, $threads, $blocks)
 
     A_eff = (1+2+4)*nx*ny*8/1e9
 
