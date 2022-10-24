@@ -92,6 +92,9 @@ end
     B[xc.<7, yc.<7] .= b_0
     B[2:end-1,2:end-1] .= B[2:end-1,2:end-1] .+ 1.0./4.1.*(diff(diff(B[:,2:end-1], dims=1), dims=1) .+ diff(diff(B[2:end-1,:], dims=2), dims=2))
 
+    p1 = heatmap(xc, yc, H', aspect_ratio=1, xlims=(xc[1], xc[end]), ylims=(yc[1], yc[end]), c=:turbo, title= "H")
+    p2 = heatmap(xc, yc, B', aspect_ratio=1, xlims=(xc[1], xc[end]), ylims=(yc[1], yc[end]), c=:turbo, title = "B")
+    display(plot(p1, p2))
 
     H = CuArray(H) 
     B = CuArray(B)
@@ -104,6 +107,8 @@ end
 
     blocks =@.  ceil(Int, (nx,ny)/threads)
 
+    
+
     t = 0.0
     it = 1 
     #ttot = -1.0
@@ -114,11 +119,11 @@ end
         
         update_H!(H, qx, qy, B, dx, dy, dt, ρg, μ, n, mode, threads, blocks)
 
-
+        
         if (it % nvis)==0
             mass = sum(H)*dx*dy
-            p1 = heatmap(xc, yc, Array((H.+B)'); xlims = (0,lx), ylims = (0,ly), aspect_ratio = 1.0, xlabel = "lx", ylabel = "ly", title = "time = $(round(t,digits=1))", c=:turbo)
-            p2 = plot(yc, Array(H[round(Int,nx/2),:].+B[round(Int, nx/2),:]);  ylims = (0,1.0), xlabel = "y", ylabel = "H", title = "mass balance is $(mass - init_mass)")
+            p1 = heatmap(xc, yc, Array((H.+B)'); xlims = (xc[1], xc[end]), ylims = (yc[1],yc[end]), aspect_ratio = 1.0, xlabel = "lx", ylabel = "ly", title = "time = $(round(t,digits=1))", c=:turbo)
+            p2 = plot(yc, Array(H[round(Int,nx/2),:]);  xlims = (xc[1], xc[end]), ylims = (yc[1], yc[end]), xlabel = "y", ylabel = "H", title = "mass balance is $(mass - init_mass)")
             display(plot(p1,p2,layout=(1,2)))
         end
         t += dt
