@@ -71,25 +71,24 @@ end
     n    = 3
     ρg   = 970*9.8
     μ    = 1e13   # viscousity of ice
-    ttot = 10e10
+    ttot = 10e4
     b_0 = 500 # 500m 
     # numerics
-    nx,ny   = 1000, 1000
+    nx,ny   = 127, 127
     threads = (32,32)
-    nvis = 1000
+    nvis = 100
     mode = :v1
     # derived numerics
     dx   = lx/nx
     dy   = ly/ny 
     xc   = LinRange(dx/2,lx-dx/2,nx)
     yc   = LinRange(dy/2,ly-dy/2,ny)
-    print(xc)
-    # array initialisation: Gaussian distribution 
-    #H    = @. exp(-(xc-lx/2)^2 - (yc'-ly/2)^2); H_i = copy(H)
+    # array initialisation
+
     H = ones(nx,ny); H_i = copy(H)
     # define bed vector. 
     B = zeros(size(H))
-    B[xc.<7, yc.<7] .= b_0
+    B[xc.<7, :] .= b_0
     B[2:end-1,2:end-1] .= B[2:end-1,2:end-1] .+ 1.0./4.1.*(diff(diff(B[:,2:end-1], dims=1), dims=1) .+ diff(diff(B[2:end-1,:], dims=2), dims=2))
 
     p1 = heatmap(xc, yc, H', aspect_ratio=1, xlims=(xc[1], xc[end]), ylims=(yc[1], yc[end]), c=:turbo, title= "H")
