@@ -3,33 +3,28 @@ using Plots,Plots.Measures,Printf
 default(size=(800,600),framestyle=:box,label=false,grid=false,margin=10mm,lw=4,labelfontsize=9,tickfontsize=9,titlefontsize=12)
 
 macro get_thread_idx(A)  esc(:( begin nx,ny = size($A); ix = (blockIdx().x-1) * blockDim().x+threadIdx().x; iy = (blockIdx().y-1) * blockDim().y+threadIdx().y; end )) end
-macro av_xy(A)    esc(:( 0.25*($A[ix,iy]+$A[ix+1,iy]+$A[ix,iy+1]+$A[ix+1,iy+1]) )) end
 macro av_xa(A)    esc(:( 0.5*($A[ix,iy]+$A[ix+1,iy]) )) end
 macro av_ya(A)    esc(:( 0.5*($A[ix,iy]+$A[ix,iy+1]) )) end
 macro d_xa(A)     esc(:( $A[ix+1,iy]-$A[ix,iy] )) end
 macro d_ya(A)     esc(:( $A[ix,iy+1]-$A[ix,iy] )) end
-macro d_xi(A)     esc(:( $A[ix+1,iy+1]-$A[ix,iy+1] )) end
-macro d_yi(A)     esc(:( $A[ix+1,iy+1]-$A[ix+1,iy] )) end
-macro d_xa_avy(A) esc(:( 0.5*(($A[ix+1,iy]-$A[ix,iy]) + ($A[ix+1,iy+1]-$A[ix,iy+1])) )) end
-macro d_ya_avx(A) esc(:( 0.5*(($A[ix,iy+1]-$A[ix,iy]) + ($A[ix+1,iy+1]-$A[ix+1,iy])) )) end
 
 CUDA.device!(7) # GPU selection
 
 function compute_∇S!(∇Sx,∇Sy,S,dx,dy)
     @get_thread_idx(S)
-    if ix<=nx-2 && iy<=ny
+    if ix<=nx-1 && iy<=ny
         ∇Sx[ix+1,iy] = @d_xa(S)/dx
     end
-    if ix<=nx && iy<=ny-2
+    if ix<=nx && iy<=ny-1
         ∇Sy[ix,iy+1] = @d_ya(S)/dy
     end
     return
 end
 
 function compute_D!(D,∇Sx,∇Sy,H,n,a)
-    @get_thread_idx(S)
+    @get_thread_idx(H)
     if ix<=nx && iy<=ny
-        D[ix,iy] = a*H^(n+2)*(sqrt(@av_xa(∇Sx)^2 + @av_ya(∇Sy)^2))^(n-1)
+        D[ix,iy] = a*H[ix,iy]^(n+2)*(sqrt(@av_xa(∇Sx)^2 + @av_ya(∇Sy)^2))^(n-1)
     end
     return
 end
@@ -68,7 +63,7 @@ function sia_2D()
     ttot    = 50e3
     a0      = 1.5e-24
     # numerics
-    nx,ny   = 127,127
+    nx,ny   = 511,511
     nout    = 5000    # error check frequency
     ndt     = 100      # dt check/update
     threads = (16,16) # n threads
@@ -93,8 +88,10 @@ function sia_2D()
     M .= (((n.*2.0./xm.^(2*n-1)).*xc.^(n-1)).*abs.(xm.-xc).^(n-1)).*(xm.-2.0*xc)
     M[xc.>xm ,:] .= 0.0 
     B[xc.<xmB,:] .= 500
-    B[2:end-1,2:end-1] .= B[2:end-1,2:end-1] .+ 1.0./4.1.*(diff(diff(B[:,2:end-1], dims=1), dims=1) .+ diff(diff(B[2:end-1,:], dims=2), dims=2))
-    B[:,[1,end]] .= B[:,[2,end-1]] # BCs
+    for ism=1:2
+        B[2:end-1,2:end-1] .= B[2:end-1,2:end-1] .+ 1.0./4.1.*(diff(diff(B[:,2:end-1], dims=1), dims=1) .+ diff(diff(B[2:end-1,:], dims=2), dims=2))
+        B[:,[1,end]] .= B[:,[2,end-1]] # BCs
+    end
     # visu
     opts = (aspect_ratio=1,xlims=(xc[1],xc[end]),ylim=(yc[1],yc[end]),c=:turbo)
     p1 = heatmap(xc,yc,B',title="H"; opts...)
@@ -110,7 +107,7 @@ function sia_2D()
     D     = CUDA.zeros(Float64,nx  ,ny  )
     qHx   = CUDA.zeros(Float64,nx+1,ny  )
     qHy   = CUDA.zeros(Float64,nx  ,ny+1)
-    dHdt  = CUDA.zeros(Float64,nx  ,ny  )    
+    dHdt  = CUDA.zeros(Float64,nx  ,ny  )
     S    .= B .+ H # init bed
     t = 0.0; it = 1; dt = dtsc * min(1.0, cfl/(epsi+maximum(D)))
     while t <= ttot
