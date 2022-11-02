@@ -15,28 +15,29 @@ macro d_ya_avx(A) esc(:( 0.5*(($A[ix,iy+1]-$A[ix,iy]) + ($A[ix+1,iy+1]-$A[ix+1,i
 
 CUDA.device!(7) # GPU selection
 
-function bc!(qHx,qHy,H)
-    @get_thread_idx(H)
-    if (ix<=nx+1 && iy==1   )  qHx[ix,iy] = qHx[ix,iy+1] end
-    if (ix<=nx+1 && iy==ny  )  qHx[ix,iy] = qHx[ix,iy-1] end
-    if (ix==1    && iy<=ny+1)  qHy[ix,iy] = qHy[ix+1,iy] end
-    if (ix==nx   && iy<=ny+1)  qHy[ix,iy] = qHy[ix-1,iy] end
+function compute_∇S!(∇Sx,∇Sy,S,dx,dy)
+    @get_thread_idx(S)
+    if ix<=nx-2 && iy<=ny
+        ∇Sx[ix+1,iy] = @d_xa(S)/dx
+    end
+    if ix<=nx && iy<=ny-2
+        ∇Sy[ix,iy+1] = @d_ya(S)/dy
+    end
     return
 end
 
-function compute_diffus!(S,gradS,D,H,n,a,dx,dy)
+function compute_D!(D,∇Sx,∇Sy,H,n,a)
     @get_thread_idx(S)
-    if ix<=nx-1 && iy<=ny-1
-        gradS[ix,iy] = sqrt((@d_xa_avy(S)/dx)^2 + (@d_ya_avx(S)/dy)^2)
-        D[ix,iy]     = a*@av_xy(H)^(n+2)*gradS[ix,iy]^(n-1)
+    if ix<=nx && iy<=ny
+        D[ix,iy] = a*H^(n+2)*(sqrt(@av_xa(∇Sx)^2 + @av_ya(∇Sy)^2))^(n-1)
     end
     return
 end
 
 function compute_flux!(S,qHx,qHy,D,dx,dy)
     @get_thread_idx(S)
-    if (ix<=nx-1 && iy<=ny-2) qHx[ix+1,iy+1] = -@av_ya(D)*@d_xi(S)/dx end
-    if (ix<=nx-2 && iy<=ny-1) qHy[ix+1,iy+1] = -@av_xa(D)*@d_yi(S)/dy end
+    if (ix<=nx-1 && iy<=ny  ) qHx[ix+1,iy  ] = -@av_xa(D)*@d_xa(S)/dx end
+    if (ix<=nx   && iy<=ny-1) qHy[ix  ,iy+1] = -@av_ya(D)*@d_ya(S)/dy end
     return
 end 
 
@@ -50,10 +51,10 @@ function update_H_S!(dHdt,H,S,B,qHx,qHy,M,dt,dx,dy)
     return
 end
 
-function update!(S,H,B,M,D,gradS,qHx,qHy,dHdt,dx,dy,dt,n,a,threads,blocks)
-    CUDA.@sync @cuda threads=threads blocks=blocks compute_diffus!(S,gradS,D,H,n,a,dx,dy)
+function update!(S,H,B,M,D,∇Sx,∇Sy,qHx,qHy,dHdt,dx,dy,dt,n,a,threads,blocks)
+    CUDA.@sync @cuda threads=threads blocks=blocks compute_∇S!(∇Sx,∇Sy,S,dx,dy)
+    CUDA.@sync @cuda threads=threads blocks=blocks compute_D!(D,∇Sx,∇Sy,H,n,a)
     CUDA.@sync @cuda threads=threads blocks=blocks compute_flux!(S,qHx,qHy,D,dx,dy)
-    CUDA.@sync @cuda threads=threads blocks=blocks bc!(qHx,qHy,H)
     CUDA.@sync @cuda threads=threads blocks=blocks update_H_S!(dHdt,H,S,B,qHx,qHy,M,dt,dx,dy)
     return
 end
@@ -103,9 +104,10 @@ function sia_2D()
     H     = CuArray{Float64}(H) 
     B     = CuArray{Float64}(B)
     M     = CuArray{Float64}(M)
+    ∇Sx   = CUDA.zeros(Float64,nx+1,ny  )
+    ∇Sy   = CUDA.zeros(Float64,nx  ,ny+1)
     S     = CUDA.zeros(Float64,nx  ,ny  )
-    gradS = CUDA.zeros(Float64,nx-1,ny-1)
-    D     = CUDA.zeros(Float64,nx-1,ny-1)
+    D     = CUDA.zeros(Float64,nx  ,ny  )
     qHx   = CUDA.zeros(Float64,nx+1,ny  )
     qHy   = CUDA.zeros(Float64,nx  ,ny+1)
     dHdt  = CUDA.zeros(Float64,nx  ,ny  )    
@@ -113,7 +115,7 @@ function sia_2D()
     t = 0.0; it = 1; dt = dtsc * min(1.0, cfl/(epsi+maximum(D)))
     while t <= ttot
         if (it==1 || it%ndt==0) dt=dtsc*min(1.0, cfl/(epsi+maximum(D))) end
-        update!(S,H,B,M,D,gradS,qHx,qHy,dHdt,dx,dy,dt,n,a,threads,blocks)
+        update!(S,H,B,M,D,∇Sx,∇Sy,qHx,qHy,dHdt,dx,dy,dt,n,a,threads,blocks)
         if it%nout == 0
             @printf("it = %d, t = %1.2f, max(dHdt) = %1.2e \n", it, t, maximum(dHdt[2:end-1,2:end-1]))
             p1 = heatmap(xc,yc,Array(S'), title="S, it=$(it)"; opts...)
