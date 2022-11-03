@@ -36,8 +36,8 @@ end
 function compute_D!(D,∇Sx,H, n, a, as)
     @get_thread_idx(D) 
     if ix<= nx
-        D[ix] = (a*H[ix]^(n+2))*@av_xa(∇Sx)^(n-1)
-        #D[ix] = (a*H[ix]^(n+2)+as*H[ix]^n)*@av_xa(∇Sx)^(n-1)
+        #D[ix] = (a*H[ix]^(n+2))*@av_xa(∇Sx)^(n-1)
+        D[ix] = (a*H[ix]^(n+2)+as*H[ix]^n)*@av_xa(∇Sx)^(n-1)
     end 
     return 
 end 
@@ -147,7 +147,7 @@ function sia_1D()
         #update_without_limiter!(S,H,B,M,D,∇Sx,qHx,dHdt,dx,dt,n,a,as,threads,blocks)
         update_with_limiter!(S,H,B,M,D,∇Sx,qHx,B_avg, H_avg,dHdt,dx,dt,n,a,as,threads,blocks)
         if it%nout == 0
-            @printf("it = %d, t = %1.2f, max(dHdt) = %1.2e \n", it, t, maximum(dHdt[2:end-1,2:end-1]))
+            @printf("it = %d, t = %1.2f, max(dHdt) = %1.2e \n", it, t, maximum(dHdt[2:end-1]))
             #p1 = heatmap(xc,Array(S'), title="S, it=$(it)"; opts...)
             #p2 = heatmap(xc,Array(H'), title="H"; opts...)
             p3 = plot(xc, [Array(S),Array(B)])
