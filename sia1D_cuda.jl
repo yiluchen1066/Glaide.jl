@@ -2,17 +2,17 @@ using CUDA,BenchmarkTools
 using Plots,Plots.Measures,Printf
 default(size=(800,600),framestyle=:box,label=false,grid=false,margin=10mm,lw=4,labelfontsize=9,tickfontsize=9,titlefontsize=12)
 
-macro get_thread_idx(A)  esc(:( begin nx = size($A); ix =(blockIdx().x-1) * blockDim().x + threadIdx().x; end )) end 
+macro get_thread_idx(A)  esc(:( begin nx = size($A,1); ix =(blockIdx().x-1) * blockDim().x + threadIdx().x; end )) end 
 macro av_xa(A)    esc(:( 0.5*($A[ix]+$A[ix+1]) )) end
 macro d_xa(A)     esc(:( $A[ix+1]-$A[ix])) end 
 
 CUDA.device!(7) # GPU selection
 
-function compute_limiter!(B, B_avg, H_avg) 
+function compute_limiter!(B, B_avg, S, H_avg) 
     @get_thread_idx(B) 
     if ix <= nx-1
         B_avg[ix] = max(B[ix], B[ix+1])
-        H_avg[ix] = 0.5*(max(0.0, S[ix]-B_avg[ix], S[ix+1]-B_avg[ix]))
+        H_avg[ix] = 0.5*( max(0.0, max( S[ix]-B_avg[ix], S[ix+1]-B_avg[ix]) ) )
     end 
     return 
 end 
@@ -35,24 +35,25 @@ end
 
 function compute_D!(D,∇Sx,H, n, a, as)
     @get_thread_idx(D) 
-    if ix<= nx 
-        D[ix] = (a*H[ix]^(n+2)+as*H[ix]^n)*@av_xa(∇Sx)
+    if ix<= nx
+        D[ix] = (a*H[ix]^(n+2))*@av_xa(∇Sx)^(n-1)
+        #D[ix] = (a*H[ix]^(n+2)+as*H[ix]^n)*@av_xa(∇Sx)^(n-1)
     end 
     return 
 end 
 
-function cumpute_flux_without_limiter!(S, qHx, D, ∇Sx) 
+function cumpute_flux_without_limiter!(S, qHx, D, ∇Sx, dx) 
     @get_thread_idx(S)
     if ix <= nx-1
-        qHx[ix+1] = -@av_xa(D)*∇Sx[ix]
+        qHx[ix+1] = -@av_xa(D)*@d_xa(S)/dx
     end 
     return 
 end 
 
-function compute_flux_with_limiter!(S, qHx, B_avg, D)
+function compute_flux_with_limiter!(S, qHx, B_avg, D, dx)
     @get_thread_idx(S) 
     if ix <= nx-1 
-        qHx[ix+1] = -@av_xa(D)*(max(B_avg[ix,iy], S[ix+1])- max(B_avg[ix,iy], S[ix]))/dx
+        qHx[ix+1] = -@av_xa(D)*( max(B_avg[ix], S[ix+1])- max(B_avg[ix], S[ix]))/dx
     end 
     return 
 end 
@@ -61,7 +62,7 @@ function update_H_S!(dHdt, H, S, B, qHx, M, dt, dx)
     @get_thread_idx(H) 
     if ix <= nx 
         dHdt[ix]  = M[ix] - @d_xa(qHx)/dx 
-        H[ix]     = max(0.0, H[ix,iy] + dt*dHdt[ix])
+        H[ix]     = max(0.0, H[ix] + dt*dHdt[ix])
         S[ix]     = B[ix] + H[ix] 
     end 
 
@@ -72,16 +73,16 @@ end
 function update_without_limiter!(S,H,B,M,D,∇Sx,qHx,dHdt,dx,dt,n,a,as,threads,blocks)
     CUDA.@sync @cuda threads=threads blocks=blocks compute_∇S_without_limiter!(∇Sx, S, dx)
     CUDA.@sync @cuda threads=threads blocks=blocks compute_D!(D,∇Sx,H, n, a, as)
-    CUDA.@sync @cuda threads=threads blocks=blocks cumpute_flux_without_limiter!(S, qHx, D, ∇Sx)
+    CUDA.@sync @cuda threads=threads blocks=blocks cumpute_flux_without_limiter!(S, qHx, D, ∇Sx, dx)
     CUDA.@sync @cuda threads=threads blocks=blocks update_H_S!(dHdt, H, S, B, qHx, M, dt, dx)
     return
 end
 
 function update_with_limiter!(S,H,B,M,D,∇Sx,qHx,B_avg, H_avg,dHdt,dx,dt,n,a,as,threads,blocks)
-    CUDA.@sync @cuda threads=threads blocks=blocks compute_limiter!(B, B_avg, H_avg)
+    CUDA.@sync @cuda threads=threads blocks=blocks compute_limiter!(B, B_avg, S, H_avg)
     CUDA.@sync @cuda threads=threads blocks=blocks computer_∇S_with_limiter!(∇Sx, S, B_avg, dx)
     CUDA.@sync @cuda threads=threads blocks=blocks compute_D!(D,∇Sx,H, n, a, as)
-    CUDA.@sync @cuda threads=threads blocks=blocks compute_flux_with_limiter!(S, qHx, B_avg, D)
+    CUDA.@sync @cuda threads=threads blocks=blocks compute_flux_with_limiter!(S, qHx, B_avg, D, dx)
     CUDA.@sync @cuda threads=threads blocks=blocks update_H_S!(dHdt, H, S, B, qHx, M, dt, dx)
     return 
 end 

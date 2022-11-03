@@ -63,7 +63,7 @@ function sia_2D()
     ttot    = 50e3
     a0      = 1.5e-24
     # numerics
-    nx,ny   = 511,511
+    nx,ny   = 150,150
     nout    = 5000    # error check frequency
     ndt     = 100      # dt check/update
     threads = (16,16) # n threads
@@ -88,10 +88,8 @@ function sia_2D()
     M .= (((n.*2.0./xm.^(2*n-1)).*xc.^(n-1)).*abs.(xm.-xc).^(n-1)).*(xm.-2.0*xc)
     M[xc.>xm ,:] .= 0.0 
     B[xc.<xmB,:] .= 500
-    for ism=1:2
-        B[2:end-1,2:end-1] .= B[2:end-1,2:end-1] .+ 1.0./4.1.*(diff(diff(B[:,2:end-1], dims=1), dims=1) .+ diff(diff(B[2:end-1,:], dims=2), dims=2))
-        B[:,[1,end]] .= B[:,[2,end-1]] # BCs
-    end
+    B[2:end-1,2:end-1] .= B[2:end-1,2:end-1] .+ 1.0./4.1.*(diff(diff(B[:,2:end-1], dims=1), dims=1) .+ diff(diff(B[2:end-1,:], dims=2), dims=2))
+    B[:,[1,end]] .= B[:,[2,end-1]] # BCs
     # visu
     opts = (aspect_ratio=1,xlims=(xc[1],xc[end]),ylim=(yc[1],yc[end]),c=:turbo)
     p1 = heatmap(xc,yc,B',title="H"; opts...)
