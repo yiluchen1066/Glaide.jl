@@ -4,7 +4,7 @@ using ParallelStencil
 using ParallelStencil.FiniteDifferences2D 
 default(size=(800,600),framestyle=:box,label=false,grid=false,margin=10mm,lw=4,labelfontsize=9,tickfontsize=9,titlefontsize=12)
 
-const USE_GPU = true
+const USE_GPU = false
 
 @static if USE_GPU
     @init_parallel_stencil(CUDA, Float64, 2) 
@@ -32,6 +32,15 @@ CUDA.device!(7) # GPU selection
 
 
 @parallel_indices (ix, iy) function bc!(qHx::Data.Array, qHy::Data.Array, H)
+    nx, ny = size(H)
+    if (ix<=nx+1 && iy==1   )  qHx[ix,iy] = qHx[ix,iy+1] end
+    if (ix<=nx+1 && iy==ny  )  qHx[ix,iy] = qHx[ix,iy-1] end
+    if (ix==1    && iy<=ny+1)  qHy[ix,iy] = qHy[ix+1,iy] end
+    if (ix==nx   && iy<=ny+1)  qHy[ix,iy] = qHy[ix-1,iy] end
+    return 
+end 
+
+@parallel_indices (ix, iy) function bc_flux!(qHx::Data.Array, qHy::Data.Array, H)
     nx, ny = size(H)
     if (ix<=nx+1 && iy==1   )  qHx[ix,iy] = qHx[ix,iy+1] end
     if (ix<=nx+1 && iy==ny  )  qHx[ix,iy] = qHx[ix,iy-1] end

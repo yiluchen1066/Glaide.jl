@@ -48,6 +48,7 @@ function compute_diffus!(S, H_avg, B_avg, dSdx, dSdy, gradS, D, H, n, a, as, dx,
         H_avg[ix, iy] = 0.25*(max(0.0, S[ix, iy]-B_avg[ix,iy], S[ix+1, iy]-B_avg[ix,iy], S[ix, iy+1]-B_avg[ix, iy], S[ix+1, iy+1]-B_avg[ix, iy]))
     end 
     # dSdx = zeros(nx-1, ny-1) dSdy = zeros(nx-1, ny-1) 
+    # dSdx = zeros(nx+1, ny) dSdy = zeros(nx, ny+1)
     if ix <= nx-1 && iy <= ny-1
         dSdx[ix, iy] = 0.5 *(max(B_avg[ix,iy], S[ix+1, iy]) - max(B_avg[ix,iy], S[ix, iy]) + max(B_avg[ix,iy], S[ix+1, iy+1])-max(B_avg[ix,iy], S[ix ,iy+1]))/dx
         dSdy[ix, iy] = 0.5 *(max(B_avg[ix,iy], S[ix, iy+1]) - max(B_avg[ix,iy], S[ix, iy]) + max(B_avg[ix,iy], S[ix+1, iy+1])-max(B_avg[ix,iy], S[ix+1, iy]))/dy
