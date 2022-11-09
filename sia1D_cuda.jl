@@ -1,5 +1,6 @@
 using CUDA,BenchmarkTools
 using Plots,Plots.Measures,Printf
+using DelimitedFiles
 default(size=(800,600),framestyle=:box,label=false,grid=false,margin=10mm,lw=4,labelfontsize=9,tickfontsize=9,titlefontsize=12)
 
 macro get_thread_idx(A)  esc(:( begin nx = size($A,1); ix =(blockIdx().x-1) * blockDim().x + threadIdx().x; end )) end 
@@ -96,7 +97,7 @@ function sia_1D()
     ttot    = 50e3
     a0      = 1.5e-24
     # numerics
-    nx      = 127
+    nx      = 151
     nout    = 5000    # error check frequency
     ndt     = 100      # dt check/update
     threads = 16 # n threads
@@ -111,19 +112,26 @@ function sia_1D()
     # derived physics 
     a       = 2.0*a0/(n+2)*ρg^n*s2y
     as      = 5.7e-20
+    # read benchmark data
+    bed = readdlm("/scratch-1/yilchen/Msc-Inverse-SIA/Msc-Inverse-SIA/benchmark_data/bed.txt", ' ', Float64, '\n')
+    M2  = readdlm("/scratch-1/yilchen/Msc-Inverse-SIA/Msc-Inverse-SIA/benchmark_data/M2.txt", ' ', Float64, '\n')
+    MUSCL = readdlm("/scratch-1/yilchen/Msc-Inverse-SIA/Msc-Inverse-SIA/benchmark_data/MUSCL.txt", ' ', Float64, '\n')
+    upstream = readdlm("/scratch-1/yilchen/Msc-Inverse-SIA/Msc-Inverse-SIA/benchmark_data/upstream.txt", ' ', Float64, '\n')
     # array initialisation
     B       = zeros(Float64, nx)
     M       = zeros(Float64, nx)
     H       = zeros(Float64, nx)
+
+    @printf("Size of bed is %d, size of M2 is %d, size of MUSCL is %d, size of upstream is %d \n", size(bed,1), size(M2,1), size(MUSCL,1), size(upstream,1))
     # define bed vector
     xm,xmB  = 20e3,7e3
-    M .= (((n.*2.0./xm.^(2*n-1)).*xc.^(n-1)).*abs.(xm.-xc).^(n-1)).*(xm.-2.0*xc)
+    M .= (((n.*2.0./xm.^(2*n-1)).*xc.^(n-1)).*abs.(xm.-xc).^(n-1)).*(xm.-2.0*xc).*0.6
     M[xc.>xm ] .= 0.0 
     B[xc.<xmB] .= 500
-    for ism=1:2
-        B[2:end-1] .= B[2:end-1] .+ 1.0/4.1.*(diff(diff(B)))
-        B[[1,end]] .= B[[2,end-1]] # BCs
-    end
+    # for ism=1:1
+    #     B[2:end-1] .= B[2:end-1] .+ 1.0/4.1.*(diff(diff(B)))
+    #     B[[1,end]] .= B[[2,end-1]] # BCs
+    # end
     # visu
     #opts = (aspect_ratio=1,xlims=(xc[1],xc[end]),c=:turbo)
     #p1 = heatmap(xc,B',title="H"; opts...)
@@ -141,7 +149,8 @@ function sia_1D()
     qHx   = CUDA.zeros(Float64,nx+1)
     dHdt  = CUDA.zeros(Float64,nx)
     S    .= B .+ H # init bed
-    t = 0.0; it = 1; dt = dtsc * min(1.0, cfl/(epsi+maximum(D)))
+    t = 0.0; it = 1; dt = 1.0
+    #t = 0.0; it = 1; dt = dtsc * min(1.0, cfl/(epsi+maximum(D)))
     while t <= ttot
         if (it==1 || it%ndt==0) dt=dtsc*min(1.0, cfl/(epsi+maximum(D))) end
         #update_without_limiter!(S,H,B,M,D,∇Sx,qHx,dHdt,dx,dt,n,a,as,threads,blocks)
@@ -150,9 +159,11 @@ function sia_1D()
             @printf("it = %d, t = %1.2f, max(dHdt) = %1.2e \n", it, t, maximum(dHdt[2:end-1]))
             #p1 = heatmap(xc,Array(S'), title="S, it=$(it)"; opts...)
             #p2 = heatmap(xc,Array(H'), title="H"; opts...)
-            p3 = plot(xc, [Array(S),Array(B)])
+            #p3 = plot(xc, [Array(S),Array(B)])
+            p3 = plot(xc, [Array(S),Array(B)], label = ["1" "bed"])
+            p3 = plot!(M2[:,1]*1e3, [M2[:,2], MUSCL[:,2], upstream[:,2]], label = [ "M2" "MUSCL superbee" "upstream"])
             p4 = plot(xc, Array(H))
-            display(plot(p3,p4))
+            display(plot(p3, p4))
         end
         it += 1
         t += dt
