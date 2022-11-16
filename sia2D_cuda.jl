@@ -113,10 +113,10 @@ function sia_2D()
         update!(S,H,B,M,D,∇Sx,∇Sy,qHx,qHy,dHdt,dx,dy,dt,n,a,threads,blocks)
         if it%nout == 0
             @printf("it = %d, t = %1.2f, max(dHdt) = %1.2e \n", it, t, maximum(dHdt[2:end-1,2:end-1]))
-            p1 = heatmap(xc,yc,Array(S'), title="S, it=$(it)"; opts...)
-            p2 = heatmap(xc,yc,Array(H'), title="H"; opts...)
-            p3 = plot(xc, [Array(S[:,ceil(Int,ny/2)]),Array(B[:,ceil(Int,ny/2)])])
-            p4 = plot(xc, Array(H[:,ceil(Int,ny/2)]))
+            p1 = heatmap(xc,yc,Array(S'), title="SIA 2D S, it=$(it)", tickfontsize=6; opts...)
+            p2 = heatmap(xc,yc,Array(H'), title="SIA 2D H", tickfontsize=6; opts...)
+            p3 = plot(xc, [Array(S[:,ceil(Int,ny/2)]),Array(B[:,ceil(Int,ny/2)])], xlabel="X in m", ylabel = "Height in m")
+            p4 = plot(xc, Array(H[:,ceil(Int,ny/2)]),xlabel="X in m", ylabel = "Height in m")
             display(plot(p1,p2,p3,p4))
         end
         it += 1

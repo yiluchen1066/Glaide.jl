@@ -7,7 +7,10 @@ macro av_xa(A)    esc(:( 0.5*($A[ix,iy]+$A[ix+1,iy]) )) end
 macro av_ya(A)    esc(:( 0.5*($A[ix,iy]+$A[ix,iy+1]) )) end
 macro d_xa(A)     esc(:( $A[ix+1,iy]-$A[ix,iy] )) end
 macro d_ya(A)     esc(:( $A[ix,iy+1]-$A[ix,iy] )) end
-macro av_xya(A)   esc(:( ($A[ix, iy] + $A[(ix+1), iy] + $A[ix,(iy+1)] + $A[(ix+1),(iy+1)])*0.25)) end 
+macro d_xi(A)     esc(:( $A[ix+1,iy+1]-$A[ix,iy+1])) end 
+macro d_yi(A)     esc(:( $A[ix+1,iy+1]-$A[ix+1,iy])) end 
+macro av_xya(A)   esc(:( 0.25*($A[ix,iy]+$A[ix+1,iy]+$A[ix, iy+1]+$A[ix+1,iy+1]))) end
+
 
 CUDA.device!(7) # GPU selection
 
@@ -33,15 +36,20 @@ end
 function compute_D!(D,∇Sx,∇Sy,H,n,a, as)
     @get_thread_idx(H)
     if ix<=nx-1 && iy<=ny-1
-        D[ix,iy] = (a*@av_xya(H)^(n+2) + as*@av_xya(H)^n)*(sqrt(@av_ya(∇Sx)^2 + @av_xa(∇Sy)^2))^(n-1)
+        D[ix,iy] = a*@av_xya(H)^(n+2)*(sqrt(@av_ya(∇Sx)^2 + @av_xa(∇Sy)^2))^(n-1)
+        #D[ix,iy] = (a*@av_xya(H)^(n+2) + as*@av_xya(H)^n)*(sqrt(@av_ya(∇Sx)^2 + @av_xa(∇Sy)^2))^(n-1)
     end
     return
 end
 
 function compute_flux_without_limiter!(S,qHx,qHy,D,dx,dy)
     @get_thread_idx(S)
-    if (ix<=nx-1 && iy<=ny-2  ) qHx[ix,iy] = -@av_ya(D)*@d_xa(S[ix,iy+1])/dx end
-    if (ix<=nx-2   && iy<=ny-1) qHy[ix,iy] = -@av_xa(D)*@d_ya(S[ix+1, iy])/dy end
+    # if (ix<=nx-1 && iy<=ny-2  ) qHx[ix,iy] = -@av_ya(D)*@d_xa(S[ix,iy+1])/dx end
+    # if (ix<=nx-2   && iy<=ny-1) qHy[ix,iy] = -@av_xa(D)*@d_ya(S[ix+1, iy])/dy end
+    # compute differences between adjecent elements of A along the dimension x and select the inner 
+    # elements of A in the remainning dimension. 
+    if (ix <= nx-1 && iy <= ny-2) qHx[ix,iy] = -@av_ya(D)*@d_xi(S)/dx end 
+    if (ix <= nx-2 && iy <= ny-1) qHy[ix,iy] = -@av_xa(D)*@d_yi(S)/dy end 
     return
 end 
 
@@ -55,8 +63,6 @@ function update_1!(dHdt,H,S,B,qHx,qHy,M,dt,dx,dy)
     @get_thread_idx(S)
     if (ix<=nx-2 && iy<=ny-2)
         dHdt[ix,iy] = -(@d_xa(qHx)/dx + @d_ya(qHy)/dy) + M[ix+1,iy+1]
-        H[ix+1,iy+1]    = max(0.0, H[ix+1,iy+1] + dt*dHdt[ix,iy])
-        S[ix,iy]    = B[ix,iy] + H[ix,iy]
     end
     return
 end
@@ -69,22 +75,22 @@ function update_2!(dHdt,H,dt)
     return
 end
 
-function set_BC!(H) 
-    @get_thread_idx(H)
-    if ix ==1 && iy <= ny 
-        H[ix,iy] = H[ix+1, iy]
-    end 
-    if ix == nx && iy <= ny 
-        H[ix, iy] = H[ix-1, iy]
-    end 
-    if ix <= nx && iy == 1 
-        H[ix, iy] = H[ix, iy+1]
-    end 
-    if ix <= nx && iy == ny 
-        H[ix, iy] = H[ix, iy-1]
-    end 
-    return 
-end 
+# function set_BC!(H) 
+#     @get_thread_idx(H)
+#     if ix ==1 && iy <= ny 
+#         H[ix,iy] = 0.0
+#     end 
+#     if ix == nx && iy <= ny 
+#         H[ix, iy] = 0.0
+#     end 
+#     if ix <= nx && iy == 1 
+#         H[ix, iy] = 0.0
+#     end 
+#     if ix <= nx && iy == ny 
+#         H[ix, iy] = 0.0
+#     end 
+#     return 
+# end 
 
 function update_s!(H, B, S) 
     @get_thread_idx(S) 
@@ -100,7 +106,7 @@ function update!(S,H,B,M,D,∇Sx,∇Sy,qHx,qHy,dHdt,dx,dy,dt,n,a,as, threads,blo
     CUDA.@sync @cuda threads=threads blocks=blocks compute_flux_without_limiter!(S,qHx,qHy,D,dx,dy)
     CUDA.@sync @cuda threads=threads blocks=blocks update_1!(dHdt,H,S,B,qHx,qHy,M,dt,dx,dy)
     CUDA.@sync @cuda threads=threads blocks=blocks update_2!(dHdt,H,dt)
-    CUDA.@sync @cuda threads=threads blocks=blocks set_BC!(H)
+    #CUDA.@sync @cuda threads=threads blocks=blocks set_BC!(H)
     CUDA.@sync @cuda threads=threads blocks=blocks update_s!(H, B, S)
     return
 end

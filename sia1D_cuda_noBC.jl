@@ -195,10 +195,11 @@ function sia_1D()
             #p1 = heatmap(xc,Array(S'), title="S, it=$(it)"; opts...)
             #p2 = heatmap(xc,Array(H'), title="H"; opts...)
             #p3 = plot(xc, [Array(S),Array(B)])
-            p3 = plot(xc, [Array(S),Array(B)], label = ["1" "bed"])
-            p3 = plot!(M2[:,1]*1e3, [M2[:,2], MUSCL[:,2], upstream[:,2]], label = [ "M2" "MUSCL superbee" "upstream"])
-            p4 = plot(xc, Array(H))
-            display(plot(p3, p4))
+            #title = plot(title = "SIA 1D")
+            p3 = plot(xc, [Array(S),Array(B)], label = ["Implementation" "bedrock"], xlabel="X in m", ylabel="Height in m")
+            p3 = plot!(M2[:,1]*1e3, [M2[:,2], MUSCL[:,2], upstream[:,2]], label = [ "M2" "MUSCL superbee" "upstream"],xlabel="X in m", ylabel="Height in m")
+            p4 = plot(xc, Array(H),xlabel="X in m", ylabel="Height in m")
+            display(plot(p3, p4, title = "SIA 1D"))
         end
         it += 1
         t += dt

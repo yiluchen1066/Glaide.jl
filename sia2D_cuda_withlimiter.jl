@@ -31,16 +31,6 @@ function compute_limiter_1!(B,S,B_avg, H_avg, Bx, By)
     return 
 end 
 
-function compute_∇S_without_limiter!(S,∇Sx,∇Sy,dx,dy)
-    @get_thread_idx(S)
-    if ix<=nx-1 && iy<=ny
-        ∇Sx[ix,iy] = (S[ix+1,iy]-S[ix,iy])/dx
-    end
-    if iy<=ny-1 && ix<=nx
-        ∇Sy[ix,iy] = (S[ix,iy+1]-S[ix,iy])/dy
-    end
-    return
-end
 
 function compute_∇S_with_limiter!(S, B_avg, ∇Sx_lim,∇Sy_lim,dx,dy)
     @get_thread_idx(S)
@@ -53,35 +43,18 @@ function compute_∇S_with_limiter!(S, B_avg, ∇Sx_lim,∇Sy_lim,dx,dy)
     return 
 end 
 
-function compute_D_without_limiter!(S,gradS,∇Sx,∇Sy,D,H,n,a,as)
-    @get_thread_idx(S)
-    if ix<=nx-1 && iy<=ny-1
-        gradS[ix,iy] = sqrt(@av_ya(∇Sx)^2 + @av_xa(∇Sy)^2)
-        D[ix,iy]     = (a*@av_xy(H)^(n+2)+as*@av_xy(H)^n)*gradS[ix,iy]^(n-1)
-    end
-    return
-end
 
 function compute_D_with_limiter!(S,∇Sx_lim,∇Sy_lim,D,H_avg,n,a,as)
     @get_thread_idx(S)
     if ix <= nx-1 && iy<= ny-1 
         #gradS[ix,iy]   = sqrt(∇Sx_lim[ix,iy]^2+∇Sy_lim[ix,iy]^2)
-        D[ix,iy]       = (a*H_avg[ix,iy]^(n+2)+as*H_avg[ix,iy]^n)*(sqrt(∇Sx_lim[ix,iy]^2+∇Sy_lim[ix,iy]^2))^(n-1)
+        #D[ix,iy]       = (a*H_avg[ix,iy]^(n+2)+as*H_avg[ix,iy]^n)*(sqrt(∇Sx_lim[ix,iy]^2+∇Sy_lim[ix,iy]^2))^(n-1)
+        D[ix,iy]       = (a*H_avg[ix,iy]^(n+2))*(sqrt(∇Sx_lim[ix,iy]^2+∇Sy_lim[ix,iy]^2))^(n-1)
     end 
     return 
 end 
 
 
-function compute_flux_without_limiter!(S,qHx,qHy,D,dx,dy)
-    @get_thread_idx(S)
-    if ix<=nx-1 && iy<=ny-2
-        qHx[ix,iy] = -@av_ya(D)*@d_xi(S)/dx
-    end
-    if ix<=nx-2 && iy<=ny-1
-        qHy[ix,iy] = -@av_xa(D)*@d_yi(S)/dy
-    end
-    return
-end 
 
 function compute_flux_with_limiter!(S,qHx,qHy,D,Bx,By,dx,dy)
     # qHx = zeros(nx-1, ny-2) qHy = zeros(nx-2, ny-1)
@@ -112,6 +85,24 @@ function update_H!(H,dHdt,dt)
     return
 end 
 
+function set_BC!(H)
+    @get_thread_idx(H)
+    if ix == 1 && iy <= ny 
+        H[ix,iy] = 0.0 
+    end 
+    if ix == nx && iy <= ny 
+        H[ix,iy] = 0.0 
+    end 
+    if ix <= nx && iy == 1 
+        H[ix,iy] = 0.0 
+    end 
+    if ix <= nx && iy == ny 
+        H[ix,iy] = 0.0 
+    end 
+
+    return 
+end 
+
 function update_S!(S,H,B)
     @get_thread_idx(S)
     if ix<=nx && iy<=ny
@@ -120,15 +111,6 @@ function update_S!(S,H,B)
     return
 end
 
-function update_without_limiter!(S, H, B, M, D, ∇Sx,∇Sy, gradS, qHx, qHy, dHdt, dx, dy, dt, n, a, as, threads, blocks)
-    CUDA.@sync @cuda threads=threads blocks=blocks compute_∇S_without_limiter!(S,∇Sx,∇Sy,dx,dy) #compute diffusitivity 
-    CUDA.@sync @cuda threads=threads blocks=blocks compute_D!(S,gradS,∇Sx,∇Sy,D,H,n,a,as)
-    CUDA.@sync @cuda threads=threads blocks=blocks compute_flux_without_limiter!(S,qHx,qHy,D,dx,dy) # compute flux 
-    CUDA.@sync @cuda threads=threads blocks=blocks compute_icethickness!(S, M, dHdt, qHx, qHy, dx, dy) # compute ice thickness
-    CUDA.@sync @cuda threads=threads blocks=blocks update_H!(H, dHdt, dt) # update ice thickness
-    CUDA.@sync @cuda threads=threads blocks=blocks update_S!(S, H, B) # update surface 
-    return
-end
 
 function update_with_limiter!(S, H, B, M, D, B_avg, H_avg, Bx, By, ∇Sx_lim,∇Sy_lim, gradS, qHx, qHy, dHdt, dx, dy, dt, n, a, as, threads, blocks)
     CUDA.@sync @cuda threads=threads blocks=blocks compute_limiter_1!(B,S,B_avg, H_avg, Bx, By) 
@@ -137,6 +119,7 @@ function update_with_limiter!(S, H, B, M, D, B_avg, H_avg, Bx, By, ∇Sx_lim,∇
     CUDA.@sync @cuda threads=threads blocks=blocks compute_flux_with_limiter!(S,qHx,qHy,D,Bx,By,dx,dy)
     CUDA.@sync @cuda threads=threads blocks=blocks compute_icethickness!(S, M, dHdt, qHx, qHy, dx, dy) # compute ice thickness
     CUDA.@sync @cuda threads=threads blocks=blocks update_H!(H, dHdt, dt) # update ice thickness
+    CUDA.@sync @cuda threads=threads blocks=blocks set_BC!(H) # update ice thickness
     CUDA.@sync @cuda threads=threads blocks=blocks update_S!(S, H, B) # update surface 
     return
 end
@@ -148,7 +131,7 @@ function sia_2D()
     lx,ly   = 30e3, 30e3     # lx, ly = 30 km
     n       = 3
     ρg      = 970*9.8
-    ttot    = 10e4
+    ttot    = 5000 #10e4
     a0      = 1.5e-24
     # numerics
     nx,ny   = 128,128
@@ -206,7 +189,6 @@ function sia_2D()
     t = 0.0; it = 1; dt = dtsc * min(1.0, cfl/(epsi+maximum(D)))
     while t <= ttot
         if (it==1 || it%ndt==0) dt=dtsc*min(1.0, cfl/(epsi+maximum(D))) end
-        #update!(S, H, B, M, D, ∇Sx,∇Sy, gradS, qHx, qHy, dHdt, dx, dy, dt, n, a, as, threads, blocks)
         update_with_limiter!(S, H, B, M, D, B_avg, H_avg, Bx, By, ∇Sx_lim,∇Sy_lim, gradS, qHx, qHy, dHdt, dx, dy, dt, n, a, as, threads, blocks)
         if it%nout == 0
             @printf("it = %d, max(dHdt) = %1.2e \n", it, maximum(dHdt))
@@ -215,7 +197,7 @@ function sia_2D()
             p2 = heatmap(xc,yc,Array(H'), title="H"; opts...)
             p3 = plot(xc, [Array(S[:,ceil(Int,ny/2)]),Array(B[:,ceil(Int,ny/2)])])
             p4 = plot(xc, Array(H[:,ceil(Int,ny/2)]))
-            display(plot(p1,p2,p3,p4))
+            display(plot(p1,p2,p3,p4, title="SIA 2D"))
         end
         it += 1
         t += dt
