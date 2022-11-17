@@ -13,61 +13,41 @@ macro d_yi(A)   esc(:( $A[ix+1,iy+1]-$A[ix+1,iy] )) end
 
 CUDA.device!(7) # GPU selection
 
-function compute_limiter_1!(B,S,B_avg, H_avg, Bx, By) 
-    @get_thread_idx(B) 
-    if ix<= nx-1 && iy<= ny-1 
-        B_avg[ix,iy] = max(B[ix,iy], B[ix+1, iy], B[ix,iy+1], B[ix+1, iy+1])
-        H_avg[ix,iy] = 0.25*(max(0.0,S[ix,iy]-B_avg[ix,iy])+max(0.0,S[ix+1,iy]-B_avg[ix,iy])+max(0.0,S[ix,iy+1]-B_avg[ix,iy])+max(0.0,S[ix+1,iy+1]-B_avg[ix,iy]))
-    end 
 
-    if ix<= nx-1 && iy <= ny-2 
-        Bx[ix,iy]    = max(B[ix,iy+1], B[ix+1, iy+1])
-    end 
-
-    if ix <= nx-2 && iy<= ny-1 
-        By[ix,iy]    = max(B[ix+1, iy+1], B[ix+1, iy])
-    end 
-
-    return 
-end 
-
-
-function compute_∇S_with_limiter!(S, B_avg, ∇Sx_lim,∇Sy_lim,dx,dy)
+function compute_∇S_without_limiter!(S,∇Sx,∇Sy,dx,dy)
     @get_thread_idx(S)
-
-    #∇Sx_lim = zeros(nx-1, ny-1) ∇Sy_lim = zeros(nx-1, ny-1)
-    if ix <= nx-1 && iy <= ny-1 
-        ∇Sx_lim[ix,iy] = 0.5*(max(B_avg[ix,iy],S[ix+1,iy])-max(B_avg[ix,iy],S[ix,iy])+max(B_avg[ix,iy],S[ix+1,iy+1])-max(B_avg[ix,iy],S[ix,iy+1]))/dx
-        ∇Sy_lim[ix,iy] = 0.5*(max(B_avg[ix,iy],S[ix,iy+1])-max(B_avg[ix,iy],S[ix,iy])+max(B_avg[ix,iy],S[ix+1,iy+1])-max(B_avg[ix,iy],S[ix+1,iy]))/dy 
-    end 
-    return 
-end 
-
-
-function compute_D_with_limiter!(S,∇Sx_lim,∇Sy_lim,D,H_avg,n,a,as)
-    @get_thread_idx(S)
-    if ix <= nx-1 && iy<= ny-1 
-        #gradS[ix,iy]   = sqrt(∇Sx_lim[ix,iy]^2+∇Sy_lim[ix,iy]^2)
-        #D[ix,iy]       = (a*H_avg[ix,iy]^(n+2)+as*H_avg[ix,iy]^n)*(sqrt(∇Sx_lim[ix,iy]^2+∇Sy_lim[ix,iy]^2))^(n-1)
-        D[ix,iy]       = (a*H_avg[ix,iy]^(n+2)+as*H_avg[ix,iy]^n)*(sqrt(∇Sx_lim[ix,iy]^2+∇Sy_lim[ix,iy]^2))^(n-1)
-    end 
-    return 
-end 
-
-
-
-function compute_flux_with_limiter!(S,qHx,qHy,D,Bx,By,dx,dy)
-    # qHx = zeros(nx-1, ny-2) qHy = zeros(nx-2, ny-1)
-    # Bx = zeros(nx-1, ny-2) By = zeros(nx-2, ny-1)
-    @get_thread_idx(S)
-    if ix <= nx-1 && iy <= ny-2 
-        qHx[ix,iy] = -@av_ya(D)*(max(Bx[ix,iy], S[ix+1,iy+1])-max(Bx[ix,iy],S[ix,iy+1]))/dx 
-    end 
-    if ix <= nx-2 && iy <= ny-1 
-        qHy[ix,iy] = -@av_xa(D)*(max(By[ix,iy], S[ix+1,iy+1])-max(By[ix,iy],S[ix+1,iy]))/dy 
-    end 
-    return 
+    if ix<=nx-1 && iy<=ny
+        ∇Sx[ix,iy] = (S[ix+1,iy]-S[ix,iy])/dx
+    end
+    if iy<=ny-1 && ix<=nx
+        ∇Sy[ix,iy] = (S[ix,iy+1]-S[ix,iy])/dy
+    end
+    return
 end
+
+
+function compute_D_without_limiter!(S,gradS,∇Sx,∇Sy,D,H,n,a,as)
+    @get_thread_idx(S)
+    if ix<=nx-1 && iy<=ny-1
+        gradS[ix,iy] = sqrt(@av_ya(∇Sx)^2 + @av_xa(∇Sy)^2)
+        D[ix,iy]     = (a*@av_xy(H)^(n+2)+as*@av_xy(H)^n)*gradS[ix,iy]^(n-1)
+    end
+    return
+end
+
+
+
+function compute_flux_without_limiter!(S,qHx,qHy,D,dx,dy)
+    @get_thread_idx(S)
+    if ix<=nx-1 && iy<=ny-2
+        qHx[ix,iy] = -@av_ya(D)*@d_xi(S)/dx
+    end
+    if ix<=nx-2 && iy<=ny-1
+        qHy[ix,iy] = -@av_xa(D)*@d_yi(S)/dy
+    end
+    return
+end 
+
 
 function compute_icethickness!(S,M,dHdt,qHx,qHy,dx,dy)
     @get_thread_idx(S)
@@ -88,16 +68,16 @@ end
 function set_BC!(H)
     @get_thread_idx(H)
     if ix == 1 && iy <= ny 
-        H[ix,iy] = H[ix+1, iy]
+        H[ix,iy] = 0.0 
     end 
     if ix == nx && iy <= ny 
-        H[ix,iy] = H[ix-1, iy]
+        H[ix,iy] = 0.0 
     end 
     if ix <= nx && iy == 1 
-        H[ix,iy] = H[ix, iy+1] 
+        H[ix,iy] = 0.0 
     end 
     if ix <= nx && iy == ny 
-        H[ix,iy] = H[ix, iy-1] 
+        H[ix,iy] = 0.0 
     end 
 
     return 
@@ -111,12 +91,10 @@ function update_S!(S,H,B)
     return
 end
 
-
-function update_with_limiter!(S, H, B, M, D, B_avg, H_avg, Bx, By, ∇Sx_lim,∇Sy_lim, gradS, qHx, qHy, dHdt, dx, dy, dt, n, a, as, threads, blocks)
-    CUDA.@sync @cuda threads=threads blocks=blocks compute_limiter_1!(B,S,B_avg, H_avg, Bx, By) 
-    CUDA.@sync @cuda threads=threads blocks=blocks compute_∇S_with_limiter!(S, B_avg, ∇Sx_lim,∇Sy_lim,dx,dy)
-    CUDA.@sync @cuda threads=threads blocks=blocks compute_D_with_limiter!(S,∇Sx_lim,∇Sy_lim,D,H_avg,n,a,as)
-    CUDA.@sync @cuda threads=threads blocks=blocks compute_flux_with_limiter!(S,qHx,qHy,D,Bx,By,dx,dy)
+function update_without_limiter!(S, H, B, M, D, ∇Sx,∇Sy, gradS, qHx, qHy, dHdt, dx, dy, dt, n, a, as, threads, blocks)
+    CUDA.@sync @cuda threads=threads blocks=blocks compute_∇S_without_limiter!(S,∇Sx,∇Sy,dx,dy) #compute diffusitivity 
+    CUDA.@sync @cuda threads=threads blocks=blocks compute_D_without_limiter!(S,gradS,∇Sx,∇Sy,D,H,n,a,as)
+    CUDA.@sync @cuda threads=threads blocks=blocks compute_flux_without_limiter!(S,qHx,qHy,D,dx,dy) # compute flux 
     CUDA.@sync @cuda threads=threads blocks=blocks compute_icethickness!(S, M, dHdt, qHx, qHy, dx, dy) # compute ice thickness
     CUDA.@sync @cuda threads=threads blocks=blocks update_H!(H, dHdt, dt) # update ice thickness
     CUDA.@sync @cuda threads=threads blocks=blocks set_BC!(H) # update ice thickness
@@ -125,16 +103,22 @@ function update_with_limiter!(S, H, B, M, D, B_avg, H_avg, Bx, By, ∇Sx_lim,∇
 end
 
 
+
 function sia_2D()
     # physics
     s2y     = 3600*24*365.25 # seconds to years
     lx,ly   = 30e3, 30e3     # lx, ly = 30 km
     n       = 3
     ρg      = 970*9.8
-    ttot    = 10e4 #5000 #10e4
+    ttot    = 10e4
     a0      = 1.5e-24
+    grad_b  = 0.01 
+    z_ela   = 2150
+    b_max   = 2.0 
+    B0      = 3500
     # numerics
     nx,ny   = 128,128
+    ns      = 1
     nout    = 1000    # error check frequency
     ndt     = 20      # dt check/update
     threads = (16,16) # n threads
@@ -146,22 +130,28 @@ function sia_2D()
     dy      = ly/ny 
     xc      = LinRange(dx/2,lx-dx/2,nx)
     yc      = LinRange(dy/2,ly-dy/2,ny)
+    x0      = xc[Int(nx/2)]
+    y0      = yc[Int(ny/2)]
     cfl     = max(dx^2,dy^2)/4.1
-    # derived physics 
+    # derived physics s
     a       = 2.0*a0/(n+2)*ρg^n*s2y
     as      = 5.7e-20
     # array initialisation
     B       = zeros(nx,ny)
     M       = zeros(nx,ny)
     H       = zeros(nx,ny)
+
     # define bed vector
-    xm,xmB  = 20e3,7e3
-    M .= (((n.*2.0./xm.^(2*n-1)).*xc.^(n-1)).*abs.(xm.-xc).^(n-1)).*(xm.-2.0*xc)
-    M[xc.>xm ,:] .= 0.0 
-    B[xc.<xmB,:] .= 500
-    B[2:end-1,2:end-1] .= B[2:end-1,2:end-1] .+ 1.0./4.1.*(diff(diff(B[:,2:end-1], dims=1), dims=1) .+ diff(diff(B[2:end-1,:], dims=2), dims=2))
-    B[[1,end],:] .= B[[2,end-1],:]
-    B[:,[1,end]] .= B[:,[2,end-1]]
+    xm,xmB,ymB  = 20e3,7e3,7e3
+    #M .= (((n.*2.0./xm.^(2*n-1)).*xc.^(n-1)).*abs.(xm.-xc).^(n-1)).*(xm.-2.0*xc)
+    #M[xc.>xm ,:] .= 0.0 
+    #B[xc.<xmB,:] .= 500
+    #B[abs.(xc.-x0).< xmB, abs.(yc.-y0).< ymB] .= 500
+    #B[sqrt.((xc.-x0).^2 .+ (yc'.-y0).^2) .< xmB] .= 3500
+    B      = @. B0*(exp(-xc^2/10^10-yc'^2/10^9)+exp(-xc^2/10^9-(yc'-ly/8)^2/10^10)) 
+    for is = 1:ns 
+        B[2:end-1,2:end-1] .= B[2:end-1,2:end-1] .+ 1.0./4.1.*(diff(diff(B[:,2:end-1], dims=1), dims=1) .+ diff(diff(B[2:end-1,:], dims=2), dims=2))
+    end
     # plot
     p1 = heatmap(xc, yc, B', aspect_ratio=1, xlims=(xc[1], xc[end]), ylims=(yc[1], yc[end]), c=:turbo, title= "H")
     p2 = heatmap(xc, yc, M', aspect_ratio=1, xlims=(xc[1], xc[end]), ylims=(yc[1], yc[end]), c=:turbo, title = "B")
@@ -169,7 +159,7 @@ function sia_2D()
     # array initialization 
     H     = CuArray{Float64}(H) 
     B     = CuArray{Float64}(B)
-    M     = CuArray{Float64}(M)
+    
     S     = CUDA.zeros(Float64,nx ,ny  )
     B_avg = CUDA.zeros(Float64, nx-1,ny-1)
     H_avg = CUDA.zeros(Float64, nx-1,ny-1)
@@ -189,11 +179,15 @@ function sia_2D()
     # init bed
     CUDA.@sync @cuda threads=threads blocks=blocks update_S!(S,H,B)
 
-    t = 0.0; it = 1; dt = 0.1
-    #t = 0.0; it = 1; dt = dtsc * min(1.0, cfl/(epsi+maximum(D)))
+    S     = Array(S) 
+    M    .= min.(grad_b.*(S.-z_ela), b_max)
+    M     = CuArray{Float64}(M)
+    S     = CuArray{Float64}(S)
+
+    t = 0.0; it = 1; dt = dtsc * min(1.0, cfl/(epsi+maximum(D)))
     while t <= ttot
         if (it==1 || it%ndt==0) dt=dtsc*min(1.0, cfl/(epsi+maximum(D))) end
-        update_with_limiter!(S, H, B, M, D, B_avg, H_avg, Bx, By, ∇Sx_lim,∇Sy_lim, gradS, qHx, qHy, dHdt, dx, dy, dt, n, a, as, threads, blocks)
+        update_without_limiter!(S, H, B, M, D, ∇Sx,∇Sy, gradS, qHx, qHy, dHdt, dx, dy, dt, n, a, as, threads, blocks)
         if it%nout == 0
             @printf("it = %d, max(dHdt) = %1.2e \n", it, maximum(dHdt))
             if maximum(dHdt)<ϵtol break; end
@@ -209,3 +203,7 @@ function sia_2D()
 end
 
 sia_2D()
+
+#the mass balance rate M, is defined as the annual gain, accumulation, or loss of mass, ablation, at the galcier surface 
+# we define the mass balance rate gradient 
+# M = 

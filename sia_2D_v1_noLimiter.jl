@@ -21,10 +21,6 @@ ixi, iyi  = :($ix+1), :($iy+1)
 macro av_xya(A) esc(:( ($A[$ix, $iy] + $A[($ix+1), $iy] + $A[$ix,($iy+1)] + $A[($ix+1),($iy+1)])*0.25 )) end
 # macro  av_xa(A) esc(:( ($A[$ix, $iy ] + $A[($ix+1), $iy   ])*0.5 )) end
 # macro  av_ya(A) esc(:( ($A[$ix, $iy ] + $A[ $ix   ,($iy+1)])*0.5 )) end
-# macro d_xa(A)   esc(:( $A[ix+1,iy]-$A[ix,iy] )) end
-# macro d_ya(A)   esc(:( $A[ix,iy+1]-$A[ix,iy] )) end
-# macro d_xi(A)   esc(:( $A[ix+1,iy+1]-$A[ix,iy+1] )) end
-# macro d_yi(A)   esc(:( $A[ix+1,iy+1]-$A[ix+1,iy] )) end
 macro     sw(A) esc(:( $A[ $ix   ,  $iy   ] )) end
 macro     se(A) esc(:( $A[ $ix   , ($iy+1)] )) end
 macro     nw(A) esc(:( $A[($ix+1),  $iy   ] )) end
@@ -49,23 +45,23 @@ end
     return
 end 
 
-@parallel function compute_1!(B_avg::Data.Array, Bx::Data.Array, By::Data.Array, B::Data.Array)
+# @parallel function compute_1!(B_avg::Data.Array, Bx::Data.Array, By::Data.Array, B::Data.Array)
 
-     @all(B_avg) = max(max(@sw(B), @se(B)), max(@nw(B), @ne(B)))
-     @all(Bx)    = max(@e_inn(B), @w_inn(B))
-     @all(By)    = max(@n_inn(B), @s_inn(B))
+#     @all(B_avg) = max(max(@sw(B), @se(B)), max(@nw(B), @ne(B)))
+#     @all(Bx)    = max(@e_inn(B), @w_inn(B))
+#     @all(By)    = max(@n_inn(B), @s_inn(B))
 
-     return
-end
+#     return
+# end
 
-@parallel function compute_2!(H_avg::Data.Array, B_avg::Data.Array, dSdx::Data.Array, dSdy::Data.Array, grdS2::Data.Array, D::Data.Array, H::Data.Array, S::Data.Array, _dx::Data.Number, _dy::Data.Number, a1::Data.Number, a2::Data.Number, npow::Int)
+@parallel function compute_2!(H_avg::Data.Array, dSdx::Data.Array, dSdy::Data.Array, grdS2::Data.Array, D::Data.Array, H::Data.Array, S::Data.Array, _dx::Data.Number, _dy::Data.Number, a1::Data.Number, a2::Data.Number, npow::Int)
 
-     @all(H_avg) = 0.25*(max(0.0, @sw(S)-@all(B_avg)) + max(0.0, @se(S)-@all(B_avg)) + max(0.0, @nw(S)-@all(B_avg)) + max(0.0, @ne(S)-@all(B_avg)))
-    #@all(H_avg) = @av_xya(H)
-     @all(dSdx)  = 0.5*_dx*(max(@all(B_avg), @se(S)) - max(@all(B_avg), @sw(S)) + max(@all(B_avg), @ne(S)) - max(@all(B_avg), @nw(S)))
-     @all(dSdy)  = 0.5*_dy*(max(@all(B_avg), @nw(S)) - max(@all(B_avg), @sw(S)) + max(@all(B_avg), @ne(S)) - max(@all(B_avg), @se(S)))
-    #@all(dSdx)  = _dx*@d_xa(S)
-    #@all(dSdy)  = _dy*@d_ya(S)
+    # @all(H_avg) = 0.25*(max(0.0, @sw(S)-@all(B_avg)) + max(0.0, @se(S)-@all(B_avg)) + max(0.0, @nw(S)-@all(B_avg)) + max(0.0, @ne(S)-@all(B_avg)))
+    @all(H_avg) = @av_xya(H)
+    # @all(dSdx)  = 0.5*_dx*(max(@all(B_avg), @se(S)) - max(@all(B_avg), @sw(S)) + max(@all(B_avg), @ne(S)) - max(@all(B_avg), @nw(S)))
+    # @all(dSdy)  = 0.5*_dy*(max(@all(B_avg), @nw(S)) - max(@all(B_avg), @sw(S)) + max(@all(B_avg), @ne(S)) - max(@all(B_avg), @se(S)))
+    @all(dSdx)  = _dx*@d_xa(S)
+    @all(dSdy)  = _dy*@d_ya(S)
     @all(grdS2) = @av_ya(dSdx)*@av_ya(dSdx) + @av_xa(dSdy)*@av_xa(dSdy)  # DEBUG: |∇S|^2 from Visnjevic et al. 2018 eq. (A5) should be |∇S|^(n-1). In the code |∇S| = sqrt(dS/dx^2 + dS/dy^2), and |∇S|^(n-1) = (sqrt(dS/dx^2 + dS/dy^2))^(npow-1)
     @all(D)     = (a1*@pow(@all(H_avg), (npow+2)) + a2*@pow(@all(H_avg), npow))*@all(grdS2)
 
@@ -74,11 +70,11 @@ end
 
 @parallel function compute_3!(qHx::Data.Array, qHy::Data.Array, D::Data.Array, S::Data.Array, _dx::Data.Number, _dy::Data.Number)
 
-     @all(qHx)  = -@av_ya(D)*( max(@all(Bx), @e_inn(S)) - max(@all(Bx), @w_inn(S)) )*_dx
-     @all(qHy)  = -@av_xa(D)*( max(@all(By), @n_inn(S)) - max(@all(By), @s_inn(S)) )*_dy
+    # @all(qHx)  = -@av_ya(D)*( max(@all(Bx), @e_inn(S)) - max(@all(Bx), @w_inn(S)) )*_dx
+    # @all(qHy)  = -@av_xa(D)*( max(@all(By), @n_inn(S)) - max(@all(By), @s_inn(S)) )*_dy
 
-    #@all(qHx)  = -@av_ya(D)*@d_xi(S)*_dx
-    #@all(qHy)  = -@av_xa(D)*@d_yi(S)*_dy
+    @all(qHx)  = -@av_ya(D)*@d_xi(S)*_dx
+    @all(qHy)  = -@av_xa(D)*@d_yi(S)*_dy
 
     return
 end
@@ -122,13 +118,13 @@ end
     # physics
     ρg      = 910.0*9.81
     s2yr    = 31557600.0
+    a0      = 1.5e-24
     npow    = 3
     a0      = 2.0
     Lx      = 30e3
     Ly      = 30e3
     xm      = 20e3
     t_tot   = 1e1
-    ttot    = 1.5e-24
     # numerics
     BLOCK_X = 16
     BLOCK_Y = 16 
@@ -137,19 +133,21 @@ end
     nx      = GRID_X*BLOCK_X
     ny      = GRID_Y*BLOCK_Y
     nout    = 1000
-    ε       = 1e-4#1e-2
+    ε       = 1e-2
     tolnl   = 1e-8
-    damp    = 0.0 # 0.7
+    damp    = 0.7
     itMax   = 100000
     # preprocess
-    a1      = 1.9e-24*ρg^npow*s2yr
-    a2      = 5.7e-20*ρg^npow*s2yr
+    a1      = 2.0*a0/(npow+2)*ρg^npow*s2yr
+    #a1      = 1.9e-24*ρg^npow*s2yr
+    #a2      = 5.7e-20*ρg^npow*s2yr
+    a2      = 5.7e-20
     dx, dy  = Lx/nx, Ly/ny
     xc      = LinRange(dx/2, Lx-dx/2, nx)
     yc      = LinRange(dy/2, Ly-dy/2, ny)
     (Xc,Yc) = ([x for x=xc,y=yc], [y for x=xc,y=yc])
     _dx, _dy = 1.0/dx, 1.0/dy
-    cfl      = max(dx^2,dy^2)/4.1 #1.0/8.1*max(dx*dx, dy*dy)
+    cfl     = 1.0/8.1*max(dx*dx, dy*dy)
     cuthreads = (BLOCK_X, BLOCK_Y, 1)
     cublocks  = (GRID_X , GRID_Y , 1)
     # initial
@@ -160,8 +158,8 @@ end
     dSdy    = @zeros(nx  ,ny-1)
     grdS2   = @zeros(nx-1,ny-1)
     D       = @zeros(nx-1,ny-1)
-    Bx      = @zeros(nx-1,ny-2)
-    By      = @zeros(nx-2,ny-1)
+    # Bx      = @zeros(nx-1,ny-2)
+    # By      = @zeros(nx-2,ny-1)
     qHx     = @zeros(nx-1,ny-2)
     qHy     = @zeros(nx-2,ny-1)
     RH      = @zeros(nx-2,ny-2)
@@ -188,64 +186,35 @@ end
 
     @parallel cublocks cuthreads compute_S!(S, B, H)
 
-    # implicit 
-    # it = 1; err = 2*tolnl
-    # while (err>tolnl && it<itMax)
+    it = 1; err = 2*tolnl
+    while (err>tolnl && it<itMax)
 
-    #     @parallel cublocks cuthreads err_1!(Err, H)
-    #     @parallel cublocks cuthreads compute_1!(B_avg, Bx, By, B)
-    #     @parallel cublocks cuthreads compute_2!(H_avg, dSdx, dSdy, grdS2, D, H, S, _dx, _dy, a1, a2, npow)
-    #     @parallel cublocks cuthreads compute_3!(qHx, qHy, D, S, _dx, _dy)
-    #     @parallel cublocks cuthreads compute_4!(dHdτ, RH, dτ, qHx, qHy, A, D, _dx, _dy, damp, cfl, ε)
-    #     @parallel cublocks cuthreads compute_5!(H, dHdτ, dτ)
-    #     @parallel cublocks cuthreads set_BC!(H)
-    #     @parallel cublocks cuthreads compute_S!(S, B, H)
-
-    #     # time_p = time_p + dτ
-    #     it = it+1
-
-    #     if mod(it, nout) == 0
-
-    #         @parallel cublocks cuthreads err_2!(Err, H)
-
-    #         err = (sum(abs.(Err[:]))./nx./ny)
-    #         @printf("iter = %d, max resid = %1.3e \n", it, err)
-
-    #         p1 = heatmap(xc,yc,S', aspect_ratio=1, xlims=(xc[1], xc[end]), ylims=(yc[1], yc[end]), c=:viridis, title="S")
-    #         p2 = heatmap(xc,yc,H', aspect_ratio=1, xlims=(xc[1], xc[end]), ylims=(yc[1], yc[end]), c=:viridis, title="H")
-    #         display(plot( p1, p2 ))
-
-    #         if (err < tolnl) break; end
-    #     end
-    # end
-
-    #explicit 
-
-    t = 0.0; it = 1; dt = 0.9*min(1.0, cfl/(ε+maximum(D)))
-    while t <= ttot 
-        if (it==1 || it%ndt==0) dt=0.9*min(1.0, cfl/(ε+maximum(D))) end
         @parallel cublocks cuthreads err_1!(Err, H)
-        @parallel cublocks cuthreads compute_1!(B_avg, Bx, By, B)
-        @parallel cublocks cuthreads compute_2!(H_avg, B_avg, dSdx, dSdy, grdS2, D, H, S, _dx, _dy, a1, a2, npow)
+        # @parallel cublocks cuthreads compute_1!(B_avg, Bx, By, B)
+        @parallel cublocks cuthreads compute_2!(H_avg, dSdx, dSdy, grdS2, D, H, S, _dx, _dy, a1, a2, npow)
         @parallel cublocks cuthreads compute_3!(qHx, qHy, D, S, _dx, _dy)
         @parallel cublocks cuthreads compute_4!(dHdτ, RH, dτ, qHx, qHy, A, D, _dx, _dy, damp, cfl, ε)
         @parallel cublocks cuthreads compute_5!(H, dHdτ, dτ)
         @parallel cublocks cuthreads set_BC!(H)
         @parallel cublocks cuthreads compute_S!(S, B, H)
-        if it%nout == 0
-            @printf("it = %d, max(dHdt) = %1.2e \n", it, maximum(dHdt))
-            if maximum(dHdt)<ϵtol break; end
-            p1 = heatmap(xc,yc,Array(S'), title="S, it=$(it)"; opts...)
-            p2 = heatmap(xc,yc,Array(H'), title="H"; opts...)
-            p3 = plot(xc, [Array(S[:,ceil(Int,ny/2)]),Array(B[:,ceil(Int,ny/2)])])
-            p4 = plot(xc, Array(H[:,ceil(Int,ny/2)]))
-            display(plot(p1,p2,p3,p4, title="SIA 2D"))
+
+        # time_p = time_p + dτ
+        it = it+1
+
+        if mod(it, nout) == 0
+
+            @parallel cublocks cuthreads err_2!(Err, H)
+
+            err = (sum(abs.(Err[:]))./nx./ny)
+            @printf("iter = %d, max resid = %1.3e \n", it, err)
+
+            p1 = heatmap(xc,yc,S', aspect_ratio=1, xlims=(xc[1], xc[end]), ylims=(yc[1], yc[end]), c=:viridis, title="S")
+            p2 = heatmap(xc,yc,H', aspect_ratio=1, xlims=(xc[1], xc[end]), ylims=(yc[1], yc[end]), c=:viridis, title="H")
+            display(plot( p1, p2 ))
+
+            if (err < tolnl) break; end
         end
-        it += 1
-        t += dt
-
-    end 
-
+    end
 
     return
 end
