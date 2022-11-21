@@ -161,6 +161,9 @@ function sia_2D()
 
     B[2:end-1,2:end-1] .= B[2:end-1,2:end-1] .+ 1.0./4.1.*(diff(diff(B[:,2:end-1], dims=1), dims=1) .+ diff(diff(B[2:end-1,:], dims=2), dims=2))
 
+    # B[[1,end],:] .= B[[2,end-1],:]
+
+    # B[:,[1,end]] .= B[:,[2,end-1]]
     # for is = 1:ns
     #     B[2:end-1,2:end-1] .= B[2:end-1,2:end-1] .+ 1.0./4.1.*(diff(diff(B[:,2:end-1], dims=1), dims=1) .+ diff(diff(B[2:end-1,:], dims=2), dims=2))
     

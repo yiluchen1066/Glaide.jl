@@ -30,14 +30,6 @@ end
 #     return nothing 
 # end 
 
-function compute_∇S_without_limiter!(∇Sx, S, dx, nx)
-    @get_thread_idx() 
-    if ix <= nx-1 
-        ∇Sx[ix] = @d_xa(S)/dx
-    end 
-    return 
-end 
-
 @parallel function compute_∇S_without_limiter!(∇Sx, S, dx, nx)
     @all(∇Sx) = @d_xa(S)/dx
     return nothing 
@@ -51,22 +43,32 @@ function computer_∇S_with_limiter!(∇Sx, S, B_avg, dx, nx)
     return 
 end 
 
-function compute_D!(D,∇Sx,H_avg, n, a, as, nx)
-    @get_thread_idx() 
-    if ix<= nx-1
-        #D[ix] = (a*H[ix]^(n+2))*@av_xa(∇Sx)^(n-1)
-        #D[ix] = (a*H[ix]^(n+2)+as*H[ix]^n)*@av_xa(∇Sx)^(n-1)
-        D[ix]  = (a*H_avg[ix]^(n+2) + as*H_avg[ix]^n)*∇Sx[ix]^(n-1)
-    end 
-    return 
+# function compute_D!(D,∇Sx,H_avg, n, a, as, nx)
+#     @get_thread_idx() 
+#     if ix<= nx-1
+#         #D[ix] = (a*H[ix]^(n+2))*@av_xa(∇Sx)^(n-1)
+#         #D[ix] = (a*H[ix]^(n+2)+as*H[ix]^n)*@av_xa(∇Sx)^(n-1)
+#         D[ix]  = (a*H_avg[ix]^(n+2) + as*H_avg[ix]^n)*∇Sx[ix]^(n-1)
+#     end 
+#     return 
+# end 
+
+@parallel function compute_D!(D,∇Sx,H_avg, n, a, as)
+    @all(D)   = (a*@all(H_avg)^(n+2) + as*@all(H_avg)^n)*@all(∇Sx)^(n-1) 
+    return nothing 
 end 
 
-function compute_flux_without_limiter!(S, qHx, D, ∇Sx, dx, nx) 
-    @get_thread_idx()
-    if ix <= nx-1
-        qHx[ix] = -D[ix]*@d_xa(S)/dx
-    end 
-    return 
+# function compute_flux_without_limiter!(S, qHx, D, ∇Sx, dx, nx) 
+#     @get_thread_idx()
+#     if ix <= nx-1
+#         qHx[ix] = -D[ix]*@d_xa(S)/dx
+#     end 
+#     return 
+# end 
+
+@parallel function compute_flux_without_limiter!(S, qHx, D, ∇Sx, dx) 
+    @all(qHx) = @all(qHx)-@all(D)*@d_xa(S)/dx 
+    return nothing 
 end 
 
 function compute_flux_with_limiter!(S, qHx, B_avg, D, dx, nx)
@@ -84,6 +86,11 @@ function update_1!(dHdt, qHx, M, dx, nx)
     end 
 
     return 
+end 
+
+@parallel function update_1!(dHdt, qHx, M, dx, nx)
+    @all(dHdt) = @inn(M) - @d_xa(qHx)/dx
+    return nothing 
 end 
 
 function update_2!(dHdt, H, dt, nx)
