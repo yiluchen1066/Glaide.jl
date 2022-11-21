@@ -2,7 +2,7 @@ using CUDA,BenchmarkTools
 using Plots,Plots.Measures,Printf
 default(size=(800,600),framestyle=:box,label=false,grid=false,margin=10mm,lw=4,labelfontsize=9,tickfontsize=9,titlefontsize=12)
 
-macro get_thread_idx(A)  esc(:( begin nx,ny = size($A); ix = (blockIdx().x-1) * blockDim().x+threadIdx().x; iy = (blockIdx().y-1) * blockDim().y+threadIdx().y; end )) end
+macro get_thread_idx(A)  esc(:( begin ix = (blockIdx().x-1) * blockDim().x+threadIdx().x; iy = (blockIdx().y-1) * blockDim().y+threadIdx().y; end )) end
 macro av_xy(A)  esc(:( 0.25*($A[ix,iy]+$A[ix+1,iy]+$A[ix,iy+1]+$A[ix+1,iy+1]) )) end
 macro av_xa(A)  esc(:( 0.5*($A[ix,iy]+$A[ix+1,iy]) )) end
 macro av_ya(A)  esc(:( 0.5*($A[ix,iy]+$A[ix,iy+1]) )) end
@@ -14,7 +14,7 @@ macro d_yi(A)   esc(:( $A[ix+1,iy+1]-$A[ix+1,iy] )) end
 CUDA.device!(7) # GPU selection
 
 
-function compute_∇S_without_limiter!(S,∇Sx,∇Sy,dx,dy)
+function compute_∇S_without_limiter!(S,∇Sx,∇Sy,dx,dy, nx, ny)
     @get_thread_idx(S)
     if ix<=nx-1 && iy<=ny
         ∇Sx[ix,iy] = (S[ix+1,iy]-S[ix,iy])/dx
@@ -26,7 +26,7 @@ function compute_∇S_without_limiter!(S,∇Sx,∇Sy,dx,dy)
 end
 
 
-function compute_D_without_limiter!(S,gradS,∇Sx,∇Sy,D,H,n,a,as)
+function compute_D_without_limiter!(S,gradS,∇Sx,∇Sy,D,H,n,a,as, nx, ny)
     @get_thread_idx(S)
     if ix<=nx-1 && iy<=ny-1
         gradS[ix,iy] = sqrt(@av_ya(∇Sx)^2 + @av_xa(∇Sy)^2)
@@ -37,7 +37,7 @@ end
 
 
 
-function compute_flux_without_limiter!(S,qHx,qHy,D,dx,dy)
+function compute_flux_without_limiter!(S,qHx,qHy,D,dx,dy,nx, ny)
     @get_thread_idx(S)
     if ix<=nx-1 && iy<=ny-2
         qHx[ix,iy] = -@av_ya(D)*@d_xi(S)/dx
@@ -49,7 +49,7 @@ function compute_flux_without_limiter!(S,qHx,qHy,D,dx,dy)
 end 
 
 
-function compute_icethickness!(S,M,dHdt,qHx,qHy,dx,dy)
+function compute_icethickness!(S,M,dHdt,qHx,qHy,dx,dy,nx,ny)
     @get_thread_idx(S)
     if ix<=nx-2 && iy<=ny-2
         dHdt[ix,iy] = -(@d_xa(qHx)/dx + @d_ya(qHy)/dy) + M[ix+1,iy+1]
@@ -57,7 +57,7 @@ function compute_icethickness!(S,M,dHdt,qHx,qHy,dx,dy)
     return
 end 
 
-function update_H!(H,dHdt,dt)
+function update_H!(H,dHdt,dt,nx,ny)
     @get_thread_idx(H)
     if ix<=nx-2 && iy<=ny-2
         H[ix+1,iy+1] = max(0.0, H[ix+1,iy+1] + dt*dHdt[ix,iy])
@@ -65,7 +65,7 @@ function update_H!(H,dHdt,dt)
     return
 end 
 
-function set_BC!(H)
+function set_BC!(H,nx,ny)
     @get_thread_idx(H)
     if ix == 1 && iy <= ny 
         H[ix,iy] = 0.0 
@@ -83,7 +83,7 @@ function set_BC!(H)
     return 
 end 
 
-function update_S!(S,H,B)
+function update_S!(S,H,B,nx,ny)
     @get_thread_idx(S)
     if ix<=nx && iy<=ny
         S[ix,iy] = B[ix,iy] + H[ix,iy]
@@ -91,14 +91,14 @@ function update_S!(S,H,B)
     return
 end
 
-function update_without_limiter!(S, H, B, M, D, ∇Sx,∇Sy, gradS, qHx, qHy, dHdt, dx, dy, dt, n, a, as, threads, blocks)
-    CUDA.@sync @cuda threads=threads blocks=blocks compute_∇S_without_limiter!(S,∇Sx,∇Sy,dx,dy) #compute diffusitivity 
-    CUDA.@sync @cuda threads=threads blocks=blocks compute_D_without_limiter!(S,gradS,∇Sx,∇Sy,D,H,n,a,as)
-    CUDA.@sync @cuda threads=threads blocks=blocks compute_flux_without_limiter!(S,qHx,qHy,D,dx,dy) # compute flux 
-    CUDA.@sync @cuda threads=threads blocks=blocks compute_icethickness!(S, M, dHdt, qHx, qHy, dx, dy) # compute ice thickness
-    CUDA.@sync @cuda threads=threads blocks=blocks update_H!(H, dHdt, dt) # update ice thickness
-    CUDA.@sync @cuda threads=threads blocks=blocks set_BC!(H) # update ice thickness
-    CUDA.@sync @cuda threads=threads blocks=blocks update_S!(S, H, B) # update surface 
+function update_without_limiter!(S, H, B, M, D, ∇Sx,∇Sy, gradS, qHx, qHy, dHdt, dx, dy, dt, n, a, as,nx,ny,threads, blocks)
+    CUDA.@sync @cuda threads=threads blocks=blocks compute_∇S_without_limiter!(S,∇Sx,∇Sy,dx,dy, nx, ny) #compute diffusitivity 
+    CUDA.@sync @cuda threads=threads blocks=blocks compute_D_without_limiter!(S,gradS,∇Sx,∇Sy,D,H,n,a,as, nx, ny)
+    CUDA.@sync @cuda threads=threads blocks=blocks compute_flux_without_limiter!(S,qHx,qHy,D,dx,dy,nx, ny) # compute flux 
+    CUDA.@sync @cuda threads=threads blocks=blocks compute_icethickness!(S,M,dHdt,qHx,qHy,dx,dy,nx,ny) # compute ice thickness
+    CUDA.@sync @cuda threads=threads blocks=blocks update_H!(H,dHdt,dt,nx,ny) # update ice thickness
+    CUDA.@sync @cuda threads=threads blocks=blocks set_BC!(H,nx,ny) # update ice thickness
+    CUDA.@sync @cuda threads=threads blocks=blocks update_S!(S,H,B,nx,ny) # update surface 
     return
 end
 
@@ -148,7 +148,7 @@ function sia_2D()
     #B[xc.<xmB,:] .= 500
     #B[abs.(xc.-x0).< xmB, abs.(yc.-y0).< ymB] .= 500
     #B[sqrt.((xc.-x0).^2 .+ (yc'.-y0).^2) .< xmB] .= 3500
-    B      = @. B0*(exp(-xc^2/10^10-yc'^2/10^9)+exp(-xc^2/10^9-(yc'-ly/8)^2/10^10)) 
+    B      = @. B0*(exp(-(xc-x0)^2/10^10-yc'^2/10^9)+exp(-(xc-x0)^2/10^9-(yc'-ly/8)^2/10^10)) 
     for is = 1:ns 
         B[2:end-1,2:end-1] .= B[2:end-1,2:end-1] .+ 1.0./4.1.*(diff(diff(B[:,2:end-1], dims=1), dims=1) .+ diff(diff(B[2:end-1,:], dims=2), dims=2))
     end
@@ -177,7 +177,7 @@ function sia_2D()
     blocks = ceil.(Int,(nx,ny)./threads)
     opts = (aspect_ratio=1,xlims=(xc[1],xc[end]),ylim=(yc[1],yc[end]),c=:turbo)
     # init bed
-    CUDA.@sync @cuda threads=threads blocks=blocks update_S!(S,H,B)
+    CUDA.@sync @cuda threads=threads blocks=blocks update_S!(S,H,B,nx,ny)
 
     S     = Array(S) 
     M    .= min.(grad_b.*(S.-z_ela), b_max)
@@ -187,7 +187,7 @@ function sia_2D()
     t = 0.0; it = 1; dt = dtsc * min(1.0, cfl/(epsi+maximum(D)))
     while t <= ttot
         if (it==1 || it%ndt==0) dt=dtsc*min(1.0, cfl/(epsi+maximum(D))) end
-        update_without_limiter!(S, H, B, M, D, ∇Sx,∇Sy, gradS, qHx, qHy, dHdt, dx, dy, dt, n, a, as, threads, blocks)
+        update_without_limiter!(S, H, B, M, D, ∇Sx,∇Sy, gradS, qHx, qHy, dHdt, dx, dy, dt, n, a, as,nx,ny,threads, blocks)
         if it%nout == 0
             @printf("it = %d, max(dHdt) = %1.2e \n", it, maximum(dHdt))
             if maximum(dHdt)<ϵtol break; end
