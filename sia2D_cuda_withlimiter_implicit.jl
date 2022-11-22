@@ -166,14 +166,14 @@ function sia_2D()
     dy      = ly/ny 
     xc      = LinRange(dx/2,lx-dx/2,nx)
     yc      = LinRange(dy/2,ly-dy/2,ny)
-    cfl     = max(dx^2,dy^2)/4.1
+    cfl     = min(dx^2,dy^2)/4.1
     # derived physics 
     a       = 2.0*a0/(n+2)*ρg^n*s2y
     as      = 5.7e-20
     # array initialisation
     B       = zeros(nx,ny)
     M       = zeros(nx,ny)
-    H       = zeros(nx,ny)
+    H       = ones(nx,ny).*10
     # define bed vector
     xm,xmB  = 20e3,7e3
     M .= (((n.*2.0./xm.^(2*n-1)).*xc.^(n-1)).*abs.(xm.-xc).^(n-1)).*(xm.-2.0*xc)

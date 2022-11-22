@@ -155,14 +155,15 @@ function sia_2D()
     # physics
     s2y     = 3600*24*365.25 # seconds to years
     lx,ly   = 30e3, 30e3     # lx, ly = 30 km
+    w       = 0.15*lx
     n       = 3
     ρg      = 970*9.8
     ttot    = 10e4 #5000 #10e4
     a0      = 1.5e-24
-    grad_b  = 0.01 
-    z_ela   = 2150 
-    b_max   = 2.0 
-    B0      = 3500 
+    grad_b  = 0.001 #0.01 
+    z_ela   = 300
+    b_max   = 0.1 # 2.0
+    B0      = 500 #3500 
     # numerics
     nx,ny   = 128,128
     nout    = 1000    # error check frequency
@@ -187,7 +188,7 @@ function sia_2D()
     # array initialisation
     B       = zeros(nx,ny)
     M       = zeros(nx,ny)
-    H       = zeros(nx,ny)
+    H       = ones(nx,ny).*10
     # define bed vector
     xm,xmB  = 20e3,7e3
     #M .= (((n.*2.0./xm.^(2*n-1)).*xc.^(n-1)).*abs.(xm.-xc).^(n-1)).*(xm.-2.0*xc)
@@ -195,7 +196,8 @@ function sia_2D()
     
     # cylinder bedrock setup 
     #B[sqrt.((xc.-x0).^2 .+ (yc'.-y0).^2) .< xmB] .= 500
-    B      = @. B0*(exp(-(xc-x0)^2/10^10-yc'^2/10^9)+exp(-(xc-x0)^2/10^9-(yc'-ly/8)^2/10^10)) 
+    #B      = @. B0*(exp(-(xc-x0)^2/10^10-yc'^2/10^9)+exp(-(xc-x0)^2/10^9-(yc'-ly/8)^2/10^10)) 
+    B      = @. B0*(exp(-(xc-x0)^2/w^2-(yc'-y0)^2/w^2))
 
     # smoother 
     B[2:end-1,2:end-1] .= B[2:end-1,2:end-1] .+ 1.0./4.1.*(diff(diff(B[:,2:end-1], dims=1), dims=1) .+ diff(diff(B[2:end-1,:], dims=2), dims=2))
