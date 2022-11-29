@@ -165,7 +165,7 @@ function sia_2D()
     b_max   = 0.1 # 2.0
     B0      = 500 #3500 
     # numerics
-    nx,ny   = 128,128
+    nx,ny   = 512,512
     nout    = 1000    # error check frequency
     ndt     = 20      # dt check/update
     threads = (16,16) # n threads
@@ -188,7 +188,8 @@ function sia_2D()
     # array initialisation
     B       = zeros(nx,ny)
     M       = zeros(nx,ny)
-    H       = ones(nx,ny).*10
+    #H       = zeros(nx,ny)
+    H       = ones(nx,ny).*100
     # define bed vector
     xm,xmB  = 20e3,7e3
     #M .= (((n.*2.0./xm.^(2*n-1)).*xc.^(n-1)).*abs.(xm.-xc).^(n-1)).*(xm.-2.0*xc)
@@ -244,14 +245,20 @@ function sia_2D()
             CUDA.@sync @cuda threads=threads blocks=blocks compute_error_2!(Err,H, nx, ny) 
             err = (sum(abs.(Err[:,:]))./nx./ny) 
             @printf("iter = %d, max resid = %1.3e \n", it, err) 
-            p1 = heatmap(xc,yc,Array(S'), title="S, it=$(it)"; opts...)
-            p2 = heatmap(xc,yc,Array(H'), title="H"; opts...)
-            p3 = plot(xc, [Array(S[:,ceil(Int,ny/2)]),Array(B[:,ceil(Int,ny/2)])])
-            p4 = plot(xc, Array(H[:,ceil(Int,ny/2)]))
-            display(plot(p1,p2,p3,p4, title="SIA 2D"))
+            # p1 = heatmap(xc,yc,Array(S'), title="S, it=$(it)"; opts...)
+            # p2 = heatmap(xc,yc,Array(H'), title="H"; opts...)
+            # p3 = plot(xc, [Array(S[:,ceil(Int,ny/2)]),Array(B[:,ceil(Int,ny/2)])])
+            # p4 = plot(xc, Array(H[:,ceil(Int,ny/2)]))
+            # display(plot(p1,p3, title="SIA 2D"))
             if (err < ϵtol) break; end 
         end 
     end 
+    p1 = heatmap(xc,yc,Array(S'), title="S",xlabel="X direction in m", ylabel="Y direction in m"; opts...)
+    p2 = heatmap(xc,yc,Array(H'), title="H"; opts...)
+    p3 = plot(xc, [Array(S[:,ceil(Int,ny/2)]),Array(B[:,ceil(Int,ny/2)])],xlabel="X in m", ylabel="Height in m")
+    p4 = plot(xc, Array(H[:,ceil(Int,ny/2)]))
+    display(plot(p3, title="SIA 2D"))
+    savefig("2D_setup2_cross_section_100.png")
 end
 
 sia_2D()

@@ -120,9 +120,9 @@ end
         if (it % nvis)==0
             mass = sum(H)*dx*dy
             #p1 = heatmap(xc, yc, Array((H.+B)'); xlims = (xc[1], xc[end]), ylims = (yc[1],yc[end]), aspect_ratio = 1.0, xlabel = "lx", ylabel = "ly", title = "time = $(round(t,digits=1))", c=:turbo)
-            p2 = plot(xc, Array(H[round(Int,ny/2),:]); xlabel = "x", ylabel = "H", title= "Cross section of ice thickness")
-            p3 = plot(yc, Array(H[round(Int,nx/2),:]);  xlabel = "y", ylabel = "H", title = "mass balance is $(mass - init_mass)")
-            display(plot(p2,p3,layout=(1,2)))
+            p3 = plot(xc, Array(H[round(Int,ny/2),:]); xlabel = "x", ylabel = "H", title= "Cross section of ice thickness")
+            p4 = plot(yc, Array(H[round(Int,nx/2),:]);  xlabel = "y", ylabel = "H", title = "mass balance is $(mass - init_mass)")
+            display(plot(p3,p4,layout=(1,2)))
         end
         t += dt
         it += 1

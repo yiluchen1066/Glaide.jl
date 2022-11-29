@@ -197,15 +197,20 @@ function sia_2D()
         if it%nout == 0
             @printf("it = %d, max(dHdt) = %1.2e \n", it, maximum(dHdt))
             if maximum(dHdt)<ϵtol break; end
-            p1 = heatmap(xc,yc,Array(S'), title="S, it=$(it)"; opts...)
-            p2 = heatmap(xc,yc,Array(H'), title="H"; opts...)
-            p3 = plot(xc, [Array(S[:,ceil(Int,ny/2)]),Array(B[:,ceil(Int,ny/2)])])
-            p4 = plot(xc, Array(H[:,ceil(Int,ny/2)]))
-            display(plot(p1,p2,p3,p4, title="SIA 2D"))
+            # p1 = heatmap(xc,yc,Array(S'), title="S, it=$(it)"; opts...)
+            # p2 = heatmap(xc,yc,Array(H'), title="H"; opts...)
+            # p3 = plot(xc, [Array(S[:,ceil(Int,ny/2)]),Array(B[:,ceil(Int,ny/2)])])
+            # p4 = plot(xc, Array(H[:,ceil(Int,ny/2)]))
+            # display(plot(p1,p2,p3,p4, title="SIA 2D"))
         end
         it += 1
         t += dt
     end
+    p1 = heatmap(xc,yc,Array(S'), title="S, it=$(it)"; opts...)
+    p2 = heatmap(xc,yc,Array(H'), title="H"; opts...)
+    p3 = plot(xc, [Array(S[:,ceil(Int,ny/2)]),Array(B[:,ceil(Int,ny/2)])])
+    p4 = plot(xc, Array(H[:,ceil(Int,ny/2)]))
+    display(plot(p1, title="SIA 2D"))
 end
 
 sia_2D()

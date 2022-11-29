@@ -152,6 +152,7 @@ function sia_1D()
     M2  = readdlm("/scratch-1/yilchen/Msc-Inverse-SIA/Msc-Inverse-SIA/benchmark_data/M2.txt", ' ', Float64, '\n')
     MUSCL = readdlm("/scratch-1/yilchen/Msc-Inverse-SIA/Msc-Inverse-SIA/benchmark_data/MUSCL.txt", ' ', Float64, '\n')
     upstream = readdlm("/scratch-1/yilchen/Msc-Inverse-SIA/Msc-Inverse-SIA/benchmark_data/upstream.txt", ' ', Float64, '\n')
+    benchmark = readdlm("/scratch-1/yilchen/Msc-Inverse-SIA/Msc-Inverse-SIA/benchmark_data/benchmark.txt", ' ', Float64, '\n')
     # array initialisation
     B       = zeros(Float64, nx)
     M       = zeros(Float64, nx)
@@ -186,24 +187,34 @@ function sia_1D()
     S    .= B .+ H # init bed
     #t = 0.0; it = 1; dt = 1.0
     t = 0.0; it = 1; dt = dtsc * min(1.0, cfl/(epsi+maximum(D)))
-    while t <= ttot
+    anim = @animate while t <= ttot
         if (it==1 || it%ndt==0) dt=dtsc*min(1.0, cfl/(epsi+maximum(D))) end
-        #update_without_limiter!(S,H,B,M,D,∇Sx,qHx,dHdt,dx,dt,n,a,as,threads,blocks, nx)
-        update_with_limiter!(S,H,B,M,D,∇Sx,qHx,B_avg, H_avg,dHdt,dx,dt,n,a,as,threads,blocks, nx)
+        update_without_limiter!(S,H,B,M,D,∇Sx,qHx,dHdt,dx,dt,n,a,as,threads,blocks, nx)
+        #update_with_limiter!(S,H,B,M,D,∇Sx,qHx,B_avg, H_avg,dHdt,dx,dt,n,a,as,threads,blocks, nx)
         if it%nout == 0
             @printf("it = %d, t = %1.2f, max(dHdt) = %1.2e \n", it, t, maximum(dHdt[2:end-1]))
             #p1 = heatmap(xc,Array(S'), title="S, it=$(it)"; opts...)
             #p2 = heatmap(xc,Array(H'), title="H"; opts...)
             #p3 = plot(xc, [Array(S),Array(B)])
             #title = plot(title = "SIA 1D")
-            p3 = plot(xc, [Array(S),Array(B)], label = ["Implementation" "bedrock"], xlabel="X in m", ylabel="Height in m")
-            p3 = plot!(M2[:,1]*1e3, [M2[:,2], MUSCL[:,2], upstream[:,2]], label = [ "M2" "MUSCL superbee" "upstream"],xlabel="X in m", ylabel="Height in m")
-            p4 = plot(xc, Array(H),xlabel="X in m", ylabel="Height in m")
-            display(plot(p3, p4, title = "SIA 1D"))
+            # p3 = plot(xc, Array(S), label = "Implementation", xlabel="X in m", ylabel="Height in m", color=:firebrick1)
+            # p3 = plot!(xc, Array(B), label = "bedrock", xlabel="X in m", ylabel="Height in m", color=:grey)
+            # #p3 = plot(xc, [Array(S),Array(B)], label = ["Implementation" "bedrock"], xlabel="X in m", ylabel="Height in m")
+            # p3 = plot!(M2[:,1]*1e3, [M2[:,2], MUSCL[:,2], upstream[:,2],benchmark[:,2]], label = [ "M2" "MUSCL superbee" "upstream" "benchmark"],xlabel="X in m", ylabel="Height in m")
+            # p4 = plot(xc, Array(H),xlabel="X in m", ylabel="Height in m",color=:red)
+            # display(plot(p3, title = "SIA 1D cliff benchmark"))
         end
         it += 1
         t += dt
     end
+    p3 = plot(xc, Array(S), label = "Implementation", xlabel="X in m", ylabel="Height in m", color=:firebrick1)
+    p3 = plot!(xc, Array(B), label = "bedrock", xlabel="X in m", ylabel="Height in m", color=:grey)
+    #p3 = plot(xc, [Array(S),Array(B)], label = ["Implementation" "bedrock"], xlabel="X in m", ylabel="Height in m")
+    p3 = plot!(M2[:,1]*1e3, [M2[:,2], MUSCL[:,2], upstream[:,2],benchmark[:,2]], label = [ "M2" "MUSCL superbee" "upstream" "benchmark"],xlabel="X in m", ylabel="Height in m")
+    p4 = plot(xc, Array(H),xlabel="X in m", ylabel="Height in m",color=:red)
+    display(plot(p3, title = "SIA 1D cliff benchmark"))
+    savefig("1D_without_limiter.png")
+    #gif(anim, "1D_without_limiter.gif", fps=15)
 end
 
 sia_1D()

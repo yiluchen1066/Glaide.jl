@@ -1,5 +1,6 @@
 using CUDA,BenchmarkTools
 using Plots,Plots.Measures,Printf
+using DelimitedFiles
 default(size=(800,600),framestyle=:box,label=false,grid=false,margin=10mm,lw=4,labelfontsize=9,tickfontsize=9,titlefontsize=12)
 
 macro get_thread_idx(A)  esc(:( begin ix = (blockIdx().x-1) * blockDim().x+threadIdx().x; iy = (blockIdx().y-1) * blockDim().y+threadIdx().y; end )) end
@@ -209,14 +210,21 @@ function sia_2D()
             CUDA.@sync @cuda threads=threads blocks=blocks compute_error_2!(Err,H, nx, ny)
             err = (sum(abs.(Err[:,:]))./nx./ny) 
             @printf("iter = %d, max resid = %1.3e \n", it, err) 
-            p1 = heatmap(xc,yc,Array(S'), title="S, it=$(it)"; opts...)
-            p2 = heatmap(xc,yc,Array(H'), title="H"; opts...)
-            p3 = plot(xc, [Array(S[:,ceil(Int,ny/2)]),Array(B[:,ceil(Int,ny/2)])])
-            p4 = plot(xc, Array(H[:,ceil(Int,ny/2)]))
-            display(plot(p1,p2,p3,p4, title="SIA 2D"))
+            # p1 = heatmap(xc,yc,Array(S'), title="S, it=$(it)"; opts...)
+            # p2 = heatmap(xc,yc,Array(H'), title="H"; opts...)
+            # p3 = plot(xc, [Array(S[:,ceil(Int,ny/2)]),Array(B[:,ceil(Int,ny/2)])])
+            # p4 = plot(xc, Array(H[:,ceil(Int,ny/2)]))
+            # display(plot(p1,p2,p3,p4, title="SIA 2D"))
             if (err < ϵtol) break; end 
         end 
     end 
+    writedlm("S_without_limiter_implicit.txt", Array(S))
+    p1 = heatmap(xc,yc,Array(S'), title="S, it=$(it)"; opts...)
+    p2 = heatmap(xc,yc,Array(H'), title="H"; opts...)
+    p3 = plot(xc, [Array(S[:,ceil(Int,ny/2)]),Array(B[:,ceil(Int,ny/2)])])
+    p4 = plot(xc, Array(H[:,ceil(Int,ny/2)]))
+    display(plot(p3, title="SIA 2D"))
+    savefig("2D_without_limiter_implicit.png")
 end 
 
 sia_2D()
