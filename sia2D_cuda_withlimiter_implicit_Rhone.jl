@@ -1,6 +1,7 @@
 using CUDA,BenchmarkTools
 using Plots,Plots.Measures,Printf
 using HDF5
+using DelimitedFiles
 default(size=(800,600),framestyle=:box,label=false,grid=false,margin=10mm,lw=4,labelfontsize=9,tickfontsize=9,titlefontsize=12)
 
 macro get_thread_idx(A)  esc(:( begin ix = (blockIdx().x-1) * blockDim().x+threadIdx().x; iy = (blockIdx().y-1) * blockDim().y+threadIdx().y; end )) end
@@ -278,6 +279,11 @@ function sia_2D()
             if (err < ϵtol) break; end 
         end 
     end 
+    writedlm("S_rhone.txt", Array(S))
+    writedlm("B_rhone.txt", Array(B))
+    writedlm("H_rhone.txt", Array(H))
+    writedlm("xc_rhone.txt", Array(xc))
+    writedlm("yc_rhone.txt", Array(yc))
     # p1 = heatmap(xc,yc,Array(S'), title="S",xlabel="X direction in m", ylabel="Y direction in m"; opts...)
     # p2 = heatmap(xc,yc,Array(H'), title="H"; opts...)
     # p3 = plot(xc, [Array(S[:,ceil(Int,ny/2)]),Array(B[:,ceil(Int,ny/2)])],xlabel="X in m", ylabel="Height in m")
