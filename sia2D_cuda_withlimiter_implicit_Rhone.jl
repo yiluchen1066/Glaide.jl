@@ -139,6 +139,16 @@ function compute_M!(S,M, grad_b,b_max,z_ELA,nx,ny)
     return 
 end 
 
+function compute_velocity!(vx, vy, D, H_avg, S, ∇Sx_lim,∇Sy_lim,epsi, nx, ny) 
+    @get_thread_idx(S)
+    if ix <= nx-1 && iy <= ny-1
+        vx[ix,iy] = -D[ix,iy]/(H_avg[ix,iy]+epsi)*∇Sx_lim[ix,iy]
+        vy[ix,iy] = -D[ix,iy]/(H_avg[ix,iy]+epsi)*∇Sy_lim[ix,iy]
+    end 
+    return 
+end 
+
+
 
 function update_with_limiter!(S, H, B, M, D, B_avg, H_avg, Bx, By, ∇Sx_lim,∇Sy_lim, gradS, qHx, qHy, dHdτ, RH,dx, dy, dτ,damp,cfl,epsi,n, a, as, nx,ny, threads, blocks)
     CUDA.@sync @cuda threads=threads blocks=blocks compute_limiter_1!(B,S,B_avg, H_avg, Bx, By, nx, ny) 
@@ -248,6 +258,8 @@ function sia_2D()
     ∇Sy   = CUDA.zeros(Float64,nx  ,ny-1)
     ∇Sx_lim  = CUDA.zeros(Float64,nx-1,ny-1)
     ∇Sy_lim  = CUDA.zeros(Float64,nx-1,ny-1)
+    vx    = CUDA.zeros(Float64, nx-1,ny-1)
+    vy    = CUDA.zeros(Float64, nx-1,ny-1)
     gradS = CUDA.zeros(Float64,nx-1,ny-1)
     D     = CUDA.zeros(Float64,nx-1,ny-1)
     qHx   = CUDA.zeros(Float64,nx-1,ny-2)
@@ -279,11 +291,14 @@ function sia_2D()
             if (err < ϵtol) break; end 
         end 
     end 
+    CUDA.@sync @cuda threads=threads blocks=blocks compute_velocity!(vx, vy, D, H_avg, S, ∇Sx_lim,∇Sy_lim,epsi, nx, ny)
     writedlm("S_rhone.txt", Array(S))
     writedlm("B_rhone.txt", Array(B))
     writedlm("H_rhone.txt", Array(H))
     writedlm("xc_rhone.txt", Array(xc))
     writedlm("yc_rhone.txt", Array(yc))
+    writedlm("vx.txt", Array(vx))
+    writedlm("vy.txt", Array(vy))
     # p1 = heatmap(xc,yc,Array(S'), title="S",xlabel="X direction in m", ylabel="Y direction in m"; opts...)
     # p2 = heatmap(xc,yc,Array(H'), title="H"; opts...)
     # p3 = plot(xc, [Array(S[:,ceil(Int,ny/2)]),Array(B[:,ceil(Int,ny/2)])],xlabel="X in m", ylabel="Height in m")
