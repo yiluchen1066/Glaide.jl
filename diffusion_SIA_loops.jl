@@ -114,7 +114,7 @@ end
 
     T_eff = A_eff/t_it
 
-    @printf("effective memory throuput = %1.3f GB/s\n", T_eff)
+    @printf("t_it = %1.6f s, effective memory throuput = %1.3f GB/s\n", t_it, T_eff)
 end
 
 nonlinear_diffusion_1D()

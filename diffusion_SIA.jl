@@ -3,6 +3,8 @@ default(size=(2500,1000),framestyle=:box,label=false,grid=false,margin=10mm,lw=6
 @views avx(A) = 0.5.*(A[1:end-1,:].+A[2:end,:])
 @views avy(A) = 0.5.*(A[:,1:end-1].+A[:,2:end])
 
+
+
 @views function nonlinear_diffusion_1D()
     # physics
     lx,ly  = 10.0, 10.0
