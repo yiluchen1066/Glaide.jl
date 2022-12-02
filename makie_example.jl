@@ -2,17 +2,17 @@ using GLMakie
 using DelimitedFiles
 using LinearAlgebra
 
-xc = vec(readdlm("xc_rhone.txt"))#LinRange(-1,1,201)
-yc = vec(readdlm("yc_rhone.txt"))#LinRange(-1,1,201)
+xc = vec(readdlm("glacier_data/xc_rhone.txt"))#LinRange(-1,1,201)
+yc = vec(readdlm("glacier_data/yc_rhone.txt"))#LinRange(-1,1,201)
 
 dx,dy = xc[2]-xc[1], yc[2]-yc[1]
 
-B = readdlm("B_rhone.txt")  # @. 0.1*sin(2π*xc)*cos(2π*yc')
-H = readdlm("H_rhone.txt")  # @. 0.5*sqrt(max(0.6 - xc^2 - yc'^2,0.0))
-S = readdlm("S_rhone.txt"); @. S[H == 0.0] = NaN  # @. B + Hs
+B = readdlm("glacier_data/B_rhone.txt")  # @. 0.1*sin(2π*xc)*cos(2π*yc')
+H = readdlm("glacier_data/H_rhone.txt")  # @. 0.5*sqrt(max(0.6 - xc^2 - yc'^2,0.0))
+S = readdlm("glacier_data/S_rhone.txt"); @. S[H == 0.0] = NaN  # @. B + Hs
 
-Vx = readdlm("vx.txt")
-Vy = readdlm("vy.txt")
+Vx = readdlm("glacier_data/vx.txt")
+Vy = readdlm("glacier_data/vy.txt")
 Vz = 0.0.*Vx
 
 for iy in axes(B,2)[2:end-1]
