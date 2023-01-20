@@ -1,5 +1,6 @@
 using CUDA,BenchmarkTools
 using Plots,Plots.Measures,Printf
+using DelimitedFiles
 default(size=(800,600),framestyle=:box,label=false,grid=false,margin=10mm,lw=4,labelfontsize=9,tickfontsize=9,titlefontsize=12)
 
 macro get_thread_idx(A)  esc(:( begin ix = (blockIdx().x-1) * blockDim().x+threadIdx().x; iy = (blockIdx().y-1) * blockDim().y+threadIdx().y; end )) end
@@ -175,8 +176,8 @@ function sia_2D()
     H       = zeros(nx,ny)
     #H       = ones(nx,ny).*10
     # read no limiter data
-    S_without_limiter = readdlm("/scratch-1/yilchen/Msc-Inverse-SIA/Msc-Inverse-SIA/S_without_limiter.txt")
-    S_without_limiter_implicit = readdlm("/scratch-1/yilchen/Msc-Inverse-SIA/Msc-Inverse-SIA/S_without_limiter_implicit.txt")
+    S_without_limiter = readdlm("/scratch-1/yilchen/Msc-Inverse-SIA/model_output/S_without_limiter.txt")
+    S_without_limiter_implicit = readdlm("/scratch-1/yilchen/Msc-Inverse-SIA/model_output/S_without_limiter_implicit.txt")
     # define bed vector
     xm,xmB  = 20e3,7e3
     M .= (((n.*2.0./xm.^(2*n-1)).*xc.^(n-1)).*abs.(xm.-xc).^(n-1)).*(xm.-2.0*xc)
