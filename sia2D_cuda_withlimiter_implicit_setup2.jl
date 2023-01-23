@@ -129,6 +129,7 @@ function update_S!(S,H,B,nx,ny)
     return
 end
 
+#
 function compute_M!(S,M, grad_b,b_max,z_ELA,nx,ny) 
     @get_thread_idx(S) 
     if ix <= nx && iy <= ny 
@@ -160,7 +161,7 @@ function sia_2D()
     ρg      = 970*9.8
     ttot    = 10e4 #5000 #10e4
     a0      = 1.5e-24
-    grad_b  = 0.001 #0.01 
+    grad_b  = 0.001 #0.01 # mass balance gradient 
     z_ela   = 300
     b_max   = 0.1 # 2.0
     B0      = 500 #3500 
