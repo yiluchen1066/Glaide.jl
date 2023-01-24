@@ -163,19 +163,30 @@ end
 
 
 #compute (dR/dH)^T
-function grad_residual_H!(tmp1, tmp2, tmp3, tmp4, S, H, B, D, ∇Sx, qHx, dR_q, dQ_h, dR_h, dR, n, a, as, β, b_max, z_ELA, dx, nx)
-    @get_thread_idx(H)
+function grad_residual_H_1!(tmp1, tmp2, S, H, B, D, ∇Sx, qHx, dR_q, n, a, as, β, b_max, z_ELA, dx, nx)
     Enzyme.autodiff_deferred(residual!, Duplicated(tmp1, tmp2), Const(S), Const(H), Const(B), Const(D), Const(∇Sx), Duplicated(qHx, dR_q), Const(n), Const(a), Const(as), Const(β), Const(b_max), Const(z_ELA), Const(dx), Const(nx))
-    Enzyme.autodiff_deferred(flux_q!,Duplicated(tmp3, dR_q),Const(S), Duplicated(H, dQ_h), Const(D), Const(∇Sx), Const(nx), Const(dx), Const(a), Const(as), Const(n))
-    Enzyme.autodiff_deferred(residual!, Duplicated(tmp4, tmp2), Const(S), Duplicated(H, dR_h),Const(D), Const(∇Sx), Const(qHx), Const(n), Const(a), Const(as), Const(β), Const(b_max), Const(z_ELA), Const(dx), Const(nx))
-    #dR .= dQ_h + dR_h
-    if ix <= nx 
-        dR[ix] = dQ_h[ix] + dR_h[ix]
-    end 
+    
     return  
 end 
 
+function grad_residual_H_2!(tmp3, dR_q, S, H, dQ_h, D, ∇Sx, nx, dx, a, as, n)
+    Enzyme.autodiff_deferred(flux_q!,Duplicated(tmp3, dR_q),Const(S), Duplicated(H, dQ_h), Const(D), Const(∇Sx), Const(nx), Const(dx), Const(a), Const(as), Const(n))
+    return 
+end 
+    
+function grad_residual_H_3!(tmp4, tmp2, S, H, dR_h, D, ∇Sx, qHx, n, a, as, β, b_max, z_ELA, dx, nx)
+    Enzyme.autodiff_deferred(residual!, Duplicated(tmp4, tmp2), Const(S), Duplicated(H, dR_h),Const(D), Const(∇Sx), Const(qHx), Const(n), Const(a), Const(as), Const(β), Const(b_max), Const(z_ELA), Const(dx), Const(nx))
+    return 
+end 
 
+
+function grad_residual_H_4!(dR, dQ_h, dR_h, nx) 
+    @get_thread_idx(dR) 
+    if ix <= nx 
+        dR[ix] = dQ_h[ix] + dR_h[ix]
+    end 
+    return 
+end 
 
 function update_r!(r, dR, R, H, dt, dmp, nx) 
     @get_thread_idx(H)
@@ -229,7 +240,10 @@ function solve!(problem::AdjointProblem)
         Err .= r 
         # compute dQ/dH 
         tmp2 .= r 
-        CUDA.@sync @cuda threads = threads blocks = blocks grad_residual_H!(tmp1, tmp2, tmp3, tmp4, S, H, B, D, ∇Sx, qHx, dR_q, dQ_h, dR_h, dR, n, a, as, β, b_max, z_ELA, dx, nx)
+        CUDA.@sync @cuda threads = threads blocks = blocks grad_residual_H_1!(tmp1, tmp2, S, H, B, D, ∇Sx, qHx, dR_q, n, a, as, β, b_max, z_ELA, dx, nx)
+        CUDA.@sync @cuda threads = threads blocks = blocks grad_residual_H_2!(tmp3, dR_q, S, H, dQ_h, D, ∇Sx, nx, dx, a, as, n)
+        CUDA.@sync @cuda threads = threads blocks = blocks grad_residual_H_3!(tmp4, tmp2, S, H, dR_h, D, ∇Sx, qHx, n, a, as, β, b_max, z_ELA, dx, nx)
+        CUDA.@sync @cuda threads = threads blocks = blocks grad_residual_H_4!(dR, dQ_h, dR_h, nx) 
         dR .= .-∂J_∂H
         CUDA.@sync @cuda threads = threads blocks = blocks update_r!(r, dR, R, H, dt, dmp, nx)
         if iter % ncheck == 0 
@@ -387,9 +401,9 @@ function adjoint_1D()
         push!(iter_evo, gd_iter); push!(J_evo, J_old/J_ini)
         CUDA.@sync @cuda threads=threads blocks=blocks update_S!(H, S, B, nx)
         if DO_VISU 
-            p1 = heatmap(xc, Array(S'); title = "S", aspect_ratio =1)
-            p2 = heatmap(xc, Array(β'); title = "β", aspect_ratio =1)
-            p3 = heatmap(xc, Array(S_obs'); title = "S_obs", aspect_ratio = 1)
+            p1 = plot(xc, Array(S'); title = "S")
+            p2 = plot(xc, Array(β'); title = "β")
+            p3 = plot(xc, Array(S_obs'); title = "S_obs")
             p4 = plot(iter_evo, J_evo; title="misfit", yaxis=:log10)
             display(plot(p1, p2, p3, p4; layout=(2,2), size=(980, 980)))
         end 
