@@ -455,10 +455,10 @@ function adjoint_1D()
         for bt_iter = 1:bt_niter 
             # update β
             @. β = clamp(β-γ*Jn, 0.0, 100.0)
-            p1 = plot(xc, Array(β); title="β")
-            display(p1)
+            #p1 = plot(xc, Array(β); title="β")
+            #display(p1)
             β[[1,end]] .= β[[2,end-1]]
-            smooth!(β,β2,nx,10,threads,blocks)
+            smooth!(β,β2,nx,100,threads,blocks)
             forward_problem.H .= H_ini
             # update H 
             solve!(forward_problem)
@@ -481,13 +481,17 @@ function adjoint_1D()
 
         push!(iter_evo, gd_iter); push!(J_evo, J_old/J_ini)
         CUDA.@sync @cuda threads=threads blocks=blocks update_S!(H, S, B, nx)
-        # if DO_VISU 
-        #     p1 = plot(xc, Array(S); title = "S")
-        #     p2 = plot(xc, Array(β); title = "β")
-        #     p3 = plot(xc, Array(S_obs); title = "S_obs")
-        #     p4 = plot(iter_evo, J_evo; title="misfit", yaxis=:log10)
-        #     display(plot(p1, p2, p3, p4; layout=(2,2), size=(980, 980)))
-        # end 
+        if DO_VISU 
+             p1 = plot(xc, Array(H_ini); xlabel="nx", ylabel="H (m)", title = "Initial state of ice thickness H(m)")
+             plot!(xc, Array(H_obs); title = "Observed value of ice thickness H(m)")
+             plot!(xc, Array(H); title="Current State of ice thickness H(m)")
+             p2 = plot(xc, Array(β_ini); title = "Initial state of β")
+             plot!(xc, Array(β_syn); title="Synthetic value of β")
+             plot!(xc,Array(β); title="Inversed value of β")
+             p3 = plot(xc, Array(Jn); title = "Gradient of cost function Jn")
+             p4 = plot(iter_evo, J_evo; title="misfit", yaxis=:log10)
+             display(plot(p1, p2, p3, p4; layout=(2,2), size=(980, 980)))
+        end 
 
         # check convergence?
         if J_old/J_ini < gd_ϵtol 
