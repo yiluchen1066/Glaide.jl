@@ -47,13 +47,23 @@ cost(H, H_obs) = 0.5*sum((H.-H_obs).^2)
 #     return 
 # end 
 
+function compute_D!(D,B,H, ∇Sx,nx, dx, a, as, n)
+    @get_thread_idx(H)
+    if ix <=nx-1 
+        ∇Sx[ix] = @d_xa(B)/dx + @d_xa(H)/dx
+        D[ix] = (a*@av_xa(H)^(n+2)+as*@av_xa(H)^n)*∇Sx[ix]^(n-1)
+    end 
+    return 
+end 
+
 
 function flux_q!(qHx, B, H, D, ∇Sx, nx, dx, a, as, n)
     @get_thread_idx(H)
     if ix <= nx-1
-        ∇Sx[ix] = @d_xa(B)/dx + @d_xa(H)/dx
-        D[ix] = (a*@av_xa(H)^(n+2)+as*@av_xa(H)^n)*∇Sx[ix]^(n-1)
-        qHx[ix] = -D[ix]*(@d_xa(B)/dx + @d_xa(H)/dx)
+        #∇Sx[ix] = @d_xa(B)/dx + @d_xa(H)/dx
+        #D[ix] = (a*@av_xa(H)^(n+2)+as*@av_xa(H)^n)*∇Sx[ix]^(n-1)
+        #qHx[ix] = -D[ix]*(@d_xa(B)/dx + @d_xa(H)/dx)
+        qHx[ix]  = -(a*@av_xa(H)^(n+2)+as*@av_xa(H)^n)*(@d_xa(B)/dx + @d_xa(H)/dx)^(n-1)*(@d_xa(B)/dx + @d_xa(H)/dx)
     end 
     return 
 end 
@@ -149,6 +159,7 @@ function solve!(problem::Forwardproblem)
         #Err .= H 
         #CUDA.@sync @cuda threads=threads blocks=blocks residual!(RH, H, B, qHx, β, b_max, z_ELA, dx, nx)
         CUDA.@sync @cuda threads=threads blocks=blocks compute_error_1!(Err, H, nx)
+        CUDA.@sync @cuda threads=threads blocks=blocks compute_D!(D,B,H, ∇Sx,nx, dx, a, as, n)
         CUDA.@sync @cuda threads=threads blocks=blocks flux_q!(qHx, B, H, D, ∇Sx, nx, dx, a, as, n)
         CUDA.@sync @cuda threads=threads blocks=blocks residual!(RH, H, B, qHx, β, b_max, z_ELA, dx, nx)   # compute RH 
         CUDA.@sync @cuda threads=threads blocks=blocks timestep!(D, dτ, nx, epsi, cfl)
@@ -184,7 +195,7 @@ function grad_residual_H_1!(tmp1, tmp2, H, B, qHx, dR_q, β, b_max, z_ELA, dx, n
 end 
 #flux_q!(qHx, B, H, D, ∇Sx, nx, dx, a, as, n)
 function grad_residual_H_2!(tmp3, dR_q, B, H, dQ_h, D, dQ_d, dQ_S, qHx, ∇Sx, nx, dx, a, as, n)
-    Enzyme.autodiff_deferred(flux_q!,Duplicated(tmp3, dR_q),Const(B), Duplicated(H, dQ_h), Duplicated(D, dQ_d), Duplicated(∇Sx, dQ_S),Const(nx), Const(dx), Const(a), Const(as), Const(n))
+    Enzyme.autodiff_deferred(flux_q!,Duplicated(tmp3, dR_q),Const(B), Duplicated(H, dQ_h), Const(D), Const(∇Sx),Const(nx), Const(dx), Const(a), Const(as), Const(n))
     return 
 end
     
@@ -318,6 +329,20 @@ function cost_gradient!(Jn, problem::AdjointProblem)
     Jn .= 0.0; tmp2 .= -r
     CUDA.@sync @cuda threads= threads blocks=blocks grad_residual_β!(tmp1, tmp2, H, B, qHx, β, Jn, b_max, z_ELA, dx, nx)
     
+    Jn[[1,end]] .= Jn[[2,end-1]]
+    return 
+end 
+
+
+function grad_residual_as_1!(tmp1, tmp2, B, H, D, ∇Sx, nx, dx, a, as, Jn, n)
+    Enzyme.autodiff_deferred(flux_q!,Duplicated(tmp1, tmp2),  Const(B), Const(H), Const(D), Const(∇Sx), Const(nx), Const(dx), Const(a), Duplicated(as, Jn), Const(n))
+    return 
+end 
+
+function cost_gradient!(Jn, problem::AdjointProblem)
+    (; H, H_obs, B, D, ∇Sx, qHx, r, dR, R, dR_q, dQ_h, dR_h, Err, tmp1, tmp2, tmp3, tmp4, ∂J_∂H, nx, dx, as, a, n, β, b_max, z_ELA, dmp, ϵtol, niter, ncheck, threads, blocks) = problem
+    Jn .= 0; tmp2 .= -dR_q
+    CUDA.@sync @cuda threads=threads blocks=blocks grad_residual_as_1!(tmp1, tmp2, B, H, D, ∇Sx, nx, dx, a, as, Jn, n)
     Jn[[1,end]] .= Jn[[2,end-1]]
     return 
 end 
