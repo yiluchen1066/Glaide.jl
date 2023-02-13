@@ -2,7 +2,7 @@ using CUDA,BenchmarkTools
 using Plots,Plots.Measures,Printf
 using DelimitedFiles
 using Enzyme 
-default(size=(800,600),framestyle=:box,label=false,grid=false,margin=10mm,lw=4,labelfontsize=9,tickfontsize=9,titlefontsize=12)
+default(size=(800,600),framestyle=:box,label=false,grid=false,margin=10mm,lw=4,labelfontsize=16,tickfontsize=14,titlefontsize=18, legendfontsize=12)
 
 const DO_VISU = true 
 macro get_thread_idx(A)  esc(:( begin ix =(blockIdx().x-1) * blockDim().x + threadIdx().x; end )) end 
@@ -362,7 +362,7 @@ function adjoint_1D()
     dmp_adj = 1.7 
     ϵtol = 1e-8
     gd_ϵtol = 1e-3
-    γ0 = 1.0e-10
+    γ0 = 1e-10
     niter = 100000
     ncheck = 100
     threads = 16 
@@ -389,6 +389,7 @@ function adjoint_1D()
     H_obs = copy(H)
     H_ini = copy(H)
     S_obs = copy(S)
+    
 
     
     B = @. B0*(exp(-(xc-x0)^2/w^2))
@@ -413,7 +414,8 @@ function adjoint_1D()
     #CUDA.@sync @cuda threads=threads blocks=blocks update_S!(H, S, B, nx)
     
     # how to define β_init β_syn 
-    β = 0.002*CUDA.ones(nx)
+    β = 0.0025*CUDA.ones(nx)
+    β_vis = copy(β)
     β_ini = copy(β)
     β_syn  = 0.0015*CUDA.ones(nx)
     β2 = similar(β)
@@ -431,7 +433,7 @@ function adjoint_1D()
     println("done.")
     solve!(forward_problem)
     H_ini .= forward_problem.H
-
+    H_vis = copy(H_ini)
 
     println("gradient descent")
 
@@ -442,7 +444,7 @@ function adjoint_1D()
 
     #S_obs .= B .+ H_obs 
     #S .= B .+ H 
-    #CUDA.@sync @cuda threads=threads blocks=blocks update_S!(H_obs, S_obs, B, nx)
+    CUDA.@sync @cuda threads=threads blocks=blocks update_S!(H_obs, S_obs, B, nx)
     #CUDA.@sync @cuda threads=threads blocks=blocks update_S!(H, S, B, nx)
     γ = γ0
     J_old = 0.0; J_new = 0.0 
@@ -462,6 +464,7 @@ function adjoint_1D()
         # line search 
         for bt_iter = 1:bt_niter 
             # update β
+            @show(size(β))
             @. β = clamp(β-γ*Jn, 0.0, 100.0)
             #p1 = plot(xc, Array(β); title="β")
             #display(p1)
@@ -495,15 +498,16 @@ function adjoint_1D()
         push!(iter_evo, gd_iter); push!(J_evo, J_old/J_ini)
         CUDA.@sync @cuda threads=threads blocks=blocks update_S!(H, S, B, nx)
         if DO_VISU 
-             p1 = plot(xc, Array(H_ini); xlabel="x", ylabel="H (m)", label= "Initial state of H" ,title = "Ice thickness H(m)")
-             plot!(xc, Array(H_obs); label = "Synthetic value of H")
-             plot!(xc, Array(H); label="Current state of H")
-             p2 = plot(xc, Array(β_ini); xlabel = "x", ylabel = "β", label="Initial state of β", title = "β")
-             plot!(xc, Array(β_syn); label="Syntheic value of β")
-             plot!(xc,Array(β); label="Current state of β")
-             p3 = plot(xc, Array(Jn); xlabel="x", ylabel="Cost function Jn",title = "Gradient of cost function Jn")
-             p4 = plot(iter_evo, J_evo; shape = :circle, xlabel="Iterations", ylabel="J_old/J_ini", title="misfit", yaxis=:log10)
-             display(plot(p1, p2, p3, p4; layout=(2,2), size=(980, 980)))
+            p1 = plot(xc, Array(B); xlabel="x", ylabel="H (m)", label= "Bedrock" ,title = "Surface S(m)")
+            plot!(xc, Array(H_vis.+B); xlabel="x", ylabel="Surface (m)", label= "Initial state of S" ,title = "Surface S(m)")
+            plot!(xc, Array(S_obs); label = "Synthetic value of S")
+            plot!(xc, Array(S); linestyle = :dash, color = :magenta, label="Current state of S")
+            p2 = plot(xc, Array(β_vis); xlabel = "x", ylabel = "β", label="Initial state of β", title = "β")
+            plot!(xc, Array(β_syn); label="Syntheic value of β")
+            plot!(xc,Array(β); linestyle = :dash,label="Current state of β")
+            p3 = plot(xc, Array(Jn); xlabel="x", ylabel="Jn",title = "Gradient of cost function Jn")
+            p4 = plot(iter_evo, J_evo; shape = :circle, xlabel="Iterations", ylabel="J_old/J_ini", title="misfit", yaxis=:log10)
+            display(plot(p1, p2, p3, p4; layout=(2,2), size=(2080, 980)))
         end 
 
         # check convergence?

@@ -63,7 +63,7 @@ function flux_q!(qHx, B, H, D, ∇Sx, nx, dx, a, as, n)
     return 
 end 
 
-function flux_q!()
+function compute_∇Sx!(∇Sx, ∇Sy, H, B, dx, dy, nx, ny)
     @get_thread_idx(H) 
     if ix <= nx-1 && iy <= ny 
         ∇Sx[ix,iy] = @d_xa(B)/dx + @d_xa(H)/dx
@@ -74,27 +74,75 @@ function flux_q!()
     return 
 end 
 
-function flux_q!()
-    @get_thread_idx(H) 
+function compute_D!(D, gradS, ∇Sx, ∇Sy, a, as, n, nx, ny)
+    @get_thread_idx(H)
     if ix <= nx-1 && iy <= ny-1 
-        D[ix,iy] = (a*@av_xy(H)^(n+2)+as*@av_xy(H)^n)*(sqrt(@av_ya(∇Sx)^2+@av_xa(∇Sy)^2))^(n-1)
+        gradS[ix, iy] = sqrt(@av_ya(∇Sx)^2+@av_xa(∇Sy)^2)
+        D[ix, iy] = (a*@av_xy(H)^(n+2)+as*@av_xy(H)^n)*gradS[ix,iy]^(n-1)
     end 
     return 
 end 
 
-function flux_q!()
-    @get_thread_idx(H) 
-    if ix <= nx-1 && iy <= ny-2 
+function compute_q!(qHx, qHy, D, H, B, nx, ny, dx, dy)
+    @get_thread_idx(H)
+    if ix <= nx-1 && iy <= ny-2
         qHx[ix,iy] = -@av_ya(D)*(@d_xi(H)+@d_xi(B))/dx 
     end 
     if ix <= nx-2 && iy <= ny-1 
         qHy[ix,iy] = -@av_xa(D)*(@d_yi(H)+@d_yi(B))/dy 
     end 
+    return
+end
+
+function residual!(RH, qHx, qHy, β, H, B, z_ELA, b_max, nx, ny, dx, dy)
+    @get_thread_idx(H)
+    if ix <= nx-2 && iy <= ny-2 
+        RH[ix,iy] =  -(@d_xa(qHx)/dx + @d_ya(qHy)/dy) + min(β[ix+1,iy+1]*(H[ix+1, iy+1]+B[ix+1, iy+1]-z_ELA), b_max)
+    end 
     return 
 end 
 
+function timestep!(dτ, H, D, cfl, epsi, nx, ny)
+    @get_thread_idx(H)
+    if ix <= nx-2 && iy <= ny-2 
+        dτ[ix,iy] = 0.5*min(1.0, cfl/(epsi+@av_xy(D)))
+    end 
+    return 
+end
 
+function update_H!(H, dHdτ, RH, dτ, damp, nx, ny)
+    @get_thread_idx(H)
+    if ix <= nx-2 && iy <= ny -2 
+        dHdτ[ix, iy] = dHdτ[ix,iy]*damp + RH[ix,iy]
+        H[ix+1,iy+1] = max(0.0, H[ix+1,iy+1]+dτ[ix,iy]*dHdτ[ix,iy])
+    end 
+    return 
+end
 
+function set_BC!(H, nx, ny)
+    @get_thread_idx(H)
+    if ix == 1 && iy <= ny 
+        H[ix,iy] = H[ix+1, iy]
+    end 
+    if ix == nx && iy <= ny 
+        H[ix,iy] = H[ix-1, iy]
+    end 
+    if ix <= nx && iy == 1 
+        H[ix,iy] = H[ix, iy+1]
+    end 
+    if ix <= nx && iy == ny 
+        H[ix, iy] = H[ix, iy-1]
+    end 
+    return 
+end
+
+function update_S!(S, H, B, nx, ny)
+    @get_thread_idx(H)
+    if ix <= nx && iy <= ny 
+        S[ix,iy] = H[ix,iy] + B[ix,iy]
+    end 
+    return 
+end 
 
 
 #function compute_M!(M, H, B, β, b_max, z_ELA, nx)
