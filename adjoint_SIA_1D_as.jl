@@ -289,7 +289,7 @@ function solve!(problem::AdjointProblem)
         dR .= .-∂J_∂H; tmp2 .= r 
         #println("auto differentiation procedure")
         #@show(size(dR_q))
-        #@show(size(qHx))ß
+        #@show(size(qHx))
         #@show(size(r))
         CUDA.@sync @cuda threads = threads blocks = blocks grad_residual_H_1!(tmp1, tmp2, H, B, qHx, dR_q, β, b_max, z_ELA, dx, nx)
         #println("grad_reidual_4")
