@@ -60,7 +60,7 @@ function compute_D!(D, gradS, av_ya_∇Sx, av_xa_∇Sy, H, B, a, as, n, nx, ny, 
         av_ya_∇Sx[ix,iy] = 0.5*((B[ix+1, iy+1]-B[ix,iy+1])/dx + (H[ix+1, iy+1]-H[ix,iy+1])/dx + (B[ix+1,iy]-B[ix,iy])/dx + (H[ix+1,iy]-H[ix,iy])/dx)
         av_xa_∇Sy[ix,iy] = 0.5*((B[ix+1, iy+1]-B[ix+1,iy])/dy + (H[ix+1, iy+1]-H[ix+1,iy])/dy + (B[ix,iy+1]-B[ix,iy])/dy + (H[ix,iy+1]-H[ix,iy])/dy)
         gradS[ix, iy] = sqrt(av_ya_∇Sx[ix,iy]^2+av_xa_∇Sy[ix,iy]^2)
-        D[ix, iy] = (a*@av_xy(H)^(n+2)+as*@av_xy(H)^n)*gradS[ix,iy]^(n-1)
+        D[ix, iy] = (a*@av_xy(H)^(n+2)+as[ix,iy]*@av_xy(H)^n)*gradS[ix,iy]^(n-1)
     end 
     return 
 end 
@@ -161,22 +161,22 @@ end
 
 
 mutable struct Forwardproblem{T<:Real, A<:AbstractArray{T}}
-    H::A; B::A; D::A; gradS::A; av_ya_∇Sx::A; av_xa_∇Sy::A; qHx::A; qHy::A; β::A
+    H::A; B::A; D::A; gradS::A; av_ya_∇Sx::A; av_xa_∇Sy::A; qHx::A; qHy::A; β::A; as::A
     dτ::A; dHdτ::A; RH::A; Err::A
-    n::Int; a::T; as::T; b_max::T; z_ELA::Int; dx::T; dy::T; nx::Int; ny::Int; epsi::T; cfl::T; ϵtol::T; niter::Int; ncheck::Int; threads::Tuple{Int, Int}; blocks::Tuple{Int, Int}; dmp::T
+    n::Int; a::T; b_max::T; z_ELA::Int; dx::T; dy::T; nx::Int; ny::Int; epsi::T; cfl::T; ϵtol::T; niter::Int; ncheck::Int; threads::Tuple{Int, Int}; blocks::Tuple{Int, Int}; dmp::T
 end 
 
-function Forwardproblem(H, B, D, gradS, av_ya_∇Sx, av_xa_∇Sy, qHx, qHy, β, n, a, as, b_max, z_ELA, dx, dy, nx, ny, epsi, cfl, ϵtol, niter, ncheck, threads, blocks, dmp)
+function Forwardproblem(H, B, D, gradS, av_ya_∇Sx, av_xa_∇Sy, qHx, qHy, β, as, n, a, b_max, z_ELA, dx, dy, nx, ny, epsi, cfl, ϵtol, niter, ncheck, threads, blocks, dmp)
     RH = similar(H,nx, ny)
     dHdτ = similar(H, nx-2, ny-2) 
     dτ   = similar(H, nx-2, ny-2) 
     Err  = similar(H, nx, ny)
-    return Forwardproblem(H, B, D, gradS, av_ya_∇Sx, av_xa_∇Sy, qHx, qHy, β,dτ, dHdτ, RH, Err, n, a, as, b_max, z_ELA, dx, dy, nx, ny, epsi, cfl, ϵtol, niter, ncheck, threads, blocks, dmp) 
+    return Forwardproblem(H, B, D, gradS, av_ya_∇Sx, av_xa_∇Sy, qHx, qHy, β, as,dτ, dHdτ, RH, Err, n, a, b_max, z_ELA, dx, dy, nx, ny, epsi, cfl, ϵtol, niter, ncheck, threads, blocks, dmp) 
 end 
 
 #solve for H using pseudo-trasient method 
 function solve!(problem::Forwardproblem)
-    (;H, B, D, gradS, av_ya_∇Sx, av_xa_∇Sy, qHx, qHy, β, dτ, dHdτ,RH, Err, n, a, as, b_max, z_ELA, dx,dy, nx, ny, epsi, cfl, ϵtol, niter, ncheck, threads, blocks, dmp) = problem
+    (;H, B, D, gradS, av_ya_∇Sx, av_xa_∇Sy, qHx, qHy, β, as, dτ, dHdτ,RH, Err, n, a, b_max, z_ELA, dx,dy, nx, ny, epsi, cfl, ϵtol, niter, ncheck, threads, blocks, dmp) = problem
     dHdτ .= 0; RH .= 0; dτ .= 0; Err .= 0
     merr = 2ϵtol; iter = 1 
     lx = 30e3
@@ -264,24 +264,26 @@ function grad_residual_H!(dR, dR_H, dD_Hx, dD_Hy, dqHx_H, dqHy_H)
     return 
 end 
 
-## 
-### size of r is not decided yet
-function update_r!(r, dR, R, H, dt, dmp, nx) 
-    @get_thread_idx(H)
-    if ix <= nx 
-        if H[ix] <= 1e-2
-            R[ix] = 0.0 
-            r[ix] = 0.0 
+
+function update_r!(r, R, dR, dt, dmp, nx, ny)
+    @get_thread_idx(R) 
+    if ix <= nx && iy <= ny 
+        if H[ix, iy] <= 1e-2 
+            R[ix,iy] = 0.0 
+            r[ix,iy] = 0.0 
         else 
-            R[ix] = R[ix]*(1.0 - dmp/nx) + dt*dR[ix] 
-            r[ix] += dt*R[ix]
+            R[ix,iy] = R[ix,iy]*(1.0 - dmp/min(nx,ny)) + dt*dR[ix,iy] 
+            r[ix,iy] += dt*R[ix,iy] 
         end 
-        if ix == 1 || ix == nx 
-            r[ix] = 0.0 # boundary conditions of r 
+        if ix ==1 || ix == nx 
+            r[ix,iy] = 0.0 
+        end 
+        if iy == 1 || iy == ny 
+            r[ix,iy] = 0.0 
         end 
     end 
     return 
-end
+end  
 
 function update_r_1!(r, dR, R, H, dt, dmp, nx)
     @get_thread_idx(H)
@@ -298,42 +300,42 @@ end
 
 
 mutable struct AdjointProblem{T<:Real, A<:AbstractArray{T}}
-    H::A; H_obs::A; B::A; D::A; qHx::A; qHy::A; β::A; gradS::A; av_ya_∇Sx::A; av_xa_∇Sy::A
+    H::A; H_obs::A; B::A; D::A; qHx::A; qHy::A; β::A; as::A; gradS::A; av_ya_∇Sx::A; av_xa_∇Sy::A
     r::A; dR::A; R::A; Err::A; dR_qHx::A; dR_qHy::A; dqHx_D::A;dqHx_H::A; dqHy_D::A; dqHy_H::A; dD_Hx::A; dD_Hy::A; dR_H::A
     tmp1::A; tmp2::A; tmp3::A; tmp4::A; tmp5::A; tmp6::A; tmp7::A; ∂J_∂H::A
-    z_ELA::Int; b_max::T; nx::Int; ny::Int; dx::T; dy::T; a::T; as::T; n::Int; dmp::T; ϵtol::T; niter::Int; ncheck::Int; threads::Tuple{Int, Int}; blocks::Tuple{Int, Int}
+    z_ELA::Int; b_max::T; nx::Int; ny::Int; dx::T; dy::T; a::T; n::Int; dmp::T; ϵtol::T; niter::Int; ncheck::Int; threads::Tuple{Int, Int}; blocks::Tuple{Int, Int}
 end 
 
 
-function AdjointProblem(H, H_obs,B, D, qHx, qHy, β, gradS, av_ya_∇Sx, av_xa_∇Sy, z_ELA, b_max, nx, ny, dx, dy, a, as, n, dmp, ϵtol, niter, ncheck, threads, blocks)
-    dR_qHx = similar(H)
-    dR_qHy = similar(H)
-    dqHx_D = similar(H)
-    dqHx_H = similar(H)
-    dqHy_D = similar(H)
-    dqHy_H = similar(H)
-    dD_Hx = similar(H)
-    dD_Hy = similar(H)
-    dR_H = similar(H)
-    r = similar(H, nx) 
-    R = similar(H, nx)
-    dR = similar(H, nx) 
-    Err = similar(H)
-    tmp1 = similar(H) 
-    tmp2 = similar(H)
-    tmp3 = similar(H) 
-    tmp4 = similar(H) 
-    tmp5 = similar(H) 
-    tmp6 = similar(H) 
-    tmp7 = similar(H)
-    ∂J_∂H = similar(H) 
-    return AdjointProblem(H, H_obs,B, D, qHx, qHy, β, gradS, av_ya_∇Sx, av_xa_∇Sy, r, dR, R, Err, dR_qHx, dR_qHy, dqHx_D, dqHx_H, dqHy_D, dqHy_H, dD_Hx, dD_Hy, dR_H, tmp1, tmp2, tmp3, tmp4, tmp5, tmp6, tmp7, ∂J_∂H, z_ELA, b_max, nx, ny, dx, dy, a, as, n, dmp, ϵtol, niter, ncheck, threads, blocks)
+function AdjointProblem(H, H_obs,B, D, qHx, qHy, β, as, gradS, av_ya_∇Sx, av_xa_∇Sy, z_ELA, b_max, nx, ny, dx, dy, a, n, dmp, ϵtol, niter, ncheck, threads, blocks)
+    dR_qHx = similar(H,(nx-1,ny-2))
+    dR_qHy = similar(H,(nx-2, ny-1))
+    dqHx_D = similar(H, (nx-1, ny-1))
+    dqHx_H = similar(H, (nx, ny))
+    dqHy_D = similar(H, (nx-1, ny-1))
+    dqHy_H = similar(H, (nx, ny))
+    dD_Hx = similar(H, (nx, ny))
+    dD_Hy = similar(H, (nx, ny))
+    dR_H = similar(H, (nx, ny))
+    r = similar(H, (nx,ny)) 
+    R = similar(H, (nx,ny))
+    dR = similar(H, (nx, ny)) 
+    Err = similar(H,(nx,ny))
+    tmp1 = similar(H,(nx,ny)) 
+    tmp2 = similar(H,(nx,ny))
+    tmp3 = similar(H,(nx,ny)) 
+    tmp4 = similar(H,(nx,ny)) 
+    tmp5 = similar(H,(nx,ny)) 
+    tmp6 = similar(H,(nx,ny)) 
+    tmp7 = similar(H,(nx,ny))
+    ∂J_∂H = similar(H,(nx,ny)) 
+    return AdjointProblem(H, H_obs,B, D, qHx, qHy, β, as, gradS, av_ya_∇Sx, av_xa_∇Sy, r, dR, R, Err, dR_qHx, dR_qHy, dqHx_D, dqHx_H, dqHy_D, dqHy_H, dD_Hx, dD_Hy, dR_H, tmp1, tmp2, tmp3, tmp4, tmp5, tmp6, tmp7, ∂J_∂H, z_ELA, b_max, nx, ny, dx, dy, a, n, dmp, ϵtol, niter, ncheck, threads, blocks)
 end 
 
 
 # solve for r using pseudo-trasient method to compute sensitvity afterwards 
 function solve!(problem::AdjointProblem) 
-    (; H, H_obs, B, D, qHx, qHy, β, gradS, av_ya_∇Sx, av_xa_∇Sy, r, dR, R, Err, dR_qHx, dR_qHy, dqHx_D, dqHx_H, dqHy_D, dqHy_H, dD_Hx, dD_Hy, dR_H, tmp1, tmp2, tmp3, tmp4, tmp5, tmp6, tmp7, ∂J_∂H, z_ELA, b_max, nx, ny, dx, dy, a, as, n, dmp, ϵtol, niter, ncheck, threads, blocks) = problem
+    (; H, H_obs, B, D, qHx, qHy, β, as, gradS, av_ya_∇Sx, av_xa_∇Sy, r, dR, R, Err, dR_qHx, dR_qHy, dqHx_D, dqHx_H, dqHy_D, dqHy_H, dD_Hx, dD_Hy, dR_H, tmp1, tmp2, tmp3, tmp4, tmp5, tmp6, tmp7, ∂J_∂H, z_ELA, b_max, nx, ny, dx, dy, a, n, dmp, ϵtol, niter, ncheck, threads, blocks) = problem
     r.= 0;  R.= 0; Err .= 0; dR .= 0; dR_qHx .= 0; dR_qHy .= 0; dqHx_D .= 0; dqHx_H .= 0; dqHy_D .= 0; dqHy_H .= 0; dD_Hx .= 0; dD_Hy .= 0; dR_H .= 0
 
     dt = max(dx^2, dy^2)/maximum(D)/4.1
@@ -347,7 +349,7 @@ function solve!(problem::AdjointProblem)
         dR .= .-∂J_∂H; tmp2 .= r 
         #println("auto differentiation procedure")
         #@show(size(dR_q))
-        #@show(size(qHx))ß
+        #@show(size(qHx))
         #@show(size(r))
         CUDA.@sync @cuda threads = threads blocks = blocks grad_residual_H_1!(tmp1, tmp2, qHx, qHy, dR_qHx, dR_qHy, β, H, B, z_ELA, b_max, nx, ny, dx, dy)
         #println("grad_reidual_1")
@@ -359,11 +361,11 @@ function solve!(problem::AdjointProblem)
         CUDA.@sync @cuda threads = threads blocks = blocks grad_residual_H_6!(tmp2, tmp7, qHx, qHy, β, H, dR_H, B, z_ELA, b_max, nx, ny, dx, dy) 
         CUDA.@sync @cuda threads = threads blocks = blocks grad_residual_H!(dR, dR_H, dD_Hx, dD_Hy, dqHx_H, dqHy_H) 
         #dR .= .-∂J_∂H
-        CUDA.@sync @cuda threads = threads blocks = blocks update_r!(r, dR, R, H, dt, dmp, nx)
+        CUDA.@sync @cuda threads = threads blocks = blocks update_r!(r, R, dR, dt, dmp, nx, ny)
         # if iter > 10 error("Stop") end
         if iter % ncheck == 0 
             #@. Err -= r 
-            merr = maximum(abs.(R[2:end-1]))
+            merr = maximum(abs.(R[2:end-1,2:end-1]))
             #p1 = plot(xc, Array(R); title = "R")
             # savefig(p1, "adjoint_debug/adjoint_R_$(iter).png")
             #display(p1)
@@ -379,38 +381,56 @@ function solve!(problem::AdjointProblem)
     @printf("adjoint solve converged: #iter/nx = %.1f, err = %.1e\n", iter/nx, merr)
     return 
 end 
- 
-#residual!(RH, H, B, qHx, β, b_max, z_ELA, dx, nx) 
-function grad_residual_β!(tmp1, tmp2, H, B, qHx, β, Jn, b_max, z_ELA, dx, nx)
-    Enzyme.autodiff_deferred(residual!,Duplicated(tmp1, tmp2), Const(H), Const(B), Const(qHx), Duplicated(β, Jn), Const(b_max), Const(z_ELA), Const(dx), Const(nx))
-    return 
-end
 
-function cost_gradient!(Jn, problem::AdjointProblem)
-    (; H, H_obs, B, D, ∇Sx, qHx, r, dR, R, dR_q, dQ_h, dR_h, Err, tmp1, tmp2, tmp3, tmp4, ∂J_∂H, nx, dx, as, a, n, β, b_max, z_ELA, dmp, ϵtol, niter, ncheck, threads, blocks) = problem
-    Jn .= 0.0; tmp2 .= -r
-    CUDA.@sync @cuda threads= threads blocks=blocks grad_residual_β!(tmp1, tmp2, H, B, qHx, β, Jn, b_max, z_ELA, dx, nx)
-    
-    Jn[[1,end]] .= Jn[[2,end-1]]
-    return 
-end 
 
-function laplacian!(β,β2,nx)
-    @get_thread_idx(β)
-    if ix >= 2 && ix <= nx-1 
-        β2[ix] = β[ix] + 0.5*(β[ix-1]+β[ix+1]-2.0*β[ix])
-    end
-    return
-end
-
-function smooth!(β,β2,nx,nsm, threads, blocks)
-    for _ = 1:nsm 
-        CUDA.@sync @cuda threads=threads blocks=blocks laplacian!(β,β2,nx)
-        β[[1,end]] .= β[[2,end-1]]
-        β, β2 = β2, β
+function grad_residual_as_1!(dqH_D, dqHx_D, dqHy_D, H, nx, ny)
+    # add up dqHx_D and dqHy_D to dqH_D in size (nx-1, ny-1)
+    @get_thread_idx(H)
+    if ix <= nx-1 && iy <= ny-1 
+        dqH_D[ix,iy] = dqHx_D[ix,iy] + dqHy_D[ix,iy]
     end 
     return 
 end 
+
+# compute dD_as stored i Jn
+# compute_D!(D, gradS, av_ya_∇Sx, av_xa_∇Sy, H, B, a, as, n, nx, ny, dx, dy)
+function grad_residual_as_2!(tmp1, tmp2, gradS, av_ya_∇Sx, av_xa_∇Sy, H, B, a, as, Jn, n, nx, ny, dx, dy) 
+    Enzyme.autodiff_deferred(compute_D!, Duplicated(tmp1, tmp2), Const(gradS), Const(av_ya_∇Sx), Const(av_xa_∇Sy), Const(H), Const(B), Const(a), Duplicated(as, Jn), Const(n), Const(nx), Const(ny), Const(dx), Const(dy))
+    return 
+end 
+
+function cost_gradient!(Jn, dqH_D, problem::AdjointProblem)
+    (; H, H_obs, B, D, qHx, qHy, β, as, gradS, av_ya_∇Sx, av_xa_∇Sy, r, dR, R, Err, dR_qHx, dR_qHy, dqHx_D, dqHx_H, dqHy_D, dqHy_H, dD_Hx, dD_Hy, dR_H, tmp1, tmp2, tmp3, tmp4, tmp5, tmp6, tmp7, ∂J_∂H, z_ELA, b_max, nx, ny, dx, dy, a, n, dmp, ϵtol, niter, ncheck, threads, blocks) = problem
+    
+    CUDA.@sync @cuda threads=threads blocks=blocks grad_residual_as_1!(dqH_D, dqHx_D, dqHy_D, H, nx, ny)
+    Jn .= 0.0; tmp2 .= -dqH_D 
+    CUDA.@sync @cuda threads=threads blocks=blocks grad_residual_as_2!(tmp1, tmp2, gradS, av_ya_∇Sx, av_xa_∇Sy, H, B, a, as, Jn, n, nx, ny, dx, dy)
+    Jn[[1,end],:] = Jn[[2,end-1],:]
+    Jn[:,[1,end]] = Jn[:,[2,end-1]]
+    return 
+end 
+
+function laplacian!(as, as2, H, nx, ny) 
+    @get_thread_idx(H) 
+    if ix >= 2 && ix <= nx-1 && iy <= ny
+        as2[ix,iy] = as[ix,iy] + 0.5*(as[ix-1,iy] + as[ix+1, iy] - 2.0*as[ix,iy])
+    end 
+    if iy >= 2 && iy <= ny-1 && ix <= nx 
+        as2[ix,iy] = as[ix,iy] + 0.5*(as[ix,iy-1] + as[ix, iy+1] - 2.0*as[ix,iy])
+    end 
+    return 
+end 
+
+function smooth!(as, as2, nx, ny, nsm, threads, blocks)
+    for _ = 1:nsm 
+        CUDA.@sync @cuda threads=threads blocks=blocks laplacian!(as, as2, H, nx, ny) 
+        as[[1,end],:] .= as[[2,end-1],:]
+        as[:,[1,end]] .= as[:,[2:end-1]] 
+        as, as2 = as2, as 
+    end 
+    return 
+end 
+
 
 
 
@@ -497,22 +517,28 @@ function adjoint_1D()
     #CUDA.@sync @cuda threads=threads blocks=blocks update_S!(H, S, B, nx)
     
     # how to define β_init β_syn 
-    β = 0.002*CUDA.ones(nx, ny)
-    β_ini = copy(β)
-    β_syn  = 0.0015*CUDA.ones(nx, ny)
-    β2 = similar(β)
+    β = 0.0015*CUDA.ones(nx, ny)
+    
+    as = 2.0e-10*CUDA.ones(nx-1, ny-1) 
+    as_ini = copy(as)
+    as_syn = 5.7e-20*CUDA.ones(nx-1,ny-1)
+    as2 = similar(as) 
 
-    Jn = CUDA.zeros(Float64,nx, ny)
+
+
+    Jn = CUDA.zeros(Float64,nx-1, ny-1)
+    dqH_D = CUDA.zeros(Float64, nx-1, ny-1)
     # display
     # synthetic problem
     
     
     #Forwardproblem(H, B, D, gradS, av_ya_∇Sx, av_xa_∇Sy, qHx, qHy, β, n, a, as, b_max, z_ELA, dx, dy, nx, ny, epsi, cfl, ϵtol, niter, ncheck, threads, blocks, dmp)
-    synthetic_problem = Forwardproblem(H_obs, B, D, gradS, av_ya_∇Sx, av_xa_∇Sy, qHx, qHy, β_syn,n, a, as, b_max, z_ELA, dx, dy, nx, ny, epsi, cfl, ϵtol, niter, ncheck, threads, blocks, dmp)
+    #AdjointProblem(H, H_obs,B, D, qHx, qHy, β, as, gradS, av_ya_∇Sx, av_xa_∇Sy, z_ELA, b_max, nx, ny, dx, dy, a, n, dmp, ϵtol, niter, ncheck, threads, blocks)
+    synthetic_problem = Forwardproblem(H_obs, B, D, gradS, av_ya_∇Sx, av_xa_∇Sy, qHx, qHy, β,n, a, as_syn, b_max, z_ELA, dx, dy, nx, ny, epsi, cfl, ϵtol, niter, ncheck, threads, blocks, dmp)
     forward_problem = Forwardproblem(H, B, D, gradS, av_ya_∇Sx, av_xa_∇Sy, qHx, qHy, β,n, a, as, b_max, z_ELA, dx, dy, nx, ny, epsi, cfl, ϵtol, niter, ncheck, threads, blocks, dmp)
-    #adjoint_problem = AdjointProblem(H, H_obs,B, D, ∇Sx, qHx, β, nx, dx, as, a, n, b_max, z_ELA, dmp_adj, ϵtol, niter, ncheck, threads, blocks)
+    adjoint_problem = AdjointProblem(H, H_obs, B, D, qHx, qHy, β, as, gradS, av_ya_∇Sx, av_xa_∇Sy, z_ELA, b_max, nx, ny, dx, dy, a, n, dmp_adj, ϵtol, niter, ncheck, threads, blocks)
 
-    println("generating synthetic data (nx = $nx)...")
+    println("generating synthetic data (nx = $nx, ny = $ny)...")
     solve!(synthetic_problem)
     println("done.")
     solve!(forward_problem)
@@ -527,7 +553,7 @@ function adjoint_1D()
     #CUDA.@sync @cuda threads=threads blocks=blocks update_S!(H, S, B, nx)
     γ = γ0
     J_old = 0.0; J_new = 0.0 
-    J_old = sqrt(cost(H, H_obs)*dx)
+    J_old = sqrt(cost(H, H_obs)*dx*dy)
     #CUDA.@sync @cuda threads=threads blocks=blocks cost!(H, H_obs, J_old, nx)
     #@printf("initial cost function equals %.1e\n", J_old)
     J_ini = J_old
@@ -535,22 +561,23 @@ function adjoint_1D()
     J_evo = Float64[]; iter_evo = Int[]
     # gradient descent iterations to update n 
     for gd_iter = 1:gd_niter 
-        β_ini .= β
+        as_ini .= as
         solve!(adjoint_problem)
-        cost_gradient!(Jn, adjoint_problem)
+        cost_gradient!(Jn, dqH_D, adjoint_problem)
         # line search 
         for bt_iter = 1:bt_niter 
             # update β
-            @. β = clamp(β-γ*Jn, 0.0, 100.0)
+            @. as = clamp(as-γ*Jn, 0.0, 100.0)
             #p1 = plot(xc, Array(β); title="β")
             #display(p1)
-            β[[1,end]] .= β[[2,end-1]]
-            smooth!(β,β2,nx,500,threads,blocks)
+            as[[1,end],:] .= as[[2,end-1],:]
+            as[:,[1,end]] .= as[:, [2,end-1]]
+            smooth!(as, as2, nx, ny, 400, threads, blocks)
             forward_problem.H .= H_ini
             # update H 
             solve!(forward_problem)
             #update cost functiion 
-            J_new = sqrt(cost(H, H_obs)*dx)
+            J_new = sqrt(cost(H, H_obs)*dx*dy)
             @show(J_new)
             if J_new < J_old 
                 # we accept the current value of γ
@@ -567,16 +594,16 @@ function adjoint_1D()
         end 
 
         push!(iter_evo, gd_iter); push!(J_evo, J_old/J_ini)
-        CUDA.@sync @cuda threads=threads blocks=blocks update_S!(H, S, B, nx)
+        CUDA.@sync @cuda threads=threads blocks=blocks update_S!(S, H, B, nx, ny)
         if DO_VISU 
-             p1 = plot(xc, Array(H_ini); xlabel="x", ylabel="H (m)", label= "Initial state of H" ,title = "Ice thickness H(m)")
-             plot!(xc, Array(H_obs); label = "Synthetic value of H")
-             plot!(xc, Array(B); label="Bed rock")
-             plot!(xc, Array(H); label="Current state of H")
-             p2 = plot(xc, Array(β_ini); xlabel = "x", ylabel = "β", label="Initial state of β", title = "β")
-             plot!(xc, Array(β_syn); label="Syntheic value of β")
-             plot!(xc,Array(β); label="Current state of β")
-             p3 = plot(xc, Array(Jn); xlabel="x", ylabel="Cost function Jn",title = "Gradient of cost function Jn")
+             p1 = heatmap(xc, yc,  Array(H_ini'); xlabel="x", ylabel="y", label= "Initial state of H" ,title = "Ice thickness H(m)")
+             heatmap!(xc, Array(H_obs'); label = "Synthetic value of H")
+             heatmap!(xc, Array(B'); label="Bed rock")
+             heatmap!(xc, Array(H'); label="Current state of H")
+             p2 = heatmap(xc, yc, Array(as_ini'); xlabel = "x", ylabel = "y", label="Initial state of as", title = "as")
+             plot!(xc, Array(as_syn); label="Syntheic value of as")
+             plot!(xc,Array(as); label="Current state of as")
+             p3 = heatmap(xc, yc, Array(Jn'); xlabel="x", ylabel="y",title = "Gradient of cost function Jn")
              p4 = plot(iter_evo, J_evo; shape = :circle, xlabel="Iterations", ylabel="J_old/J_ini", title="misfit", yaxis=:log10)
              display(plot(p1, p2, p3, p4; layout=(2,2), size=(980, 980)))
         end 
