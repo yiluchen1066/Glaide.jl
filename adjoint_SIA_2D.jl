@@ -76,7 +76,7 @@ end
 function compute_qHy!(qHy, D, H, B, dy, nx, ny)
     @get_thread_idx(H) 
     if ix <= nx-2 && iy <= ny-1 
-        qHy[ix,iy] = -@av_xa(D)*(@d_xi(H)+@d_xi(B))/dy 
+        qHy[ix,iy] = -@av_xa(D)*(@d_yi(H)+@d_yi(B))/dy 
     end 
     return
 end 
@@ -188,6 +188,7 @@ function solve!(problem::Forwardproblem)
         #CUDA.@sync @cuda threads=threads blocks=blocks residual!(RH, H, B, qHx, β, b_max, z_ELA, dx, nx)
         CUDA.@sync @cuda threads=threads blocks=blocks compute_error_1!(Err, H, nx, ny)
         CUDA.@sync @cuda threads=threads blocks=blocks compute_D!(D, gradS, av_ya_∇Sx, av_xa_∇Sy, H, B, a, as, n, nx, ny, dx, dy)
+        #CUDA.@sync @cuda threads=threads blocks=blocks compute_q!(qHx, qHy, D, H, B, nx, ny, dx, dy)
         CUDA.@sync @cuda threads=threads blocks=blocks compute_qHx!(qHx, D, H, B, dx, nx, ny)
         CUDA.@sync @cuda threads=threads blocks=blocks compute_qHy!(qHy, D, H, B, dy, nx, ny)
         CUDA.@sync @cuda threads=threads blocks=blocks residual!(RH, qHx, qHy, β, H, B, z_ELA, b_max, nx, ny, dx, dy)
@@ -256,7 +257,7 @@ function grad_residual_H_6!(tmp2, tmp7, qHx, qHy, β, H, dR_H, B, z_ELA, b_max, 
     return 
 end 
 
-function grad_residual_H!(dR, dR_H, dD_Hx, dD_Hy, dqHx_H, dqHy_H)
+function grad_residual_H!(dR, dR_H, dD_Hx, dD_Hy, dqHx_H, dqHy_H, nx, ny)
     @get_thread_idx(dR)
     if ix <= nx && iy <= ny 
         dR[ix,iy] = dR_H[ix,iy] + dD_Hx[ix,iy] + dD_Hy[ix,iy] + dqHx_H[ix,iy] + dqHy_H[ix,iy]
@@ -265,7 +266,7 @@ function grad_residual_H!(dR, dR_H, dD_Hx, dD_Hy, dqHx_H, dqHy_H)
 end 
 
 
-function update_r!(r, R, dR, dt, dmp, nx, ny)
+function update_r!(r, R, dR, dt, H, dmp, nx, ny)
     @get_thread_idx(R) 
     if ix <= nx && iy <= ny 
         if H[ix, iy] <= 1e-2 
@@ -337,9 +338,15 @@ end
 function solve!(problem::AdjointProblem) 
     (; H, H_obs, B, D, qHx, qHy, β, as, gradS, av_ya_∇Sx, av_xa_∇Sy, r, dR, R, Err, dR_qHx, dR_qHy, dqHx_D, dqHx_H, dqHy_D, dqHy_H, dD_Hx, dD_Hy, dR_H, tmp1, tmp2, tmp3, tmp4, tmp5, tmp6, tmp7, ∂J_∂H, z_ELA, b_max, nx, ny, dx, dy, a, n, dmp, ϵtol, niter, ncheck, threads, blocks) = problem
     r.= 0;  R.= 0; Err .= 0; dR .= 0; dR_qHx .= 0; dR_qHy .= 0; dqHx_D .= 0; dqHx_H .= 0; dqHy_D .= 0; dqHy_H .= 0; dD_Hx .= 0; dD_Hy .= 0; dR_H .= 0
+    lx, ly = 30e3, 30e3
+    dx = lx/nx
+    dy = ly/ny
+    xc = LinRange(dx/2, lx-dx/2, nx) 
+    yc = LinRange(dy/2, ly-dy/2, ny) 
 
     dt = max(dx^2, dy^2)/maximum(D)/4.1
     @. ∂J_∂H = H - H_obs
+    @show(size(R))
     # initialization for tmp1 tmp2 tmp3 tmp4 
     merr = 2ϵtol; iter = 1
     while merr >= ϵtol  && iter < niter 
@@ -359,17 +366,17 @@ function solve!(problem::AdjointProblem)
         CUDA.@sync @cuda threads = threads blocks = blocks grad_residual_H_5!(tmp6, dqHy_D, gradS, av_ya_∇Sx, av_xa_∇Sy, H, dD_Hy, B, a, as, n, nx, ny, dx, dy)
         tmp2 .= r
         CUDA.@sync @cuda threads = threads blocks = blocks grad_residual_H_6!(tmp2, tmp7, qHx, qHy, β, H, dR_H, B, z_ELA, b_max, nx, ny, dx, dy) 
-        CUDA.@sync @cuda threads = threads blocks = blocks grad_residual_H!(dR, dR_H, dD_Hx, dD_Hy, dqHx_H, dqHy_H) 
+        CUDA.@sync @cuda threads = threads blocks = blocks grad_residual_H!(dR, dR_H, dD_Hx, dD_Hy, dqHx_H, dqHy_H, nx, ny)
         #dR .= .-∂J_∂H
-        CUDA.@sync @cuda threads = threads blocks = blocks update_r!(r, R, dR, dt, dmp, nx, ny)
+        CUDA.@sync @cuda threads = threads blocks = blocks update_r!(r, R, dR, dt, H, dmp, nx, ny)
         # if iter > 10 error("Stop") end
         if iter % ncheck == 0 
             #@. Err -= r 
             merr = maximum(abs.(R[2:end-1,2:end-1]))
-            #p1 = plot(xc, Array(R); title = "R")
+            p1 = heatmap(xc, yc, Array(dqHy_H'); title = "dqHy_H")
             # savefig(p1, "adjoint_debug/adjoint_R_$(iter).png")
-            #display(p1)
-            #@printf("error = %.1e\n", merr)
+            display(p1)
+            @printf("error = %.1e\n", merr)
             (isfinite(merr) && merr >0 ) || error("adoint solve failed")
         end 
         iter += 1
@@ -533,9 +540,10 @@ function adjoint_1D()
     
     
     #Forwardproblem(H, B, D, gradS, av_ya_∇Sx, av_xa_∇Sy, qHx, qHy, β, n, a, as, b_max, z_ELA, dx, dy, nx, ny, epsi, cfl, ϵtol, niter, ncheck, threads, blocks, dmp)
+    #Forwardproblem(H, B, D, gradS, av_ya_∇Sx, av_xa_∇Sy, qHx, qHy, β, as, n, a, b_max, z_ELA, dx, dy, nx, ny, epsi, cfl, ϵtol, niter, ncheck, threads, blocks, dmp)
     #AdjointProblem(H, H_obs,B, D, qHx, qHy, β, as, gradS, av_ya_∇Sx, av_xa_∇Sy, z_ELA, b_max, nx, ny, dx, dy, a, n, dmp, ϵtol, niter, ncheck, threads, blocks)
-    synthetic_problem = Forwardproblem(H_obs, B, D, gradS, av_ya_∇Sx, av_xa_∇Sy, qHx, qHy, β,n, a, as_syn, b_max, z_ELA, dx, dy, nx, ny, epsi, cfl, ϵtol, niter, ncheck, threads, blocks, dmp)
-    forward_problem = Forwardproblem(H, B, D, gradS, av_ya_∇Sx, av_xa_∇Sy, qHx, qHy, β,n, a, as, b_max, z_ELA, dx, dy, nx, ny, epsi, cfl, ϵtol, niter, ncheck, threads, blocks, dmp)
+    synthetic_problem = Forwardproblem(H_obs, B, D, gradS, av_ya_∇Sx, av_xa_∇Sy, qHx, qHy, β,as_syn, n, a, b_max, z_ELA, dx, dy, nx, ny, epsi, cfl, ϵtol, niter, ncheck, threads, blocks, dmp)
+    forward_problem = Forwardproblem(H, B, D, gradS, av_ya_∇Sx, av_xa_∇Sy, qHx, qHy, β,as,n, a, b_max, z_ELA, dx, dy, nx, ny, epsi, cfl, ϵtol, niter, ncheck, threads, blocks, dmp)
     adjoint_problem = AdjointProblem(H, H_obs, B, D, qHx, qHy, β, as, gradS, av_ya_∇Sx, av_xa_∇Sy, z_ELA, b_max, nx, ny, dx, dy, a, n, dmp_adj, ϵtol, niter, ncheck, threads, blocks)
 
     println("generating synthetic data (nx = $nx, ny = $ny)...")
@@ -587,7 +595,7 @@ function adjoint_1D()
                 @printf("new solution accepted\n")
                 break
             else
-                β .= β_ini
+                as .= as_ini
                 γ = max(γ*0.5, γ0* 0.1)
             end 
         # end of the line search loops 
