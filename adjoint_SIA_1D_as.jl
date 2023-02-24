@@ -68,7 +68,6 @@ function flux_q!(qHx, B, H, D, ∇Sx, nx, dx, a, as, n)
     return 
 end 
 
-
 #function compute_M!(M, H, B, β, b_max, z_ELA, nx)
 #    @get_thread_idx(S) 
 #    if ix <= nx
@@ -310,7 +309,7 @@ function solve!(problem::AdjointProblem)
         if iter % ncheck == 0 
             #@. Err -= r 
             merr = maximum(abs.(R[2:end-1]))
-            p1 = plot(xc, Array(R); title = "R")
+            p1 = plot(xc, Array(dR); title = "dR")
             # savefig(p1, "adjoint_debug/adjoint_R_$(iter).png")
             display(p1)
             #@printf("error = %.1e\n", merr)
