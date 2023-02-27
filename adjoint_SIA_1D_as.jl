@@ -309,9 +309,9 @@ function solve!(problem::AdjointProblem)
         if iter % ncheck == 0 
             #@. Err -= r 
             merr = maximum(abs.(R[2:end-1]))
-            p1 = plot(xc, Array(dR); title = "dR")
+            #p1 = plot(xc, Array(dR); title = "dR")
             # savefig(p1, "adjoint_debug/adjoint_R_$(iter).png")
-            display(p1)
+            #display(p1)
             #@printf("error = %.1e\n", merr)
             (isfinite(merr) && merr >0 ) || error("adoint solve failed")
         end 
@@ -493,6 +493,7 @@ function adjoint_1D()
         @show(size(Jn))
         for bt_iter = 1:bt_niter 
             # update as
+            @show(Jn)
             @. as = clamp(as-γ*Jn, 0.0, 100.0)
             #p1 = plot(xc, Array(β); title="β")
             #display(p1)
