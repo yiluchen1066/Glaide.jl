@@ -324,21 +324,29 @@ function solve!(problem::AdjointProblem)
     xc1 = LinRange(dx/2,lx-3*dx/2, nx-1)
     yc1 = LinRange(3*dy/2, ly-3*dy/2, ny-2)
 
-    dt = min(dx^2, dy^2)/maximum(D)/60.1
+    dt = min(dx^2, dy^2)/maximum(D)/60.1/2
+    #dt = min(dx^2, dy^2)/maximum(D)/60.1
     @. ∂J_∂H = H - H_obs
     # initialization for tmp1 tmp2 tmp3 tmp4 
     merr = 2ϵtol; iter = 1
     while merr >= ϵtol  && iter < niter 
         #Err .= r 
         # compute dQ/dH 
-        dR_qHx .= 0; dR_qHy .= 0 ; dR_H .= 0; dq_D .= 0; dq_H .= 0; dD_H .= 0
+        dR_qHx .= 0; dR_qHy .= 0 ; dR_H .= 0; dq_D .= 1.0; dq_H .= 0; dD_H .= 0
         dR .= .-∂J_∂H; tmp2 .= r 
         
         CUDA.@sync @cuda threads = threads blocks = blocks grad_residual_H_1!(tmp1, tmp2, qHx, dR_qHx, qHy, dR_qHy, β, H, dR_H, B, z_ELA, b_max, nx, ny, dx, dy)
         CUDA.@sync @cuda threads = threads blocks = blocks grad_residual_H_2!(qHx, dR_qHx, qHy, dR_qHy, D, dq_D, H, dq_H, B, nx, ny, dx, dy)
+        @show(maximum(dq_D)) 
+        @show(maximum(dq_H))
         CUDA.@sync @cuda threads = threads blocks = blocks grad_residual_H_3!(D, dq_D, gradS, av_ya_∇Sx, av_xa_∇Sy, H, dD_H, B, a, as, n, nx, ny, dx, dy)
         CUDA.@sync @cuda threads = threads blocks = blocks grad_residual_H!(dR, dD_H, dq_H, dR_H, nx, ny)
         CUDA.@sync @cuda threads = threads blocks = blocks update_r!(r, R, dR, dt, H, dmp, nx, ny)
+        
+        @show(maximum(dD_H))
+        
+        @show(maximum(dR_H))
+
         
         # if iter > 10 error("Stop") end
         if iter % ncheck == 0 
@@ -362,8 +370,9 @@ function solve!(problem::AdjointProblem)
 end 
 
 # compute 
-function grad_residual_as_1!(tmp1, tmp2, gradS, av_ya_∇Sx, av_xa_∇Sy, H, B, a, as, Jn, n, nx, ny, dx, dy)
-    Enzyme.autodiff_deferred(compute_D!, Duplicated(tmp1, tmp2), Const(gradS), Const(av_ya_∇Sx), Const(av_xa_∇Sy),Const(H), Const(B), Const(a), Duplicated(as, Jn), Const(n), Const(nx), Const(ny), Const(dx), Const(dy))
+#compute_D!(D, gradS, av_ya_∇Sx, av_xa_∇Sy, H, B, a, as, n, nx, ny, dx, dy)
+function grad_residual_as_1!(D,tmp2, gradS, av_ya_∇Sx, av_xa_∇Sy, H, B, a, as, Jn, n, nx, ny, dx, dy)
+    Enzyme.autodiff_deferred(compute_D!, Duplicated(D, tmp2), Const(gradS), Const(av_ya_∇Sx), Const(av_xa_∇Sy),Const(H), Const(B), Const(a), Duplicated(as, Jn), Const(n), Const(nx), Const(ny), Const(dx), Const(dy))
     return
 end 
 
@@ -372,9 +381,11 @@ function cost_gradient!(Jn, problem::AdjointProblem)
     # dimensionmismatch: array could not be broadcast to match destination 
     @show(size(dq_D))
     Jn .= 0.0
-    CUDA.@sync @cuda threads=threads blocks=blocks grad_residual_as_1!(tmp1, -dq_D, gradS, av_ya_∇Sx, av_xa_∇Sy, H, B, a, as, Jn, n, nx, ny, dx, dy)
+    CUDA.@sync @cuda threads=threads blocks=blocks grad_residual_as_1!(D, -dq_D, gradS, av_ya_∇Sx, av_xa_∇Sy, H, B, a, as, Jn, n, nx, ny, dx, dy)
+    @show(maximum(dq_D))
     Jn[[1,end],:] = Jn[[2,end-1],:]
     Jn[:,[1,end]] = Jn[:,[2,end-1]]
+    @show(maximum(Jn))
     return 
 end 
 
@@ -421,8 +432,8 @@ function adjoint_1D()
     #numerics parameters 
     gd_niter = 100
     bt_niter = 3
-    nx = 255
-    ny = 255
+    nx = 63
+    ny = 63
     epsi = 1e-2
     dmp = 0.7
     # dmp_adj = 50*1.7
@@ -491,7 +502,6 @@ function adjoint_1D()
     gradS = CUDA.zeros(Float64, nx-1, ny-1)
     qHx = CUDA.zeros(Float64, nx-1,ny-2)
     qHy = CUDA.zeros(Float64, nx-2,ny-1)
-    Jn  = CUDA.zeros(Float64, nx, ny) # ? size of Jn need to be considered again
 
     #S_obs .= B .+ H_obs
     #CUDA.@sync @cuda threads=threads blocks=blocks update_S!(H_obs, S_obs, B, nx)
@@ -522,6 +532,7 @@ function adjoint_1D()
     solve!(synthetic_problem)
     println("done.")
     solve!(forward_problem)
+    #H_ini .= forward_problem.H
     println("gradient descent")
 
     #print(H)
@@ -534,6 +545,7 @@ function adjoint_1D()
     γ = γ0
     J_old = 0.0; J_new = 0.0 
     J_old = sqrt(cost(H, H_obs)*dx*dy)
+    @show(maximum(J_old))
     #CUDA.@sync @cuda threads=threads blocks=blocks cost!(H, H_obs, J_old, nx)
     #@printf("initial cost function equals %.1e\n", J_old)
     J_ini = J_old
@@ -550,8 +562,6 @@ function adjoint_1D()
         # line search 
         for bt_iter = 1:bt_niter 
             #@. as = clamp(as-γ*Jn, 0.0, 100.0)
-            @show(as)
-            @show(Jn)
             @. as = exp(log(as) + γ*log(Jn))
             #p1 = plot(xc, Array(β); title="β")
             #display(p1)
@@ -562,8 +572,14 @@ function adjoint_1D()
             # update H 
             solve!(forward_problem)
             #update cost functiion 
+            @show(maximum(H.-H_obs))
+            #@show(H_obs)
             J_new = sqrt(cost(H, H_obs)*dx*dy)
-            @show(J_new)
+            p1 = heatmap(xc, yc,  Array(H_obs'); xlabel="x", ylabel="y", label= "H_obs" ,title = "Ice thickness H(m)")
+            p2 = heatmap!(xc, yc, Array(H'); xlabel="x", ylabel="y", label= "H" ,title = "Ice thickness H(m)")
+            display(plot(p1, p2))
+            error("zero J_new")
+            #@show(J_new)
             if J_new < J_old 
                 # we accept the current value of γ
                 γ *= 1.1 
