@@ -31,3 +31,5 @@ function residual!()
     return 
 end 
 
+# compute dR_dH 
+
