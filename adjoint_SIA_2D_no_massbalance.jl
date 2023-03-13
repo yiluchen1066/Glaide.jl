@@ -207,9 +207,9 @@ function solve!(problem::Forwardproblem)
             merr = (sum(abs.(Err[:,:]))./nx./ny)
             (isfinite(merr) && merr >0) || error("forward solve failed")
             #@printf("error = %1.e\n", merr)
-            #p1 = heatmap(xc, yc, Array((H.+B)'); title = "S (forward problem)")
+            p1 = heatmap(xc, yc, Array((H.+B)'); title = "S (forward problem)")
             #plot!(xc, Array(B); title = "S (forward problem)", ylims=(0,1000))
-            #display(plot(p1))
+            display(plot(p1))
             #error("check forward model")
         end 
         iter += 1 
@@ -332,24 +332,22 @@ function solve!(problem::AdjointProblem)
     while merr >= ϵtol  && iter < niter 
         #Err .= r 
         # compute dQ/dH 
-        dR_qHx .= 0; dR_qHy .= 0 ; dR_H .= 0; dq_D .= 1.0; dq_H .= 0; dD_H .= 0
+        dR_qHx .= 0; dR_qHy .= 0 ; dR_H .= 0; dq_D .= 0.0; dq_H .= 0; dD_H .= 0
         dR .= .-∂J_∂H; tmp2 .= r 
         
         CUDA.@sync @cuda threads = threads blocks = blocks grad_residual_H_1!(tmp1, tmp2, qHx, dR_qHx, qHy, dR_qHy, β, H, dR_H, B, z_ELA, b_max, nx, ny, dx, dy)
-        @show(maximum(dR_qHx))
-        @show(maximum(dR_qHy))
+        #@show(maximum(dR_qHx))
+        #@show(maximum(dR_qHy))
         CUDA.@sync @cuda threads = threads blocks = blocks grad_residual_H_2!(qHx, dR_qHx, qHy, dR_qHy, D, dq_D, H, dq_H, B, nx, ny, dx, dy)
-        @show(maximum(dq_D)) 
-        @show(maximum(dq_H))
-        @show(maximum(dR_qHx))
-        @show(maximum(dR_qHy))
+        #@show(maximum(dq_D)) 
+        #@show(maximum(dq_H))
+        #@show(maximum(dR_qHx))
+        #@show(maximum(dR_qHy))
         CUDA.@sync @cuda threads = threads blocks = blocks grad_residual_H_3!(D, dq_D, gradS, av_ya_∇Sx, av_xa_∇Sy, H, dD_H, B, a, as, n, nx, ny, dx, dy)
         CUDA.@sync @cuda threads = threads blocks = blocks grad_residual_H!(dR, dD_H, dq_H, dR_H, nx, ny)
         CUDA.@sync @cuda threads = threads blocks = blocks update_r!(r, R, dR, dt, H, dmp, nx, ny)
-        
-        @show(maximum(dD_H))
-        
-        @show(maximum(dR_H))
+        #@show(maximum(dD_H))
+        #@show(maximum(dR_H))
 
         
         # if iter > 10 error("Stop") end
@@ -385,8 +383,10 @@ function cost_gradient!(Jn, problem::AdjointProblem)
     # dimensionmismatch: array could not be broadcast to match destination 
     @show(size(dq_D))
     Jn .= 0.0
-    CUDA.@sync @cuda threads=threads blocks=blocks grad_residual_as_1!(D, -dq_D, gradS, av_ya_∇Sx, av_xa_∇Sy, H, B, a, as, Jn, n, nx, ny, dx, dy)
+    
     @show(maximum(dq_D))
+    CUDA.@sync @cuda threads=threads blocks=blocks grad_residual_as_1!(D, -dq_D, gradS, av_ya_∇Sx, av_xa_∇Sy, H, B, a, as, Jn, n, nx, ny, dx, dy)
+    
     Jn[[1,end],:] = Jn[[2,end-1],:]
     Jn[:,[1,end]] = Jn[:,[2,end-1]]
     @show(maximum(Jn))
@@ -567,7 +567,7 @@ function adjoint_1D()
         for bt_iter = 1:bt_niter 
             #@. as = clamp(as-γ*Jn, 0.0, 100.0)
             @. as = exp(log(as) + γ*log(Jn))
-            #p1 = plot(xc, Array(β); title="β")
+            #p1 = heatmap(xc[1:end-1], yc[1:end-1], Array(as); title="as")
             #display(p1)
             as[[1,end],:] .= as[[2,end-1],:]
             as[:,[1,end]] .= as[:, [2,end-1]]
@@ -582,7 +582,7 @@ function adjoint_1D()
             p1 = heatmap(xc, yc,  Array(H_obs'); xlabel="x", ylabel="y", label= "H_obs" ,title = "Ice thickness H(m)")
             p2 = heatmap!(xc, yc, Array(H'); xlabel="x", ylabel="y", label= "H" ,title = "Ice thickness H(m)")
             display(plot(p1, p2))
-            error("zero J_new")
+            #error("zero J_new")
             #@show(J_new)
             if J_new < J_old 
                 # we accept the current value of γ
