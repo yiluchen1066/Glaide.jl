@@ -2,7 +2,7 @@ using CUDA,BenchmarkTools
 using Plots,Plots.Measures,Printf
 using DelimitedFiles
 using Enzyme 
-default(size=(800,600),framestyle=:box,label=false,grid=false,margin=10mm,lw=4,labelfontsize=9,tickfontsize=9,titlefontsize=12)
+#default(size=(800,600),framestyle=:box,label=false,grid=false,margin=10mm,lw=4,labelfontsize=9,tickfontsize=9,titlefontsize=12)
 
 const DO_VISU = true 
 macro get_thread_idx(A)  esc(:( begin ix =(blockIdx().x-1) * blockDim().x + threadIdx().x; iy = (blockIdx().y-1) * blockDim().y+threadIdx().y;end )) end 
@@ -324,8 +324,8 @@ function solve!(problem::AdjointProblem)
     xc1 = LinRange(dx/2,lx-3*dx/2, nx-1)
     yc1 = LinRange(3*dy/2, ly-3*dy/2, ny-2)
 
-    dt = min(dx^2, dy^2)/maximum(D)/60.1/2
-    #dt = min(dx^2, dy^2)/maximum(D)/60.1
+    #dt = min(dx^2, dy^2)/maximum(D)/60.1/2
+    dt = min(dx^2, dy^2)/maximum(D)/60.1
     @. ∂J_∂H = H - H_obs
     # initialization for tmp1 tmp2 tmp3 tmp4 
     merr = 2ϵtol; iter = 1
@@ -420,15 +420,15 @@ function adjoint_1D()
     n = 3
     ρg = 970*9.8 
     a0 = 1.5e-24
-    z_ELA = 300 
-    b_max = 0.1
+    z_ELA = 300
+    b_max = 0.1#0.1
     B0 = 500 
 
     #numerics parameters 
     gd_niter = 100
     bt_niter = 3
-    nx = 63
-    ny = 63
+    nx = 128#512#63
+    ny = 128#512#63
     epsi = 1e-2
     dmp = 0.7
     # dmp_adj = 50*1.7
@@ -436,14 +436,13 @@ function adjoint_1D()
     ϵtol = 1e-4
     ϵtol_adj = 1e-8
     gd_ϵtol =1e-3
-    γ0 = 5.0e-10#1.0e-10
+    γ0 = 1.0e-10#1.0e-9#5.0e-9#1.0e-10
     niter = 500000
     ncheck = 1000
     ncheck_adj = 100
     threads = (16,16) 
     blocks = ceil.(Int,(nx,ny)./threads)
 
-    @show(typeof(blocks))
 
     #derived numerics 
     dx = lx/nx
@@ -462,19 +461,33 @@ function adjoint_1D()
     S = zeros(Float64, nx, ny)
     H = zeros(Float64, nx, ny)
     B = zeros(Float64, nx, ny)
+    H_gaussian = zeros(Float64,nx,ny)
+    B_gaussian = zeros(Float64,nx,ny)
+    H_slope = zeros(Float64, nx, ny)
+    B_slope = zeros(Float64, nx, ny)
 
     #H = @. exp(-(xc - lx/4)^2)
     #H = @. exp(-(xc - x0)^2)
     H    = @. 200*exp(-((xc-x0)/5000)^2-((yc'-y0)/5000)^2) 
+    #@. H_slope =  1.0*(xc-x0)+1.5*(yc-y0)'
+    #H    = H_gaussian .+ H_slope
     H_obs = copy(H)
     H_ini = copy(H)
     S_obs = copy(S)
 
     
-    B = @. B0*(exp(-((xc-x0)/w)^2-((yc'-y0)/w)^2))
+    B_gaussian = @. B0*(exp(-((xc-x0)/w)^2-((yc'-y0)/w)^2))
+    @. B_slope =  150.0*(xc-x0)/lx+125.0*((yc'-y0)/ly)
+    B = B_gaussian .+ B_slope 
     #smoother 
+    p1 = contourf(xc, yc, Array(B_slope'), color =:turbo, aspect_ratio =1)
+    p2 = contourf(xc, yc, Array(B_gaussian'), color =:turbo, aspect_ratio =1)
+    p3 = contourf(xc, yc, Array(B'), levels=20, color =:turbo)
+    p4 = contourf(xc, yc, Array((B.+H)'), levels=20, color =:turbo)
+    display(plot(p1,p2,p3,p4; layout=(2,2), size=(980,980)))
+    #error("initial display")
 
-    @show(size(B))
+
     #B[2:end-1, 2:end-1] .= B[2:end-1, 2:end-1] .+ 1.0/4.1.*(diff(diff(B[:, 2:end-1], dims=1),dims=1) .+ diff(diff(B[2:end-1,:], dims=2), dims=2)) 
     #B[[1,end],:] .= B[[2,end-1],:]
     #B[:,[1,end]] .= B[:,[2,end-1]]
@@ -504,9 +517,9 @@ function adjoint_1D()
     #CUDA.@sync @cuda threads=threads blocks=blocks update_S!(H, S, B, nx)
     
     # how to define β_init β_syn 
-    β = 0.0015*CUDA.ones(nx, ny)
+    β = 0.0010*CUDA.ones(nx, ny)
     
-    as = 2.0e-3*CUDA.ones(nx-1, ny-1) 
+    as = 2.0e-2*CUDA.ones(nx-1, ny-1) 
     as_ini = copy(as)
     as_syn = 5.7e-20*CUDA.ones(nx-1,ny-1)
     as2 = similar(as) 
@@ -598,16 +611,28 @@ function adjoint_1D()
         push!(iter_evo, gd_iter); push!(J_evo, J_old/J_ini)
         CUDA.@sync @cuda threads=threads blocks=blocks update_S!(S, H, B, nx, ny)
         if DO_VISU 
-             p1 = heatmap(xc, yc,  Array(H_ini'); xlabel="x", ylabel="y", label= "Initial state of H" ,title = "Ice thickness H(m)")
-             heatmap!(xc, yc, Array(H_obs'); label = "Synthetic value of H")
-             heatmap!(xc, yc,  Array(B'); label="Bed rock")
-             heatmap!(xc, yc, Array(H'); label="Current state of H")
+             #p1 = heatmap(xc, yc,  Array(H_ini'); xlabel="x", ylabel="y", label= "Initial state of H" ,title = "Ice thickness H(m)")
+             #heatmap!(xc, yc, Array(H_obs'); label = "Synthetic value of H")
+             #heatmap!(xc, yc,  Array(B'); label="Bed rock")
+             #p1=contour(xc,yc, Array((H.-H_obs)'), levels=20, color =:turb)
+             p1=heatmap(xc, yc, Array((H.+B)'); levels=20, color =:turbo, label="H observation", aspect_ratio = 1)
+             contour!(xc, yc, Array(H'); levels=0.01:0.01, lw=2.0, color=:black, line=:solid,label="Current state of H")
+             contour!(xc, yc, Array(H_obs'); levels=0.01:0.01, lw=2.0, color=:red, line=:dash,label="Current state of H")
              p2 = heatmap(xc, yc, Array(as'); xlabel = "x", ylabel = "y", label="as", title = "as", aspect_ratio=1)
              #heatmap!(xc[1:end-1], yc[1:end-1],Array(as_syn); label="Syntheic value of as")
              #heatmap!(xc[1:end-1], yc[1:end-1], Array(log10.(as)); label="Current state of as")
-             p3 = heatmap(xc[1:end-1], yc[1:end-1], Array(Jn'); xlabel="x", ylabel="y",title = "Gradient of cost function Jn")
+             p3 = heatmap(xc[1:end-1], yc[1:end-1], Array(Jn'); xlabel="x", ylabel="y",title = "Gradient of cost function Jn", aspect_ratio=1)
              p4 = plot(iter_evo, J_evo; shape = :circle, xlabel="Iterations", ylabel="J_old/J_ini", title="misfit", yaxis=:log10)
-             display(plot(p1, p2, p3, p4; layout=(2,2), size=(980, 980)))
+             p5 = contourf(xc,yc, Array(H_ini'),levels = 20, color=:turbo)
+             xlabel!("X")
+             ylabel!("Y")
+             title!("Initial state of H (m)")
+             p6 = contourf!(xc, yc, Array(H'), levels=20, color=:turbo)
+             xlabel!("X")
+             ylabel!("Y")
+             title!("Current State of H (m)")
+             display(plot(p1,p2,p3,p4; layout=(2,2), size=(980,980)))
+             #display(plot(p5,p6; layout=(1,2), size=(980, 980)))
         end 
 
         # check convergence?
