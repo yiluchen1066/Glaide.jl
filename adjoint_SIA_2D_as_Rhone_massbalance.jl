@@ -104,7 +104,7 @@ function compute_M!(M, β, H, B, z_ELA, b_max, nx,ny)
     return 
 end 
 
-function residual!(RH, qHx, qHy, β, H, B, zs_sample, ms_sample, z_ELA, b_max, dz_sample, nx, ny, dx, dy)
+function residual!(RH, qHx, qHy, H, B, zs_sample, ms_sample, dz_sample, nx, ny, dx, dy)
     @get_thread_idx(H)
     if ix <= nx-2 && iy <= ny-2 
         iz_f = clamp((H[ix+1,iy+1]+B[ix+1,iy+1]-zs_sample[1])/dz_sample, 0.0, Float64(length(ms_sample)-2))
@@ -214,7 +214,7 @@ function solve!(problem::Forwardproblem)
         CUDA.@sync @cuda threads=threads blocks=blocks compute_D!(D, gradS, av_ya_∇Sx, av_xa_∇Sy, H, B, a, as, n, nx, ny, dx, dy)
         CUDA.@sync @cuda threads=threads blocks=blocks compute_q!(qHx, qHy, D, H, B, nx, ny, dx, dy)
         CUDA.@sync @cuda threads=threads blocks=blocks compute_M!(M, β, H, B, z_ELA, b_max, nx,ny)
-        CUDA.@sync @cuda threads=threads blocks=blocks residual!(RH, qHx, qHy, β, H, B, zs_sample, ms_sample, z_ELA, b_max, dz_sample, nx, ny, dx, dy)
+        CUDA.@sync @cuda threads=threads blocks=blocks residual!(RH, qHx, qHy, H, B, zs_sample, ms_sample, dz_sample, nx, ny, dx, dy)
         CUDA.@sync @cuda threads=threads blocks=blocks timestep!(dτ, H, D, cfl, epsi, nx, ny)
         CUDA.@sync @cuda threads=threads blocks=blocks update_H!(H, dHdτ, RH, dτ, dmp, nx, ny)# update H
         CUDA.@sync @cuda threads=threads blocks=blocks set_BC!(H, nx, ny)
@@ -228,12 +228,12 @@ function solve!(problem::Forwardproblem)
             #M .= min.(β.*(H.+B.-z_ELA), b_max)
             (isfinite(merr) && merr >0) || error("forward solve failed")
             #@printf("error = %1.e\n", merr)
-            p1 = heatmap(xc, yc, Array((H.+B)'); title = "S (forward problem)")
-            p2 = Plots.plot(xc, Array(H[:,ceil(Int,ny/2)]);title="Ice thickness")
-            Plots.plot!(xc, Array(B[:,ceil(Int,ny/2)]);label="bedrock")
-            p3 = heatmap(xc, yc, Array(M'); title="Mass balance term")
-            p4 = Plots.plot(xc, Array(M[:,ceil(Int,ny/2)]); title="Cross section of the mass balance term")
-            display(plot(p1,p2,p3,p4;layout=(2,2)))
+            # p1 = heatmap(xc, yc, Array((H.+B)'); title = "S (forward problem)")
+            # p2 = Plots.plot(xc, Array(H[:,ceil(Int,ny/2)]);title="Ice thickness")
+            # Plots.plot!(xc, Array(B[:,ceil(Int,ny/2)]);label="bedrock")
+            # p3 = heatmap(xc, yc, Array(M'); title="Mass balance term")
+            # p4 = Plots.plot(xc, Array(M[:,ceil(Int,ny/2)]); title="Cross section of the mass balance term")
+            # display(plot(p1,p2,p3,p4;layout=(2,2)))
             #plot!(xc, Array(B); title = "S (forward problem)", ylims=(0,1000))
             #display(plot(p1))
             #error("check forward model")
@@ -247,10 +247,10 @@ function solve!(problem::Forwardproblem)
     return 
 end 
 #compute dR_qHx dR_qHy dR_H
-#residual!(RH, qHx, qHy, β, H, B, zs_sample, ms_sample, z_ELA, b_max, dz_sample, nx, ny, dx, dy)
+#residual!(RH, qHx, qHy, H, B, zs_sample, ms_sample, dz_sample, nx, ny, dx, dy)
 function grad_residual_H_1!(tmp1, tmp2, qHx, dR_qHx, qHy, dR_qHy, β, H, dR_H, B, zs_sample, ms_sample, z_ELA, b_max, dz_sample, nx, ny, dx, dy)
     #tmp2 .= r 
-    Enzyme.autodiff_deferred(residual!, Duplicated(tmp1, tmp2), Duplicated(qHx, dR_qHx), Duplicated(qHy, dR_qHy), Const(β), Duplicated(H, dR_H), Const(B), Const(zs_sample), Const(ms_sample), Const(z_ELA), Const(b_max), Const(dz_sample), Const(nx), Const(ny), Const(dx), Const(dy))
+    Enzyme.autodiff_deferred(residual!, Duplicated(tmp1, tmp2), Duplicated(qHx, dR_qHx), Duplicated(qHy, dR_qHy), Duplicated(H, dR_H), Const(B), Const(zs_sample), Const(ms_sample), Const(dz_sample), Const(nx), Const(ny), Const(dx), Const(dy))
     return 
 end 
 
@@ -366,16 +366,28 @@ function solve!(problem::AdjointProblem)
         CUDA.@sync @cuda threads = threads blocks = blocks grad_residual_H_3!(D, dq_D, gradS, av_ya_∇Sx, av_xa_∇Sy, H, dD_H, B, a, as, n, nx, ny, dx, dy)
         CUDA.@sync @cuda threads = threads blocks = blocks grad_residual_H!(dR, dD_H, dq_H, dR_H, nx, ny)
         CUDA.@sync @cuda threads = threads blocks = blocks update_r!(r, R, dR, dt, H, dmp, nx, ny)
-
         
         # if iter > 10 error("Stop") end
         if iter % ncheck == 0 
             #@. Err -= r 
             #@show(size(dR_qHx))
             merr = maximum(abs.(R[2:end-1,2:end-1]))
-            p1 = heatmap(xc, yc, Array(r'); title = "r")
+            # @show(maximum(dR))
+            # @show(maximum(r))
+            # @show(maximum(R))
+            # @show(maximum(dD_H))
+            # @show(maximum(dR_H))
+            # @show(maximum(dq_H))
+        
+            p1 = heatmap(xc, yc, Array(dR_H'); title = "dR_H")
+            p2 = heatmap(xc, yc, Array(dq_H'); title = "dq_H")
+            p3 = heatmap(xc, yc, Array(dD_H'); title = "dD_H")
+            p4 = heatmap(xc, yc, Array(dR'); title ="dR")
+            p5 = heatmap(xc, yc, Array(r'); title="r")
+            p6 = heatmap(xc, yc, Array(R'); title="R")
+
             # savefig(p1, "adjoint_debug/adjoint_R_$(iter).png")
-            display(p1)
+            display(plot(p1,p2,p3,p4,p5,p6; layout=(3,2)))
             @printf("error = %.1e\n", merr)
             (isfinite(merr) && merr >0 ) || error("adoint solve failed")
         end 
@@ -397,12 +409,12 @@ function grad_residual_as_1!(D,tmp2, gradS, av_ya_∇Sx, av_xa_∇Sy, H, B, a, a
 end 
 
 function cost_gradient!(Jn, problem::AdjointProblem)
-    (; H, H_obs, B, D, qHx, qHy, β, as, gradS, av_ya_∇Sx, av_xa_∇Sy, r, dR, R, Err, dR_qHx, dR_qHy, dR_H, dq_D, dq_H, dD_H, tmp1, tmp2, ∂J_∂H, z_ELA, b_max, nx, ny, dx, dy, a, n, dmp, ϵtol, niter, ncheck, threads, blocks) = problem
+    (; H, H_obs, B, D, qHx, qHy, β, as, gradS, av_ya_∇Sx, av_xa_∇Sy, zs_sample, ms_sample, r, dR, R, Err, dR_qHx, dR_qHy, dR_H, dq_D, dq_H, dD_H, tmp1, tmp2, ∂J_∂H, z_ELA, b_max, dz_sample, nx, ny, dx, dy, a, n, dmp, ϵtol, niter, ncheck, threads, blocks) = problem
     # dimensionmismatch: array could not be broadcast to match destination 
     Jn .= 0.0
     tmp2 .= r
     dR_qHx .= 0; dR_qHy .= 0; dR_H .= 0; dq_D .= 0; dq_H .= 0; 
-    CUDA.@sync @cuda threads = threads blocks = blocks grad_residual_H_1!(tmp1, tmp2, qHx, dR_qHx, qHy, dR_qHy, β, H, dR_H, B, z_ELA, b_max, nx, ny, dx, dy)
+    CUDA.@sync @cuda threads = threads blocks = blocks grad_residual_H_1!(tmp1, tmp2, qHx, dR_qHx, qHy, dR_qHy, β, H, dR_H, B, zs_sample, ms_sample, z_ELA, b_max, dz_sample, nx, ny, dx, dy)
     
     CUDA.@sync @cuda threads = threads blocks = blocks grad_residual_H_2!(qHx, dR_qHx, qHy, dR_qHy, D, dq_D, H, dq_H, B, nx, ny, dx, dy)
     CUDA.@sync @cuda threads=threads blocks=blocks grad_residual_as_1!(D, -dq_D, gradS, av_ya_∇Sx, av_xa_∇Sy, H, B, a, as, Jn, n, nx, ny, dx, dy)
@@ -440,7 +452,7 @@ end
 
 function adjoint_2D()
     # load Rhone data: surface elevation and bedrock 
-    rhone_data = h5open("glacier_data/data_Rhone.h5","r")
+    rhone_data = h5open("Rhone_data/alps/data_Rhone.h5","r")
     xc = rhone_data["glacier/x"][:,1]
     yc = rhone_data["glacier/y"][1,:]
     B  = rhone_data["glacier/z_bed"][]
@@ -487,7 +499,7 @@ function adjoint_2D()
     epsi = 1e-2
     dmp = 0.3#0.7
     # dmp_adj = 50*1.7
-    dmp_adj = 200*1.7#50*1.7#2*1.7
+    dmp_adj = 2*1.7#0*1.7#200*1.7#50*1.7#2*1.7
     ϵtol = 1e-4
     ϵtol_adj = 1e-8
     gd_ϵtol =1e-3
