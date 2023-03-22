@@ -104,14 +104,14 @@ function compute_M!(M, β, H, B, z_ELA, b_max, nx,ny)
     return 
 end 
 
-function residual!(RH, qHx, qHy, H, B, zs_sample, ms_sample, dz_sample, nx, ny, dx, dy)
+function residual!(RH, qHx, qHy, H, B, zs_sample, ms_sample, dz_sample, mb, nx, ny, dx, dy)
     @get_thread_idx(H)
     if ix <= nx-2 && iy <= ny-2 
         iz_f = clamp((H[ix+1,iy+1]+B[ix+1,iy+1]-zs_sample[1])/dz_sample, 0.0, Float64(length(ms_sample)-2))
         iz   = floor(Int64, iz_f)+1
         f    = iz_f - (iz-1)
-        mb   = ms_sample[iz]*(1.0-f) + ms_sample[iz+1]*f
-        RH[ix+1,iy+1] =  -(@d_xa(qHx)/dx + @d_ya(qHy)/dy) + mb
+        mb[ix+1,iy+1]   = ms_sample[iz]*(1.0-f) + ms_sample[iz+1]*f
+        RH[ix+1,iy+1] =  -(@d_xa(qHx)/dx + @d_ya(qHy)/dy) + mb[ix+1,iy+1]
     end 
     return 
 end 
@@ -214,7 +214,7 @@ function solve!(problem::Forwardproblem)
         CUDA.@sync @cuda threads=threads blocks=blocks compute_D!(D, gradS, av_ya_∇Sx, av_xa_∇Sy, H, B, a, as, n, nx, ny, dx, dy)
         CUDA.@sync @cuda threads=threads blocks=blocks compute_q!(qHx, qHy, D, H, B, nx, ny, dx, dy)
         #CUDA.@sync @cuda threads=threads blocks=blocks compute_M!(M, β, H, B, z_ELA, b_max, nx,ny)
-        CUDA.@sync @cuda threads=threads blocks=blocks residual!(RH, qHx, qHy, H, B, zs_sample, ms_sample, dz_sample, nx, ny, dx, dy)
+        CUDA.@sync @cuda threads=threads blocks=blocks residual!(RH, qHx, qHy, H, B, zs_sample, ms_sample, dz_sample, mb, nx, ny, dx, dy)
         CUDA.@sync @cuda threads=threads blocks=blocks timestep!(dτ, H, D, cfl, epsi, nx, ny)
         CUDA.@sync @cuda threads=threads blocks=blocks update_H!(H, dHdτ, RH, dτ, dmp, nx, ny)# update H
         CUDA.@sync @cuda threads=threads blocks=blocks set_BC!(H, nx, ny)
@@ -469,8 +469,6 @@ function adjoint_2D()
 
     p1= Plots.plot(zs_sample, ms_sample)
     display(plot(p1))
-    error("check ms data")
-    
     
     @show(typeof(df))
     @show(size(df))
