@@ -2,7 +2,7 @@ using CUDA,BenchmarkTools
 using Plots,Plots.Measures,Printf
 using DelimitedFiles
 using Enzyme 
-#default(size=(800,600),framestyle=:box,label=false,grid=false,margin=10mm,lw=4,labelfontsize=9,tickfontsize=9,titlefontsize=12)
+default(size=(900,600),framestyle=:box,label=true,grid=false,margin=3mm,lw=4,labelfontsize=9,tickfontsize=9,titlefontsize=12)
 
 const DO_VISU = true 
 macro get_thread_idx(A)  esc(:( begin ix =(blockIdx().x-1) * blockDim().x + threadIdx().x; iy = (blockIdx().y-1) * blockDim().y+threadIdx().y;end )) end 
@@ -425,7 +425,7 @@ function adjoint_1D()
     B0 = 500 
 
     #numerics parameters 
-    gd_niter = 100
+    gd_niter = 85
     bt_niter = 3
     nx = 128#512#63
     ny = 128#512#63
@@ -480,11 +480,15 @@ function adjoint_1D()
     @. B_slope =  150.0*(xc-x0)/lx+125.0*((yc'-y0)/ly)
     B = B_gaussian .+ B_slope 
     #smoother 
-    p1 = contourf(xc, yc, Array(B_slope'), color =:turbo, aspect_ratio =1)
-    p2 = contourf(xc, yc, Array(B_gaussian'), color =:turbo, aspect_ratio =1)
-    p3 = contourf(xc, yc, Array(B'), levels=20, color =:turbo)
-    p4 = contourf(xc, yc, Array((B.+H)'), levels=20, color =:turbo)
-    display(plot(p1,p2,p3,p4; layout=(2,2), size=(980,980)))
+    #p1 = contourf(xc, yc, Array(B_slope'), color =:turbo, aspect_ratio =1)
+    #p2 = contourf(xc, yc, Array(B_gaussian'), color =:turbo, aspect_ratio =1)
+    p3 = contourf(xc, yc, Array(B'), levels=20, color =:turbo, lw=2,labelfontsize=9,tickfontsize=6,titlefontsize=12, aspect_ratio = 1.0, xlabel="X in (m)", ylabel="Y in (m)", title="Bedrock elev in (m)")
+    p4 = plot(xc, Array(B[:,ceil(Int,ny/2)]), label="Bedrock B",xlabel="X in (m)", ylabel="Height in (m)", title="Elevation (corss-section) in (m)")
+    plot!(xc, Array((H.+B)[:,ceil(Int, ny/2)]), label="Surface elev S")
+    #p5 = contourf(xc, yc, Array((B.+H)'), levels=20, color =:turbo)
+    display(plot(p3,p4))
+    #savefig("gaussian_ad.png")
+    #display(plot(p1,p2,p3,p4; layout=(2,2), size=(980,980)))
     #error("initial display")
 
 
@@ -615,14 +619,14 @@ function adjoint_1D()
              #heatmap!(xc, yc, Array(H_obs'); label = "Synthetic value of H")
              #heatmap!(xc, yc,  Array(B'); label="Bed rock")
              #p1=contour(xc,yc, Array((H.-H_obs)'), levels=20, color =:turb)
-             p1=heatmap(xc, yc, Array((H.+B)'); levels=20, color =:turbo, label="H observation", aspect_ratio = 1)
+             p1=heatmap(xc, yc, Array((H.+B)'); levels=20, color =:turbo, aspect_ratio = 1, xlabel="X in (m)", ylabel="Y in (m)", title="Surface elevation in (m)")
              contour!(xc, yc, Array(H'); levels=0.01:0.01, lw=2.0, color=:black, line=:solid,label="Current state of H")
-             contour!(xc, yc, Array(H_obs'); levels=0.01:0.01, lw=2.0, color=:red, line=:dash,label="Current state of H")
-             p2 = heatmap(xc, yc, Array(as'); xlabel = "x", ylabel = "y", label="as", title = "as", aspect_ratio=1)
+             contour!(xc, yc, Array(H_obs'); levels=0.01:0.01, lw=2.0, color=:red, line=:dash,label="H_observe")
+             p2 = heatmap(xc, yc, Array(as'); xlabel = "X in (m)", ylabel = "Y in (m)", title = "Inverted As value layout", aspect_ratio=1)
              #heatmap!(xc[1:end-1], yc[1:end-1],Array(as_syn); label="Syntheic value of as")
              #heatmap!(xc[1:end-1], yc[1:end-1], Array(log10.(as)); label="Current state of as")
-             p3 = heatmap(xc[1:end-1], yc[1:end-1], Array(Jn'); xlabel="x", ylabel="y",title = "Gradient of cost function Jn", aspect_ratio=1)
-             p4 = plot(iter_evo, J_evo; shape = :circle, xlabel="Iterations", ylabel="J_old/J_ini", title="misfit", yaxis=:log10)
+             p3 = heatmap(xc[1:end-1], yc[1:end-1], Array(Jn'); xlabel="X in (m)", ylabel="Y in (m)",title = "Gradient of cost function Jn: sensitivity", aspect_ratio=1)
+             p4 = plot(iter_evo, J_evo; shape = :circle, xlabel="Iterations", ylabel="J_old/J_ini", title="Misfit between H and H_obs", yaxis=:log10, label="Misfit")
              p5 = contourf(xc,yc, Array(H_ini'),levels = 20, color=:turbo)
              xlabel!("X")
              ylabel!("Y")
@@ -631,9 +635,12 @@ function adjoint_1D()
              xlabel!("X")
              ylabel!("Y")
              title!("Current State of H (m)")
-             display(plot(p1,p2,p3,p4; layout=(2,2), size=(980,980)))
+             #display(plot(p1))
+             display(plot(p1,p2,p3,p4; layout=(2,2), size=(1280,880)))
              #display(plot(p5,p6; layout=(1,2), size=(980, 980)))
         end 
+
+        savefig("adjoint_gauss.png")
 
         # check convergence?
         if J_old/J_ini < gd_ϵtol 

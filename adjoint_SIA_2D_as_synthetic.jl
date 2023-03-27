@@ -441,7 +441,7 @@ function adjoint_2D()
     ϵtol = 1e-4
     ϵtol_adj = 1e-8
     gd_ϵtol =1e-3
-    γ0 = 1.0e-10#1.0e-9#5.0e-9#1.0e-10
+    γ0 = 1.0e-8#1.0e-10#1.0e-9#5.0e-9#1.0e-10
     niter = 500000
     ncheck = 1000
     ncheck_adj = 100
@@ -502,10 +502,9 @@ function adjoint_2D()
     #smoother 
     p1 = plot(xc,yc,B'; st=:surface, camera =(20,25), aspect_ratio=1)
     p2 = Plots.contour(xc, yc, B'; levels =20, aspect_ratio=1)
-    p3 = Plots.contour(xc,yc, H'; levels=20, aspect_ratio=1)
-    p4 = Plots.contourf(xc, yc, (B.+H)'; levels=20, aspect_ratio=1)
-    display(plot(p1,p2,p3,p4; layout=(2,2), size=(980,980)))
-    #error("initial display")
+    p3 = Plots.plot(xc,B[:,ceil(Int, ny/2)])
+    display(plot(p1,p2,p3))
+
 
 
     #B[2:end-1, 2:end-1] .= B[2:end-1, 2:end-1] .+ 1.0/4.1.*(diff(diff(B[:, 2:end-1], dims=1),dims=1) .+ diff(diff(B[2:end-1,:], dims=2), dims=2)) 
@@ -591,9 +590,9 @@ function adjoint_2D()
         #check Jn
         # line search 
         for bt_iter = 1:bt_niter 
-            @. as = clamp(as-γ*Jn, 0.0, 100.0)
-            # mask = (Jn .!= 0)
-            # @. as[mask] = exp.(log.(as[mask]) - γ*sign(Jn[mask])*log.(abs(Jn[mask])))
+            #@. as = clamp(as-γ*Jn, 0.0, 100.0)
+             mask = (Jn .!= 0)
+             @. as[mask] = exp.(log.(as[mask]) - γ*sign(Jn[mask])*log.(abs(Jn[mask])))
             # p1 = heatmap(xc[1:end-1], yc[1:end-1], Array(as); title="as")
             # display(p1)
             # error("stop")
@@ -626,8 +625,6 @@ function adjoint_2D()
             end 
         # end of the line search loops 
         end 
-
-
 
         push!(iter_evo, gd_iter); push!(J_evo, J_old/J_ini)
         CUDA.@sync @cuda threads=threads blocks=blocks update_S!(S, H, B, nx, ny)
