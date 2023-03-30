@@ -2,7 +2,7 @@ using CUDA,BenchmarkTools
 using Plots,Plots.Measures,Printf
 using DelimitedFiles
 using Enzyme 
-default(size=(900,600),framestyle=:box,label=true,grid=false,margin=3mm,lw=4,labelfontsize=9,tickfontsize=9,titlefontsize=12)
+#default(size=(800,600),framestyle=:box,label=false,grid=false,margin=10mm,lw=4,labelfontsize=9,tickfontsize=9,titlefontsize=12)
 
 const DO_VISU = true 
 macro get_thread_idx(A)  esc(:( begin ix =(blockIdx().x-1) * blockDim().x + threadIdx().x; iy = (blockIdx().y-1) * blockDim().y+threadIdx().y;end )) end 
@@ -43,20 +43,9 @@ end
 
 cost(H, H_obs) = 0.5*sum((H.-H_obs).^2)
 
-# function compute_diffusion!(B, H, D, ∇Sx, nx, dx, a, as, n)
-#     @get_thread_idx(H)
-#     if ix <= nx-1 
-#         ∇Sx[ix] = @d_xa(B)/dx + @d_xa(H)/dx
-#         D[ix] = (a*@av_xa(H)^(n+2)+as*@av_xa(H)^n)*∇Sx[ix]^(n-1)
-#     end 
-#     return 
-# end 
-
 function compute_D!(D, gradS, av_ya_∇Sx, av_xa_∇Sy, H, B, a, as, n, nx, ny, dx, dy)
     @get_thread_idx(H)
     if ix <= nx-1 && iy <= ny-1 
-        #av_ya_∇Sx(nx-1, ny-1) av_xa_∇Sy(nx-1, ny-1)
-        # new macro needed 
         av_ya_∇Sx[ix,iy] = 0.5*((B[ix+1, iy+1]-B[ix,iy+1])/dx + (H[ix+1, iy+1]-H[ix,iy+1])/dx + (B[ix+1,iy]-B[ix,iy])/dx + (H[ix+1,iy]-H[ix,iy])/dx)
         av_xa_∇Sy[ix,iy] = 0.5*((B[ix+1, iy+1]-B[ix+1,iy])/dy + (H[ix+1, iy+1]-H[ix+1,iy])/dy + (B[ix,iy+1]-B[ix,iy])/dy + (H[ix,iy+1]-H[ix,iy])/dy)
         gradS[ix, iy] = sqrt(av_ya_∇Sx[ix,iy]^2+av_xa_∇Sy[ix,iy]^2)
@@ -64,24 +53,6 @@ function compute_D!(D, gradS, av_ya_∇Sx, av_xa_∇Sy, H, B, a, as, n, nx, ny, 
     end 
     return 
 end 
-
-#function compute_qHx!(qHx, D, H, B, dx, nx, ny)
-#    @get_thread_idx(H)
-#    if ix <= nx-1 && iy <= ny-2 
-#        qHx[ix,iy] = -@av_ya(D)*(@d_xi(H)+@d_xi(B))/dx 
-#    end 
-#    return 
-#end 
-
-#function compute_qHy!(qHy, D, H, B, dy, nx, ny)
-#    @get_thread_idx(H) 
-#    if ix <= nx-2 && iy <= ny-1 
-#        qHy[ix,iy] = -@av_xa(D)*(@d_yi(H)+@d_yi(B))/dy 
-#    end 
-#    return
-#end 
-
-
 
 function compute_q!(qHx, qHy, D, H, B, nx, ny, dx, dy)
     @get_thread_idx(H)
@@ -97,7 +68,6 @@ end
 function residual!(RH, qHx, qHy, β, H, B, z_ELA, b_max, nx, ny, dx, dy)
     @get_thread_idx(H)
     if ix <= nx-2 && iy <= ny-2 
-        #RH[ix+1,iy+1] = - (@d_xa(qHx)/dx + @d_ya(qHy)/dy)
         RH[ix+1,iy+1] =  -(@d_xa(qHx)/dx + @d_ya(qHy)/dy) + min(β[ix+1,iy+1]*(H[ix+1, iy+1]+B[ix+1, iy+1]-z_ELA), b_max)
     end 
     return 
@@ -106,7 +76,8 @@ end
 function timestep!(dτ, H, D, cfl, epsi, nx, ny)
     @get_thread_idx(H)
     if ix <= nx-2 && iy <= ny-2 
-        dτ[ix,iy] = 0.5*min(1.0, cfl/(epsi+@av_xy(D)))
+        #dτ[ix,iy] = 0.5*min(1.0, cfl/(epsi+@av_xy(D)))
+        dτ[ix,iy]  = min(20.0, cfl/(epsi+@av_xy(D)))
     end 
     return 
 end
@@ -147,21 +118,6 @@ function update_S!(S, H, B, nx, ny)
 end 
 
 
-#function compute_M!(M, H, B, β, b_max, z_ELA, nx)
-#    @get_thread_idx(S) 
-#    if ix <= nx
-#        M[ix] = min(β*(H[ix]+B[ix]-z_ELA), b_max)
-#    end 
-#    return 
-#end 
-
-#cost(H, H_obs) 
-
-#cost(H, H_obs) = 0.5*sum((H.-H_obs).^2)
-
-#M[ix+1] = min(β*(H[ix+1]+B[ix+1]-z_ELA), b_max)
-
-
 mutable struct Forwardproblem{T<:Real, A<:AbstractArray{T}}
     H::A; B::A; D::A; gradS::A; av_ya_∇Sx::A; av_xa_∇Sy::A; qHx::A; qHy::A; β::A; as::A
     dτ::A; dHdτ::A; RH::A; Err::A
@@ -182,25 +138,20 @@ function solve!(problem::Forwardproblem)
     dHdτ .= 0; RH .= 0; dτ .= 0; Err .= 0
     merr = 2ϵtol; iter = 1 
     lx, ly = 30e3, 30e3
-    xc = LinRange(dx/2, lx-dx/2, nx)
-    yc = LinRange(dy/2, ly-dy/2, ny)
-    #p1 = plot(xc, Array(H); title = "H_init (forward problem)")
-    #display(plot(p1))
+    xc = LinRange(dx/2, lx-dx/2, nx) 
+    yc = LinRange(dy/2, ly-dy/2, ny) 
     while merr >= ϵtol && iter < niter 
-        #Err .= H 
+        #Err .= H
         #CUDA.@sync @cuda threads=threads blocks=blocks residual!(RH, H, B, qHx, β, b_max, z_ELA, dx, nx)
         CUDA.@sync @cuda threads=threads blocks=blocks compute_error_1!(Err, H, nx, ny)
         CUDA.@sync @cuda threads=threads blocks=blocks compute_D!(D, gradS, av_ya_∇Sx, av_xa_∇Sy, H, B, a, as, n, nx, ny, dx, dy)
         CUDA.@sync @cuda threads=threads blocks=blocks compute_q!(qHx, qHy, D, H, B, nx, ny, dx, dy)
-        #CUDA.@sync @cuda threads=threads blocks=blocks compute_qHx!(qHx, D, H, B, dx, nx, ny)
-        #CUDA.@sync @cuda threads=threads blocks=blocks compute_qHy!(qHy, D, H, B, dy, nx, ny)
         CUDA.@sync @cuda threads=threads blocks=blocks residual!(RH, qHx, qHy, β, H, B, z_ELA, b_max, nx, ny, dx, dy)
         CUDA.@sync @cuda threads=threads blocks=blocks timestep!(dτ, H, D, cfl, epsi, nx, ny)
         CUDA.@sync @cuda threads=threads blocks=blocks update_H!(H, dHdτ, RH, dτ, dmp, nx, ny)# update H
         CUDA.@sync @cuda threads=threads blocks=blocks set_BC!(H, nx, ny)
 
         if iter  % ncheck == 0 
-            #@. Err -= H 
             CUDA.@sync @cuda threads=threads blocks =blocks compute_error_2!(Err, H, nx, ny)
             #merr = maximum(abs.(Err[:]))
             #@show(merr)
@@ -208,9 +159,9 @@ function solve!(problem::Forwardproblem)
             (isfinite(merr) && merr >0) || error("forward solve failed")
             #@printf("error = %1.e\n", merr)
             #p1 = heatmap(xc, yc, Array((H.+B)'); title = "S (forward problem)")
-            #plot!(xc, Array(B); title = "S (forward problem)", ylims=(0,1000))
-            #display(plot(p1))
-            #error("check forward model")
+            #p2 = Plots.plot(xc, Array(H[:,ceil(Int,ny/2)]);title="Ice thickness")
+            #display(plot(p1,p2;layout=(2,2)))
+            #error("check forward model") 
         end 
         iter += 1 
     end 
@@ -254,14 +205,20 @@ end
 
 function update_r!(r, R, dR, dt, H, dmp, nx, ny)
     @get_thread_idx(R) 
-    if ix <= nx && iy <= ny 
-        if H[ix, iy] <= 2.0e1
-            R[ix,iy] = 0.0 
-            r[ix,iy] = 0.0 
-        else 
-            R[ix,iy] = R[ix,iy]*(1.0 - dmp/min(nx,ny)) + dt*dR[ix,iy] 
-            r[ix,iy] = r[ix,iy] + dt*R[ix,iy]
-        end 
+    if ix <= nx && iy <= ny
+        if ix > 1 && ix < nx && iy > 1 && iy < ny
+            if H[ix  , iy] <= 1.0e-2 ||
+               H[ix-1, iy] <= 1.0e-2 ||
+               H[ix+1, iy] <= 1.0e-2 ||
+               H[ix, iy-1] <= 1.0e-2 ||
+               H[ix, iy+1] <= 1.0e-2
+                R[ix,iy] = 0.0 
+                r[ix,iy] = 0.0 
+            else 
+                R[ix,iy] = R[ix,iy]*(1.0 - dmp/min(nx,ny)) + dt*dR[ix,iy] 
+                r[ix,iy] = r[ix,iy] + dt*R[ix,iy]
+            end
+        end
         if ix ==1 || ix == nx 
             r[ix,iy] = 0.0 
         end 
@@ -271,20 +228,6 @@ function update_r!(r, R, dR, dt, H, dmp, nx, ny)
     end 
     return 
 end  
-
-function update_r_1!(r, dR, R, H, dt, dmp, nx)
-    @get_thread_idx(H)
-    if ix <= nx 
-        R[ix] = R[ix]*(1.0 - dmp/nx) + dt*dR[ix]
-        r[ix] += dt*R[ix]
-    end 
-    if ix == 1 || ix == nx 
-        r[ix] = 0.0 
-    end 
-
-    return 
-end 
-
 
 mutable struct AdjointProblem{T<:Real, A<:AbstractArray{T}}
     H::A; H_obs::A; B::A; D::A; qHx::A; qHy::A; β::A; as::A; gradS::A; av_ya_∇Sx::A; av_xa_∇Sy::A
@@ -325,7 +268,8 @@ function solve!(problem::AdjointProblem)
     yc1 = LinRange(3*dy/2, ly-3*dy/2, ny-2)
 
     #dt = min(dx^2, dy^2)/maximum(D)/60.1/2
-    dt = min(dx^2, dy^2)/maximum(D)/60.1
+    #dt = min(dx^2, dy^2)/maximum(D)/60.1
+    dt = min(dx^2, dy^2)/maximum(D)/200.1
     @. ∂J_∂H = H - H_obs
     # initialization for tmp1 tmp2 tmp3 tmp4 
     merr = 2ϵtol; iter = 1
@@ -347,10 +291,11 @@ function solve!(problem::AdjointProblem)
             #@. Err -= r 
             #@show(size(dR_qHx))
             merr = maximum(abs.(R[2:end-1,2:end-1]))
-            # p1 = heatmap(xc, yc, Array(r'); title = "r")
+            #p1 = heatmap(xc, yc, Array(r'); title = "r")
+            #p2 = heatmap(xc, yc, Array(R'); title = "R")
             # savefig(p1, "adjoint_debug/adjoint_R_$(iter).png")
-            # display(p1)
-            #@printf("error = %.1e\n", merr)
+            #display(plot(p1,p2))
+            @printf("error = %.1e\n", merr)
             (isfinite(merr) && merr >0 ) || error("adoint solve failed")
         end 
         iter += 1
@@ -402,8 +347,8 @@ end
 function smooth!(as, as2, H, nx, ny, nsm, threads, blocks)
     for _ = 1:nsm 
         CUDA.@sync @cuda threads=threads blocks=blocks laplacian!(as, as2, H, nx, ny) 
-        as[[1,end],:] .= as[[2,end-1],:]
-        as[:,[1,end]] .= as[:,[2,end-1]] 
+        as2[[1,end],:] .= as2[[2,end-1],:]
+        as2[:,[1,end]] .= as2[:,[2,end-1]] 
         as, as2 = as2, as 
     end 
     return 
@@ -412,31 +357,37 @@ end
 
 
 
-function adjoint_1D()
+function adjoint_2D()
     # physics parameters
     s2y = 3600*24*365.35 # seconds to years 
-    lx, ly = 30e3, 30e3
-    w = 0.15*lx 
+    lx, ly, lz = 30e3, 30e3, 1e3
+    ox, oy, oz = -lx/2, -ly/2, 0.0 
+    ω = 0.0001
+    w = 0.4*lx 
+    w1 = 0.45*lx
     n = 3
     ρg = 970*9.8 
-    a0 = 1.5e-24
-    z_ELA = 300
-    b_max = 0.1#0.1
-    B0 = 500 
+    a0  = 1.5e-24
+    as0 = 0*5.0e-20
+    z_ELA = 700#125#200
+    b_max = 0.0005#0.1
+    β0    = 0.0001
+    B0 = 200
+    
 
     #numerics parameters 
-    gd_niter = 85
+    gd_niter = 100
     bt_niter = 3
     nx = 128#512#63
     ny = 128#512#63
-    epsi = 1e-2
-    dmp = 0.7
+    epsi = 1e-4
+    dmp = 0.9#0.7
     # dmp_adj = 50*1.7
     dmp_adj = 2*1.7
     ϵtol = 1e-4
     ϵtol_adj = 1e-8
     gd_ϵtol =1e-3
-    γ0 = 1.0e-10#1.0e-9#5.0e-9#1.0e-10
+    γ0 = 1.0e-8#1.0e-10#1.0e-9#5.0e-9#1.0e-10
     niter = 500000
     ncheck = 1000
     ncheck_adj = 100
@@ -447,50 +398,54 @@ function adjoint_1D()
     #derived numerics 
     dx = lx/nx
     dy = ly/ny
-    xc = LinRange(dx/2, lx-dx/2, nx)
-    yc = LinRange(dy/2, ly-dy/2, ny)
+    xv = LinRange(ox, ox+lx, nx+1)
+    yv = LinRange(oy, oy+ly, ny+1)
+    xc = 0.5*(xv[1:end-1]+xv[2:end])
+    yc = 0.5*(yv[1:end-1]+yv[2:end])
+    #xc = LinRange(dx/2, lx-dx/2, nx)
+    #yc = LinRange(dy/2, ly-dy/2, ny)
+    @show(size(xc))
+    @show(size(yc))
     x0 = xc[round(Int,nx/2)]
     y0 = yc[round(Int,ny/2)]
 
     # derived physics 
-    a  = 2.0*a0/(n+2)*ρg^n*s2y 
-    as = 5.7e-20 
-    cfl = max(dx^2,dy^2)/4.1
+    a  = 1.9e-24*ρg^n
+    cfl = max(dx^2,dy^2)/6.1
+
+    #bedrock properties
+    wx1, wy1 = 0.4lx, 0.2ly 
+    wx2, wy2 = 0.15lx, 0.15ly 
+    ω1 = 4 
+    ω2 = 6
 
     # initialization 
     S = zeros(Float64, nx, ny)
     H = zeros(Float64, nx, ny)
     B = zeros(Float64, nx, ny)
-    H_gaussian = zeros(Float64,nx,ny)
-    B_gaussian = zeros(Float64,nx,ny)
-    H_slope = zeros(Float64, nx, ny)
-    B_slope = zeros(Float64, nx, ny)
 
-    #H = @. exp(-(xc - lx/4)^2)
-    #H = @. exp(-(xc - x0)^2)
-    H    = @. 200*exp(-((xc-x0)/5000)^2-((yc'-y0)/5000)^2) 
-    #@. H_slope =  1.0*(xc-x0)+1.5*(yc-y0)'
-    #H    = H_gaussian .+ H_slope
     H_obs = copy(H)
     H_ini = copy(H)
     S_obs = copy(S)
 
-    
-    B_gaussian = @. B0*(exp(-((xc-x0)/w)^2-((yc'-y0)/w)^2))
-    @. B_slope =  150.0*(xc-x0)/lx+125.0*((yc'-y0)/ly)
-    B = B_gaussian .+ B_slope 
-    #smoother 
-    #p1 = contourf(xc, yc, Array(B_slope'), color =:turbo, aspect_ratio =1)
-    #p2 = contourf(xc, yc, Array(B_gaussian'), color =:turbo, aspect_ratio =1)
-    p3 = contourf(xc, yc, Array(B'), levels=20, color =:turbo, lw=2,labelfontsize=9,tickfontsize=6,titlefontsize=12, aspect_ratio = 1.0, xlabel="X in (m)", ylabel="Y in (m)", title="Bedrock elev in (m)")
-    p4 = plot(xc, Array(B[:,ceil(Int,ny/2)]), label="Bedrock B",xlabel="X in (m)", ylabel="Height in (m)", title="Elevation (corss-section) in (m)")
-    plot!(xc, Array((H.+B)[:,ceil(Int, ny/2)]), label="Surface elev S")
-    #p5 = contourf(xc, yc, Array((B.+H)'), levels=20, color =:turbo)
-    display(plot(p3,p4))
-    #savefig("gaussian_ad.png")
-    #display(plot(p1,p2,p3,p4; layout=(2,2), size=(980,980)))
-    #error("initial display")
+    # sinwave (elevation and valley baedrock initialization)
+    fun = @. 0.4exp(-(xc/wx1)^2-((yc-0.2ly)'/wy1)^2) + 0.2*exp(-(xc/wx2)^2-((yc-0.1ly)'/wy2)^2)*(cos(ω1*π*(xc/lx + 0*yc'/ly-0.25)) + 1)
+    @. fun += 0.025exp(-(xc/wx2)^2-(yc'/wy2)^2)*cos(ω2*π*(0*xc/lx + yc'/ly)) 
+    @. fun += 0xc + 0.15*(yc'/ly)
+    zmin,zmax = extrema(fun)
+    @. fun = (fun - zmin)/(zmax-zmin)
+    @. B += oz + (lz-oz)*fun 
 
+
+    
+    #B = @. B0*(exp(-((xc-x0)/w)^2-((yc'-y0)/w)^2))*sin(ω*pi*(xc+yc'))
+    #smoother 
+    p1 = plot(xc,yc,B'; st=:surface, camera =(20,25), aspect_ratio=1)
+    p2 = Plots.contour(xc, yc, B'; levels =20, aspect_ratio=1)
+    p3 = Plots.plot(xc,B[:,ceil(Int, ny/2)])
+    display(plot(p1,p2,p3))
+
+    #p1 = plot(xc,yc,B'; st=:surface, camera =(15,30), grid=true, aspect_ratio=1, labelfontsize=9,tickfontsize=7, xlabel="X in (m)", ylabel="Y in (m)", zlabel="Height in (m)", title="Synthetic Glacier bedrock")
 
     #B[2:end-1, 2:end-1] .= B[2:end-1, 2:end-1] .+ 1.0/4.1.*(diff(diff(B[:, 2:end-1], dims=1),dims=1) .+ diff(diff(B[2:end-1,:], dims=2), dims=2)) 
     #B[[1,end],:] .= B[[2,end-1],:]
@@ -514,28 +469,15 @@ function adjoint_1D()
     gradS = CUDA.zeros(Float64, nx-1, ny-1)
     qHx = CUDA.zeros(Float64, nx-1,ny-2)
     qHy = CUDA.zeros(Float64, nx-2,ny-1)
+    β = β0*CUDA.ones(nx, ny)
 
-    #S_obs .= B .+ H_obs
-    #CUDA.@sync @cuda threads=threads blocks=blocks update_S!(H_obs, S_obs, B, nx)
-    #S .= B .+ H 
-    #CUDA.@sync @cuda threads=threads blocks=blocks update_S!(H, S, B, nx)
-    
-    # how to define β_init β_syn 
-    β = 0.0010*CUDA.ones(nx, ny)
-    
-    as = 2.0e-2*CUDA.ones(nx-1, ny-1) 
+    as = as0*ρg^n*CUDA.ones(nx-1, ny-1) 
     as_ini = copy(as)
-    as_syn = 5.7e-20*CUDA.ones(nx-1,ny-1)
+    as_syn = 5.0e-18*ρg^n*CUDA.ones(nx-1,ny-1)
     as2 = similar(as) 
 
     Jn = CUDA.zeros(Float64,nx-1, ny-1)
-    dqH_D = CUDA.zeros(Float64, nx-1, ny-1)
-    # display
-    # synthetic problem
-    
-    #Forwardproblem(H, B, D, gradS, av_ya_∇Sx, av_xa_∇Sy, qHx, qHy, β, n, a, as, b_max, z_ELA, dx, dy, nx, ny, epsi, cfl, ϵtol, niter, ncheck, threads, blocks, dmp)
-    #Forwardproblem(H, B, D, gradS, av_ya_∇Sx, av_xa_∇Sy, qHx, qHy, β, as, n, a, b_max, z_ELA, dx, dy, nx, ny, epsi, cfl, ϵtol, niter, ncheck, threads, blocks, dmp)
-    #AdjointProblem(H, H_obs,B, D, qHx, qHy, β, as, gradS, av_ya_∇Sx, av_xa_∇Sy, z_ELA, b_max, nx, ny, dx, dy, a, n, dmp, ϵtol, niter, ncheck, threads, blocks)
+   
     synthetic_problem = Forwardproblem(H_obs, B, D, gradS, av_ya_∇Sx, av_xa_∇Sy, qHx, qHy, β,as_syn, n, a, b_max, z_ELA, dx, dy, nx, ny, epsi, cfl, ϵtol, niter, ncheck, threads, blocks, dmp)
     forward_problem = Forwardproblem(H, B, D, gradS, av_ya_∇Sx, av_xa_∇Sy, qHx, qHy, β,as,n, a, b_max, z_ELA, dx, dy, nx, ny, epsi, cfl, ϵtol, niter, ncheck, threads, blocks, dmp)
     adjoint_problem = AdjointProblem(H, H_obs,B, D, qHx, qHy, β, as, gradS, av_ya_∇Sx, av_xa_∇Sy, z_ELA, b_max, nx, ny, dx, dy, a, n, dmp_adj, ϵtol_adj, niter, ncheck_adj, threads, blocks)
@@ -544,11 +486,7 @@ function adjoint_1D()
     solve!(synthetic_problem)
     println("done.")
     solve!(forward_problem)
-    #H_ini .= forward_problem.H
     println("gradient descent")
-
-    #print(H)
-    #print(H_obs)
 
     #S_obs .= B .+ H_obs 
     #S .= B .+ H 
@@ -558,9 +496,6 @@ function adjoint_1D()
     J_old = 0.0; J_new = 0.0 
     J_old = sqrt(cost(H, H_obs)*dx*dy)
     @show(maximum(abs.(H.-H_obs)))
-    #@show(maximum(J_old))
-    #CUDA.@sync @cuda threads=threads blocks=blocks cost!(H, H_obs, J_old, nx)
-    #@printf("initial cost function equals %.1e\n", J_old)
     J_ini = J_old
     
     J_evo = Float64[]; iter_evo = Int[]
@@ -571,17 +506,20 @@ function adjoint_1D()
         println("compute cost gradient")
         cost_gradient!(Jn, adjoint_problem)
         println("compute cost gradient done")
+        @show(extrema(Jn))
+
+        δ = 0.1*1
+        γ = min(γ, δ/maximum(abs.(Jn)))
+        @show γ
         #check Jn
         # line search 
         for bt_iter = 1:bt_niter 
-            @. as = clamp(as-γ*Jn, 0.0, 100.0)
-            # mask = (Jn .!= 0)
-            # @. as[mask] = exp.(log.(as[mask]) - γ*sign(Jn[mask])*log.(abs(Jn[mask])))
+            @. as = clamp(as-γ*Jn, 0.0, 1e-17)
+             #mask = (Jn .!= 0)
+             #@. as[mask] = exp.(log.(as[mask]) - γ*sign(Jn[mask])*log.(abs(Jn[mask])))
             # p1 = heatmap(xc[1:end-1], yc[1:end-1], Array(as); title="as")
             # display(p1)
             # error("stop")
-            as[[1,end],:] .= as[[2,end-1],:]
-            as[:,[1,end]] .= as[:, [2,end-1]]
             smooth!(as, as2, H, nx, ny, 10, threads, blocks)
             forward_problem.H .= H_ini
             # update H 
@@ -589,13 +527,7 @@ function adjoint_1D()
             #update cost functiion 
             
             @show(maximum(abs.(H.-H_obs)))
-            #@show(H_obs)
             J_new = sqrt(cost(H, H_obs)*dx*dy)
-            #p1 = heatmap(xc, yc,  Array(H_obs'); xlabel="x", ylabel="y", label= "H_obs" ,title = "Ice thickness H(m)")
-            #p2 = heatmap!(xc, yc, Array(H'); xlabel="x", ylabel="y", label= "H" ,title = "Ice thickness H(m)")
-            #display(plot(p1, p2))
-            #error("zero J_new")
-            #@show(J_new)
             if J_new < J_old 
                 # we accept the current value of γ
                 γ *= 1.1 
@@ -605,42 +537,23 @@ function adjoint_1D()
                 break
             else
                 as .= as_ini
-                γ = max(γ*0.5, γ0* 0.1)
+                γ = γ*0.5
             end 
         # end of the line search loops 
         end 
 
-
-
         push!(iter_evo, gd_iter); push!(J_evo, J_old/J_ini)
         CUDA.@sync @cuda threads=threads blocks=blocks update_S!(S, H, B, nx, ny)
         if DO_VISU 
-             #p1 = heatmap(xc, yc,  Array(H_ini'); xlabel="x", ylabel="y", label= "Initial state of H" ,title = "Ice thickness H(m)")
-             #heatmap!(xc, yc, Array(H_obs'); label = "Synthetic value of H")
-             #heatmap!(xc, yc,  Array(B'); label="Bed rock")
-             #p1=contour(xc,yc, Array((H.-H_obs)'), levels=20, color =:turb)
-             p1=heatmap(xc, yc, Array((H.+B)'); levels=20, color =:turbo, aspect_ratio = 1, xlims=extrema(xc), ylims=extrema(yc), xlabel="X in (m)", ylabel="Y in (m)", title="Surface elevation in (m)")
+             p1=heatmap(xc, yc, Array((H.+B)'); levels=20, color =:turbo, label="H observation", aspect_ratio = 1)
              contour!(xc, yc, Array(H'); levels=0.01:0.01, lw=2.0, color=:black, line=:solid,label="Current state of H")
-             contour!(xc, yc, Array(H_obs'); levels=0.01:0.01, lw=2.0, color=:red, line=:dash,label="H_observe")
-             p2 = heatmap(xc, yc, Array(as'); xlims=extrema(xc), ylims=extrema(yc), xlabel = "X in (m)", ylabel = "Y in (m)", title = "Inverted As value layout", aspect_ratio=1)
-             #heatmap!(xc[1:end-1], yc[1:end-1],Array(as_syn); label="Syntheic value of as")
-             #heatmap!(xc[1:end-1], yc[1:end-1], Array(log10.(as)); label="Current state of as")
-             p3 = heatmap(xc[1:end-1], yc[1:end-1], Array(Jn'); xlims=extrema(xc), ylims=extrema(yc), xlabel="X in (m)", ylabel="Y in (m)",title = "Gradient of cost function Jn: sensitivity", aspect_ratio=1)
-             p4 = plot(iter_evo, J_evo; shape = :circle, xlabel="Iterations", ylabel="J_old/J_ini", title="Misfit between H and H_obs", yaxis=:log10, label="Misfit")
-             p5 = contourf(xc,yc, Array(H_ini'),levels = 20, color=:turbo)
-             xlabel!("X")
-             ylabel!("Y")
-             title!("Initial state of H (m)")
-             p6 = contourf!(xc, yc, Array(H'), levels=20, color=:turbo)
-             xlabel!("X")
-             ylabel!("Y")
-             title!("Current State of H (m)")
-             #display(plot(p1))
-             display(plot(p1,p2,p3,p4; layout=(2,2), size=(1280,880)))
+             contour!(xc, yc, Array(H_obs'); levels=0.01:0.01, lw=2.0, color=:red, line=:dash,label="Current state of H")
+             p2 = heatmap(xc, yc, Array(log10.(as)'); xlabel = "x", ylabel = "y", label="as", title = "as", aspect_ratio=1)
+             p3 = heatmap(xc[1:end-1], yc[1:end-1], Array(Jn'); xlabel="x", ylabel="y",title = "Gradient of cost function Jn", aspect_ratio=1)
+             p4 = plot(iter_evo, J_evo; shape = :circle, xlabel="Iterations", ylabel="J_old/J_ini", title="misfit", yaxis=:log10)
+             display(plot(p1,p2,p3,p4; layout=(2,2), size=(980,980)))
              #display(plot(p5,p6; layout=(1,2), size=(980, 980)))
         end 
-
-        savefig("adjoint_gauss.png")
 
         # check convergence?
         if J_old/J_ini < gd_ϵtol 
@@ -655,4 +568,4 @@ function adjoint_1D()
     return 
 end 
 
-adjoint_1D() 
+adjoint_2D() 

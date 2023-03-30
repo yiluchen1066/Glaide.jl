@@ -500,10 +500,16 @@ function adjoint_2D()
     
     #B = @. B0*(exp(-((xc-x0)/w)^2-((yc'-y0)/w)^2))*sin(ω*pi*(xc+yc'))
     #smoother 
-    p1 = plot(xc,yc,B'; st=:surface, camera =(20,25), aspect_ratio=1)
-    p2 = Plots.contour(xc, yc, B'; levels =20, aspect_ratio=1)
-    p3 = Plots.plot(xc,B[:,ceil(Int, ny/2)])
-    display(plot(p1,p2,p3))
+    #p1 = plot(xc,yc,B'; st=:surface, camera =(20,25), aspect_ratio=1)
+    #p2 = Plots.contour(xc, yc, B'; levels =20, aspect_ratio=1)
+    #p3 = Plots.plot(xc,B[:,ceil(Int, ny/2)])
+    #display(plot(p1,p2,p3))
+
+    p1 = plot(xc,yc,B'; st=:surface, camera =(15,30), grid=true, aspect_ratio=1, labelfontsize=9,tickfontsize=7, xlabel="X in (m)", ylabel="Y in (m)", zlabel="Height in (m)", title="Synthetic Glacier bedrock")
+    #p3 = Plots.plot(xc,B[:,ceil(Int, ny/2)])
+    display(plot(p1,size=(800,600)))
+    savefig("synthetic_glacier.png")
+    error("initial display")
 
 
 
