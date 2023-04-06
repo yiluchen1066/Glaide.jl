@@ -6,16 +6,18 @@ using Printf
 @views avx(A) = 0.5.*(A[1:end-1].+A[2:end])
 @views d_x(A) = A[2:end].-A[1:end-1]
 
+# version 2 non-dimensionalization 
 @views function main()
     # power law exponents
     n        = 3   # Glen's flow law power exponent
     # dimensionally independent physics
-    lx       = 250000#1.0 # [m]
-    aρgn0    = 1.3517139631340713e-12 #1.9e-24*(970*9.81)^3#1.0 # [1/s/m^n]
+    aρgn0    = 1.0 #1.9e-24*(910*9.81)^3 = 1.3517139631340713e-12 [1/s/m^n]
+    β        = 1.0 # 0.01/365/24/3600= 3.1709791983764586e-10
     # scales
-    tsc      = 1/aρgn0/lx^n # [s]
+    tsc      = 1/β # 3.1536e9[s]
+    lsc      = (1/aρgn0/tsc)^(1/n) #6.167410620812797
     # non-dimensional numbers
-    s_f      = 3e-4    # sliding to ice flow ratio: s_f = asρgn0/aρgn0/lx^2
+    s_f      = 691.84    # sliding to ice flow ratio: s_f = asρgn0/aρgn0/lx^2
     w_b_lx   = 0.2     # mountain width to domain length ratio
     a_b_lx   = 0.0175  # mountain height to domain length ratio
     z_ela_lx = 0.016   # ela to domain length ratio
@@ -23,18 +25,12 @@ using Printf
     m_max_nd = 0.5e-16 # maximum accumulation
     tanθ     = 0.2     # slope
     # dimensionally dependent physics
-    asρgn0   = s_f*aρgn0*lx^2
-    w_b      = w_b_lx*lx
-    a_b      = a_b_lx*lx
-    z_ela    = z_ela_lx*lx
-    β        = βtsc/tsc # 0.01/3600/24/365 = 3.1709791983764586e-10
-    m_max    = m_max_nd*lx/tsc # 2.0/3600/365 = 6.341958396752917e-8
-    @show(asρgn0)
-    @show(w_b)
-    @show(a_b)
-    @show(z_ela)
-    @show(β)
-    @show(m_max)
+    asρgn0   = s_f*aρgn0*lx^2 #2.534463e-5
+    w_b      = w_b_lx*lx #50000.0
+    a_b      = a_b_lx*lx #4375.0
+    z_ela    = z_ela_lx*lx #4000.0 
+    β        = βtsc/tsc #2.1120530673969864e-10 
+    m_max    = m_max_nd*lx/tsc # 6.341958396752917e-8
     # numerics
     nx       = 501
     ϵtol     = (abs = 1e-8, rel = 1e-14)
