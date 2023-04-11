@@ -68,6 +68,7 @@ end
 function residual!(RH, qHx, qHy, β, H, B, z_ELA, b_max, nx, ny, dx, dy)
     @get_thread_idx(H)
     if ix <= nx-2 && iy <= ny-2 
+        #RH[ix+1,iy+1] = - (@d_xa(qHx)/dx + @d_ya(qHy)/dy)
         RH[ix+1,iy+1] =  -(@d_xa(qHx)/dx + @d_ya(qHy)/dy) + min(β[ix+1,iy+1]*(H[ix+1, iy+1]+B[ix+1, iy+1]-z_ELA), b_max)
     end 
     return 
@@ -76,8 +77,8 @@ end
 function timestep!(dτ, H, D, cfl, epsi, nx, ny)
     @get_thread_idx(H)
     if ix <= nx-2 && iy <= ny-2 
-        #dτ[ix,iy] = 0.5*min(1.0, cfl/(epsi+@av_xy(D)))
         dτ[ix,iy]  = min(20.0, cfl/(epsi+@av_xy(D)))
+        #dτ[ix,iy] = 0.5*min(1.0, cfl/(epsi+@av_xy(D)))
     end 
     return 
 end
@@ -91,6 +92,8 @@ function update_H!(H, dHdτ, RH, dτ, damp, nx, ny)
     end 
     return 
 end
+
+
 
 function set_BC!(H, nx, ny)
     @get_thread_idx(H)
@@ -158,9 +161,10 @@ function solve!(problem::Forwardproblem)
             merr = (sum(abs.(Err[:,:]))./nx./ny)
             (isfinite(merr) && merr >0) || error("forward solve failed")
             #@printf("error = %1.e\n", merr)
-            #p1 = heatmap(xc, yc, Array((H.+B)'); title = "S (forward problem)")
-            #p2 = Plots.plot(xc, Array(H[:,ceil(Int,ny/2)]);title="Ice thickness")
-            #display(plot(p1,p2;layout=(2,2)))
+            p1 = heatmap(xc, yc, Array((H.+B)'); title = "S (forward problem)")
+            p2 = heatmap(xc, yc, Array(H'); title = "H (forward model)")
+            p3 = Plots.plot(xc, Array(H[:,ceil(Int,ny*2/3)]);title="Ice thickness")
+            display(plot(p1,p2,p3;layout=(2,2)))
             #error("check forward model") 
         end 
         iter += 1 
@@ -216,6 +220,7 @@ function update_r!(r, R, dR, dt, H, dmp, nx, ny)
                 r[ix,iy] = 0.0 
             else 
                 R[ix,iy] = R[ix,iy]*(1.0 - dmp/min(nx,ny)) + dt*dR[ix,iy] 
+                #R[ix,iy] = R[ix,iy]*(dmp/min(nx,ny)) + dt*dR[ix,iy] 
                 r[ix,iy] = r[ix,iy] + dt*R[ix,iy]
             end
         end
