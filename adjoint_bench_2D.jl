@@ -32,14 +32,6 @@ function compute_rel_error_2!(Err_rel, H, nx, ny)
     return 
 end
 
-function cost!(H, H_obs, J, nx, ny)
-    @get_thread_idx(H)
-    if ix <= nx && iy <= ny
-        J += (H[ix,iy]-H_obs[ix,iy])^2
-    end 
-    J *= 0.5 
-    return 
-end
 
 cost(H, H_obs) = 0.5*sum((H.-H_obs).^2)
 
@@ -140,9 +132,7 @@ end
 function solve!(problem::Forwardproblem)
     (;H, B, D, gradS, av_ya_∇Sx, av_xa_∇Sy, qHx, qHy, β, as, RH, Err_rel, Err_abs, n, a, b_max, z_ELA, dx,dy, nx, ny, epsi, cfl, ϵtol, maxiter, ncheck, threads, blocks) = problem
     RH .= 0; Err_rel .= 0; Err_abs .= 0
-    lx, ly = 30e3, 30e3
-    err_abs0 = 0.0 
-    
+    err_abs0 = Inf
     for iter in 1:maxiter
         if iter % ncheck == 0 
             CUDA.@sync @cuda threads = threads blocks = blocks compute_rel_error_1!(Err_rel, H, nx, ny)
@@ -150,7 +140,8 @@ function solve!(problem::Forwardproblem)
         CUDA.@sync @cuda threads=threads blocks=blocks compute_D!(D, gradS, av_ya_∇Sx, av_xa_∇Sy, H, B, a, as, n, nx, ny, dx, dy)
         CUDA.@sync @cuda threads=threads blocks=blocks compute_q!(qHx, qHy, D, H, B, nx, ny, dx, dy)
         #CUDA.@sync @cuda threads=threads blocks=blocks timestep!(dτ, H, D, cfl, epsi, nx, ny)
-        dτ=1.0/(8.1*maximum(D)/dx^2 + maximum(β))
+        # dτ=dx^2/maximum(D)/4.1
+        dτ=1/(12.1*maximum(D)/dx^2 + maximum(β))
         CUDA.@sync @cuda threads=threads blocks=blocks residual!(RH, qHx, qHy, β, H, B, z_ELA, b_max, nx, ny , dx, dy)
         CUDA.@sync @cuda threads=threads blocks=blocks update_H!(H, RH, dτ, nx, ny)
         CUDA.@sync @cuda threads=threads blocks=blocks set_BC!(H, nx,ny)
@@ -171,7 +162,7 @@ function solve!(problem::Forwardproblem)
 
 
             #end
-            if err_abs < ϵtol.abs || err_rel < ϵtol.rel 
+            if err_rel < ϵtol.rel 
                 break 
             end 
         end 
@@ -271,7 +262,7 @@ function solve!(problem::AdjointProblem)
 
     #dt = min(dx^2, dy^2)/maximum(D)/60.1/2
     #dt = min(dx^2, dy^2)/maximum(D)/60.1
-    dt = 1.0/(8.1*maximum(D)/min(dx,dy)^2 + maximum(β))/7000.0
+    dt = 1.0/(8.1*maximum(D)/min(dx,dy)^2 + maximum(β))/7
     ∂J_∂H .= (H .- H_obs)#./sqrt(length(H))
     # initialization for tmp1 tmp2 tmp3 tmp4 
     merr = 2ϵtol; iter = 1
@@ -361,16 +352,19 @@ function adjoint_2D()
     # power law components 
     n        =  3 
     # dimensionally independet physics 
-    l        =  1.0#1e4#1.0 # length scale lx = 1e3 (natural value)
+    l        =  100.0#1e4#1.0 # length scale lx = 1e3 (natural value)
     aρgn0    =  1.0#1.3517139631340713e-12 #1.0 # A*(ρg)^n # = 1.3475844936008e-12 (natural value)
     #scales 
     tsc      =  1/aρgn0/l^n # also calculated from natural values tsc = 0.7420684971878533
     #non-dimensional numbers (calculated from natural values)
     s_f_syn  = 0.0003 # sliding to ice flow ratio: s_f_syn = asρgn0_syn/aρgn0/lx^2
+    s_f_syn  = 0.01
     s_f      = 0.026315789473684213 # sliding to ice flow ratio: s_f   = asρgn0/aρgn0/lx^2
     m_max_nd = 4.706167536706325e-12#m_max/lx*tsc m_max = 2.0 m/a lx = 1e3 tsc = 
     βtsc     = 2.353083768353162e-10#ratio between characteristic time scales of ice flow and accumulation/ablation βtsc = β0*tsc 
     β1tsc    = 3.5296256525297436e-10
+    γ_nd     = 1e0
+    δ_nd     = 1e-1
     # geometry
     lx_l     = 25.0 #horizontal length to characteristic length ratio
     ly_l     = 20.0 #horizontal length to characteristic length ratio 
@@ -397,6 +391,8 @@ function adjoint_2D()
     m_max       = m_max_nd*l/tsc  #2.0 m/a = 6.341958396752917e-8 m/s
     β0          = βtsc/tsc    #0.01 /a = 3.1709791983764586e-10
     β1          = β1tsc/tsc #0.015/3600/24/365 = 4.756468797564688e-10
+    γ0          = γ_nd*l^(2-2n)*tsc^(-2) #1.0e-2
+    δ           = δ_nd*l^(4-2n)*tsc^(-2)#0.1
 
     @show(asρgn0)
     @show(lx)
@@ -411,6 +407,9 @@ function adjoint_2D()
     @show(z_ELA_1)
     @show(β1)
     @show(H_cut)
+    @show(γ0)
+    @show(δ)
+
 
     # numerics 
     gd_niter    = 100
@@ -418,13 +417,13 @@ function adjoint_2D()
     nx          = 128
     ny          = 128
     epsi        = 1e-4 
-    ϵtol        = (abs = 1e-8, rel = 1e-14)
+    ϵtol        = (abs = 1e-4, rel = 1e-4)
     dmp_adj     = 2*1.7 
     ϵtol_adj    = 1e-8 
     gd_ϵtol     = 1e-3 
-    γ0          = 1.0e-2
-    maxiter     = 500000
-    ncheck      = 1000
+    
+    maxiter     = 5*nx^2
+    ncheck      = ceil(Int,0.25*nx^2)
     ncheck_adj  = 1000
     threads     = (16,16)
     blocks      = ceil.(Int, (nx,ny)./threads)
@@ -468,7 +467,6 @@ function adjoint_2D()
     ω = 8
     B = @. B0*(exp(-xc^2/w1 - yc'^2/w2) + exp(-xc^2/w2-(yc'-ly/ω)^2/w1))
 
-
     
     #B = @. B0*(exp(-((xc-x0)/w)^2-((yc'-y0)/w)^2))*sin(ω*pi*(xc+yc'))
     #smoother
@@ -488,12 +486,13 @@ function adjoint_2D()
     ela   = CuArray{Float64}(ela)
 
     #@show(extrema(B))
-    p1 = heatmap(xc, yc, Array((B)'); title = "B (forward problem initial)")
-    p2 = heatmap(xc, yc, Array(β'); title = "β")
-    p3 = heatmap(xc, yc, Array(ela'); title="ela")
+    p1 = contour(xc, yc, Array((B)');  color=:turbo, levels= 10, clabels=true, cbar=false,title = "Synthetic bedrock", xlabel="X", ylabel="Y")
+    #p2 = heatmap(xc, yc, Array(β'); title = "β")
+    #p3 = heatmap(xc, yc, Array(ela'); title="ela")
     #p2 = plot(xc, yc, Array(B'); levels=20, aspect_ratio =1) 
     #p3 = plot(xc, Array(B[:,ceil(Int, ny/2)]))
-    display(plot(p1, p2, p3))
+    
+    display(plot(p1))
 
     D = CUDA.zeros(Float64,nx-1, ny-1)
     av_ya_∇Sx = CUDA.zeros(Float64, nx-1, ny-1)
@@ -543,8 +542,8 @@ function adjoint_2D()
         println("compute cost gradient done")
         @show(extrema(Jn))
 
-        δ = 0.1*1
-        γ = min(γ, δ/maximum(abs.(Jn)))
+        
+        # γ = min(γ, δ/maximum(abs.(Jn)))
         @show γ
         #check Jn
         # line search 
