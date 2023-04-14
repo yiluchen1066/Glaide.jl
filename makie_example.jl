@@ -40,6 +40,7 @@ idx = findall(v -> v[2] > 200.0, ps)
 ps = ps[idx]
 ns = ns[idx]
 
+
 surface!(ax,xc,yc,B;colormap=:lightterrain)
 surface!(ax,xc,yc,S;colormap=:ice         )
 arrows!(ax,ps,ns;fxaa=true, # turn on anti-aliasing
