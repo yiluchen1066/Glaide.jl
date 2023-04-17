@@ -10,25 +10,27 @@ using Printf
     # power law exponents
     n        = 3   # Glen's flow law power exponent
     # dimensionally independent physics
-    lx       = 250000#1.0 # [m]
-    aρgn0    = 1.3517139631340713e-12 #1.9e-24*(970*9.81)^3#1.0 # [1/s/m^n]
+    lsc      = 1e4 # [m]
+    aρgn0    = 1.35e-12 #1.9e-24*(970*9.81)^3#1.0 # [1/s/m^n]
     # scales
-    tsc      = 1/aρgn0/lx^n # [s]
+    tsc      = 1/aρgn0/lsc^n # [s]
     # non-dimensional numbers
-    s_f      = 3e-4    # sliding to ice flow ratio: s_f = asρgn0/aρgn0/lx^2
-    w_b_lx   = 0.2     # mountain width to domain length ratio
-    a_b_lx   = 0.0175  # mountain height to domain length ratio
-    z_ela_lx = 0.016   # ela to domain length ratio
-    βtsc     = 1e-14   # ratio between characteristic time scales of ice flow and accumulation/ablation
-    m_max_nd = 0.5e-16 # maximum accumulation
-    tanθ     = 0.2     # slope
+    lx_lsc    = 25.0
+    s_f       = 0.02    # sliding to ice flow ratio: s_f = asρgn0/aρgn0/lx^2
+    w_b_lsc   = 5     # mountain width to length scale ratio
+    a_b_lsc   = 0.35  # mountain height to length scale ratio
+    z_ela_lsc = 0.215  # ela to length scale ratio
+    βtsc      = 2e-10   # ratio between characteristic time scales of ice flow and accumulation/ablation
+    m_max_nd  = 5e-12 # maximum accumulation
+    tanθ      = 0.2     # slope
     # dimensionally dependent physics
-    asρgn0   = s_f*aρgn0*lx^2
-    w_b      = w_b_lx*lx
-    a_b      = a_b_lx*lx
-    z_ela    = z_ela_lx*lx
+    lx       = lx_lsc*lsc
+    asρgn0   = s_f*aρgn0*lsc^2
+    w_b      = w_b_lsc*lsc
+    a_b      = a_b_lsc*lsc
+    z_ela    = z_ela_lsc*lsc
     β        = βtsc/tsc # 0.01/3600/24/365 = 3.1709791983764586e-10
-    m_max    = m_max_nd*lx/tsc # 2.0/3600/365 = 6.341958396752917e-8
+    m_max    = m_max_nd*lsc/tsc # 2.0/3600/365 = 6.341958396752917e-8
     @show(asρgn0)
     @show(w_b)
     @show(a_b)

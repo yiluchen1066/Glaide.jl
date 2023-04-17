@@ -2,7 +2,7 @@ using CUDA,BenchmarkTools
 using Plots,Plots.Measures,Printf
 using DelimitedFiles
 using Enzyme 
-default(size=(980,980),framestyle=:box,label=false,grid=true,margin=10mm,lw=3.5, labelfontsize=11,tickfontsize=11,titlefontsize=14)
+#default(size=(800,600),framestyle=:box,label=false,grid=false,margin=10mm,lw=4,labelfontsize=9,tickfontsize=9,titlefontsize=12)
 
 const DO_VISU = true 
 macro get_thread_idx(A)  esc(:( begin ix =(blockIdx().x-1) * blockDim().x + threadIdx().x; iy = (blockIdx().y-1) * blockDim().y+threadIdx().y;end )) end 
@@ -348,16 +348,6 @@ function smooth!(as, as2, H, nx, ny, nsm, threads, blocks)
     return 
 end 
 
-function as_clean(as, H, nx, ny)
-    @get_thread_idx(H)
-    if ix <= nx-1 && iy <= ny-1 
-        if H[ix,iy] == 0.0
-            as[ix,iy] = NaN 
-        end 
-    end 
-    return 
-end 
-
 function adjoint_2D()
     # power law components 
     n        =  3 
@@ -368,12 +358,12 @@ function adjoint_2D()
     tsc      =  1/aρgn0/l^n # also calculated from natural values tsc = 0.7420684971878533
     #non-dimensional numbers (calculated from natural values)
     s_f_syn  = 0.0003 # sliding to ice flow ratio: s_f_syn = asρgn0_syn/aρgn0/lx^2
-    s_f_syn  = 0.01
+    #s_f_syn  = 0.01
     s_f      = 0.026315789473684213 # sliding to ice flow ratio: s_f   = asρgn0/aρgn0/lx^2
     m_max_nd = 4.706167536706325e-12#m_max/lx*tsc m_max = 2.0 m/a lx = 1e3 tsc = 
     βtsc     = 2.353083768353162e-10#ratio between characteristic time scales of ice flow and accumulation/ablation βtsc = β0*tsc 
     β1tsc    = 3.5296256525297436e-10
-    γ_nd     = 1e0
+    γ_nd     = 7.398014870553008e9#1e0
     δ_nd     = 1e-1
     # geometry
     lx_l     = 25.0 #horizontal length to characteristic length ratio
@@ -401,11 +391,11 @@ function adjoint_2D()
     m_max       = m_max_nd*l/tsc  #2.0 m/a = 6.341958396752917e-8 m/s
     β0          = βtsc/tsc    #0.01 /a = 3.1709791983764586e-10
     β1          = β1tsc/tsc #0.015/3600/24/365 = 4.756468797564688e-10
-    γ0          = γ_nd*l^(2-2n)*tsc^(-2) #1.0e-2
-    δ           = δ_nd*l^(4-2n)*tsc^(-2)#0.1
-    le          = 1e-6#0.01 
+    γ0          = γ_nd*l^(3-2*n)/tsc #1.0e-2
+    #δ           = δ_nd*l^(4-2n)*tsc^(-2)#0.1
 
     @show(asρgn0)
+    @show(asρgn0_syn)
     @show(lx)
     @show(ly)
     @show(lz)
@@ -419,7 +409,8 @@ function adjoint_2D()
     @show(β1)
     @show(H_cut)
     @show(γ0)
-    @show(δ)
+
+    error("chheck")
 
 
     # numerics 
@@ -431,7 +422,7 @@ function adjoint_2D()
     ϵtol        = (abs = 1e-4, rel = 1e-4)
     dmp_adj     = 2*1.7 
     ϵtol_adj    = 1e-8 
-    gd_ϵtol     = 5e-2#1e-3 
+    gd_ϵtol     = 1e-3 
     
     maxiter     = 5*nx^2
     ncheck      = ceil(Int,0.25*nx^2)
@@ -497,9 +488,7 @@ function adjoint_2D()
     ela   = CuArray{Float64}(ela)
 
     #@show(extrema(B))
-    Bp     = copy(B)
-    Bp[B.==0.0] = NaN
-    p1 = contour(xc, yc, Array((Bp)');  color=:turbo, levels= 10, clabels=true, cbar=false,title = "Synthetic bedrock", xlabel="X", ylabel="Y")
+    p1 = contour(xc, yc, Array((B)');  color=:turbo, levels= 10, clabels=true, cbar=false,title = "Synthetic bedrock", xlabel="X", ylabel="Y")
     #p2 = heatmap(xc, yc, Array(β'); title = "β")
     #p3 = heatmap(xc, yc, Array(ela'); title="ela")
     #p2 = plot(xc, yc, Array(B'); levels=20, aspect_ratio =1) 
@@ -517,8 +506,7 @@ function adjoint_2D()
 
 
     as = asρgn0*CUDA.ones(nx-1, ny-1) 
-    as_ini_vis = copy(as)
-    as_ini     = copy(as)
+    as_ini = copy(as)
     as_syn = asρgn0_syn*CUDA.ones(nx-1,ny-1)
     as2 = similar(as) 
 
@@ -548,7 +536,7 @@ function adjoint_2D()
     
     J_evo = Float64[]; iter_evo = Int[]
     # gradient descent iterations to update n 
-    anim = @animate for gd_iter = 1:gd_niter 
+    for gd_iter = 1:gd_niter 
         as_ini .= as
         solve!(adjoint_problem)
         println("compute cost gradient")
@@ -593,29 +581,12 @@ function adjoint_2D()
         push!(iter_evo, gd_iter); push!(J_evo, J_old/J_ini)
         CUDA.@sync @cuda threads=threads blocks=blocks update_S!(S, H, B, nx, ny)
         if DO_VISU 
-             Hp_obs = copy(H_obs)
-             Hp_obs[H_obs.==0.0] .= NaN
-             Hp     = copy(H)
-             Hp[H .== 0.0] .= NaN
-             asp    = copy(as)
-             CUDA.@sync @cuda threads=threads blocks=blocks as_clean(asp, H, nx, ny)
-
-             p1=heatmap(xc, yc, Array(Hp'); xlabel ="X", ylabel="Y", title ="Ice thickness", levels=20, color =:turbo, label="Ice thickness", aspect_ratio = 1,cbar=true)
-             contour!(xc, yc, Array(Hp'); levels=le:le, lw=2.0, color=:black, line=:solid, label="Outline of current state of ice thickness H")
-             contour!(xc, yc, Array(Hp_obs'); levels=le:le, lw=2.0, color=:red, line=:dash,label="Outline of synthetic ice thickness H")
-             #p2 = plot(yc, Array(H[nx÷2,:]); xlabel = "y", ylabel = "H")
-             p2=plot(yc, Array(Hp_obs[nx÷2,:]); xlabel="y", ylabel="H", title="Ice thickness", label="Synthetic H (cross section)",  legend=:bottom)
-             plot!(yc,Array(Hp[nx÷2,:]);xlabel="y",ylabel="H", label="Current H (cross section)", legend=:bottom)
-             #plot!(yc,Array(B[nx÷2,:]), xlabel="y", ylabel="H", label="Bed rock", legend=:bottom)
-             p3=heatmap(xc[1:end-1], yc[1:end-1], Array(log10.(asp)'); xlabel="x", ylabel="y", label="as", title="Sliding coefficient as", aspect_ratio=1)
-             p4=plot(yc[1:end-1],Array(log10.(asp[nx÷2,:])); xlabel="y", ylabel="as", title="Sliding coefficient as",color=:blue, lw = 3, label="Current as (cross section)", legend=true)
-             plot!(yc[1:end-1],Array(log10.(as_ini_vis[nx÷2,:])); xlabel="y", ylabel="as", color=:green, lw=3, label="Initial as for inversion", legend=true)
-             plot!(yc[1:end-1],Array(log10.(as_syn[nx÷2,:]));xlabel="y", ylabel="as", color=:black, lw= 3, label="Synthetic as", legend=true)
-             display(plot(p1,p2,p3,p4; layout=(2,2), size=(980,980)))
-
-             #p2 = heatmap(xc, yc, Array(log10.(as)'); xlabel = "x", ylabel = "y", label="as", title = "as", aspect_ratio=1)
-             #p3 = heatmap(xc[1:end-1], yc[1:end-1], Array(Jn'); xlabel="x", ylabel="y",title = "Gradient of cost function Jn", aspect_ratio=1)
-             #p5 = plot(iter_evo, J_evo; shape = :circle, xlabel="Iterations", ylabel="J_old/J_ini", title="misfit", yaxis=:log10)
+             p1=heatmap(xc, yc, Array((H.+B)'); levels=20, color =:turbo, label="H observation", aspect_ratio = 1)
+             contour!(xc, yc, Array(H'); levels=0.01:0.01, lw=2.0, color=:black, line=:solid,label="Current state of H")
+             contour!(xc, yc, Array(H_obs'); levels=0.01:0.01, lw=2.0, color=:red, line=:dash,label="Current state of H")
+             p2 = heatmap(xc, yc, Array(log10.(as)'); xlabel = "x", ylabel = "y", label="as", title = "as", aspect_ratio=1)
+             p3 = heatmap(xc[1:end-1], yc[1:end-1], Array(Jn'); xlabel="x", ylabel="y",title = "Gradient of cost function Jn", aspect_ratio=1)
+             p4 = plot(iter_evo, J_evo; shape = :circle, xlabel="Iterations", ylabel="J_old/J_ini", title="misfit", yaxis=:log10)
              display(plot(p1,p2,p3,p4; layout=(2,2), size=(980,980)))
              #display(plot(p5,p6; layout=(1,2), size=(980, 980)))
         end 
@@ -628,10 +599,7 @@ function adjoint_2D()
             @printf("#iter = %d, misfit = %.1e\n", gd_iter, J_old/J_ini)
         end 
 
-        
-
     end 
-    gif(anim, "adjoint_bench_2D.gif"; fps=10)
 
     return 
 end 

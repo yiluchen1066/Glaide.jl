@@ -2,7 +2,7 @@ using CUDA,BenchmarkTools
 using Plots,Plots.Measures,Printf
 using Enzyme 
 using HDF5, DelimitedFiles, Rasters
-#default(size=(800,600),framestyle=:box,label=false,grid=false,margin=10mm,lw=4,labelfontsize=9,tickfontsize=9,titlefontsize=12)
+default(size=(980,980),framestyle=:box,label=false,grid=true,margin=7mm,lw=3.5,labelfontsize=11,tickfontsize=11,titlefontsize=11)
 
 const DO_VISU = true 
 macro get_thread_idx(A)  esc(:( begin ix =(blockIdx().x-1) * blockDim().x + threadIdx().x; iy = (blockIdx().y-1) * blockDim().y+threadIdx().y;end )) end 
@@ -272,7 +272,7 @@ function solve!(problem::AdjointProblem)
 
     #dt = min(dx^2, dy^2)/maximum(D)/60.1/2
     #dt = min(dx^2, dy^2)/maximum(D)/60.1
-    dt = 1.0/(8.1*maximum(D)/min(dx,dy)^2 + maximum(β))/10.0
+    dt = 1.0/(8.1*maximum(D)/min(dx,dy)^2 + maximum(β))/700.0
     ∂J_∂H .= (H .- H_obs)#./sqrt(length(H))
     # initialization for tmp1 tmp2 tmp3 tmp4 
     merr = 2ϵtol; iter = 1
@@ -358,6 +358,16 @@ function smooth!(as, as2, H, nx, ny, nsm, threads, blocks)
     return 
 end 
 
+function as_clean(as, H, nx, ny)
+    @get_thread_idx(H)
+    if ix <= nx-1 && iy <= ny-1 
+        if H[ix,iy] == 0.0
+            as[ix,iy] = NaN 
+        end 
+    end 
+    return 
+end 
+
 @views function load_data(bed_dat, surf_dat)
     z_bed  = reverse(dropdims(Raster(bed_dat); dims=3), dims=2)
     z_surf = reverse(dropdims(Raster(surf_dat); dims=3), dims=2)
@@ -412,13 +422,16 @@ function adjoint_2D()
     tsc      =  1/aρgn0/l^n # also calculated from natural values tsc = 739.8014870553008
     #non-dimensional numbers (calculated from natural values)
     #s_f_syn  = 0.03 # sliding to ice flow ratio: s_f_syn = asρgn0_syn/aρgn0/lx^2
-    s_f      = 5.0#2.631578947368421 # sliding to ice flow ratio: s_f   = asρgn0/aρgn0/lx^2
+    s_f      = 0.0#2.631578947368421 # sliding to ice flow ratio: s_f   = asρgn0/aρgn0/lx^2
     m_max_nd = 2.697779395337379e-8#m_max/lx*tsc m_max = 2.0 m/a lx = 1e3 tsc = 
     βtsc     = 1.12385736177553e-7#ratio between characteristic time scales of ice flow and accumulation/ablation βtsc = β0*tsc 
     # geometry
     z_ela_l  = 2.9355889409400002 # ela to domain length ratio z_ela_l = 
     # numerics
     H_cut_l  = 1.0e-6
+    γ_nd     = 1e4#1e3#1e2#1e-2 
+    δ_nd     = 1e-1
+    le       = 1e-5
     # dimensional  dependent physics parameters
     z_ELA_0     = z_ela_l*l # 2935.58894094
     H_cut       = H_cut_l*l # 1.0e-2
@@ -426,6 +439,10 @@ function adjoint_2D()
     asρgn0      = s_f*aρgn0*l^2 #5.0e-18*(ρg)^n = 3.5571420082475557e-6
     m_max       = m_max_nd*l/tsc  # 1.15 m/a = 3.646626078132927e-8 m/s
     β0          = βtsc/tsc    #0.00479074/a = 1.5191336884830034e-10
+    γ0          = γ_nd*l^(2-2n)*tsc^(-2) #1.0e-2
+    δ           = δ_nd*l^(4-2n)*tsc^(-2)#0.1
+    le          = 1e-5#0.01 
+
 
 
     M           = min.(β0.*(H_rhone .+ B_rhone .- z_ELA_0), m_max)
@@ -444,6 +461,9 @@ function adjoint_2D()
     @show(asρgn0)
     @show(m_max)
     @show(β0)
+    @show(γ0)
+    @show(δ)
+    
 
 
     # numerics 
@@ -456,9 +476,8 @@ function adjoint_2D()
     dmp_adj     = 2*1.7 
     ϵtol_adj    = 5e-5
     gd_ϵtol     = 1e-3 
-    γ0          = 1.0e-2
-    maxiter     = 500000
-    ncheck      = 1000
+    maxiter     = 5*nx^2
+    ncheck      = ceil(Int,0.25*nx^2)
     ncheck_adj  = 1000
     threads     = (16,16)
     blocks      = ceil.(Int, (nx,ny)./threads)
@@ -479,6 +498,7 @@ function adjoint_2D()
     H     = copy(H_rhone)
     H_obs = copy(H_rhone)
     H_ini = copy(H_rhone)
+
     S     = copy(S_rhone)
     S_obs = copy(S_rhone)
     B     = copy(B_rhone)
@@ -531,6 +551,7 @@ function adjoint_2D()
 
     println("generating synthetic data (nx = $nx, ny = $ny)...")
     solve!(forward_problem)
+    H_ini_vis = Array(H[nx÷2,:])
     println("gradient descent")
 
     #S_obs .= B .+ H_obs 
@@ -543,9 +564,9 @@ function adjoint_2D()
     @show(maximum(abs.(H.-H_obs)))
     J_ini = J_old
     
-    J_evo = Float64[]; iter_evo = Int[]
+    J_evo = Float64[1.0]; iter_evo = Int[0]
     # gradient descent iterations to update n 
-    for gd_iter = 1:gd_niter 
+    anim = @animate for gd_iter = 1:gd_niter 
         as_ini .= as
         solve!(adjoint_problem)
         println("compute cost gradient")
@@ -553,8 +574,7 @@ function adjoint_2D()
         println("compute cost gradient done")
         @show(extrema(Jn))
 
-        δ = 0.1*1
-        γ = min(γ, δ/maximum(abs.(Jn)))
+        #γ = min(γ, δ/maximum(abs.(Jn)))
         @show γ
         #check Jn
         # line search 
@@ -590,15 +610,33 @@ function adjoint_2D()
         push!(iter_evo, gd_iter); push!(J_evo, J_old/J_ini)
         CUDA.@sync @cuda threads=threads blocks=blocks update_S!(S, H, B, nx, ny)
         if DO_VISU 
-             p1=heatmap(xc, yc, Array((H)'); levels=20, color =:turbo, aspect_ratio = 1)
-             contour!(xc, yc, Array(H'); levels=0.01:0.01, lw=2.0, color=:black, line=:solid,label="Current state of H")
-             contour!(xc, yc, Array(H_obs'); levels=0.01:0.01, lw=2.0, color=:red, line=:dash,label="Current state of H")
-             p2 = heatmap(xc, yc, Array(log10.(as)'); xlabel = "x", ylabel = "y", label="as", title = "as", aspect_ratio=1)
-             p3 = heatmap(xc[1:end-1], yc[1:end-1], Array(Jn'); xlabel="x", ylabel="y",title = "Gradient of cost function Jn", aspect_ratio=1)
-             p4 = plot(iter_evo, J_evo; shape = :circle, xlabel="Iterations", ylabel="J_old/J_ini", title="misfit", yaxis=:log10)
-             display(plot(p1,p2,p3,p4; layout=(2,2), size=(980,980)))
-             #display(plot(p5,p6; layout=(1,2), size=(980, 980)))
-        end 
+            Hp_obs = copy(H_obs)
+            Hp_obs[H_obs.==0.0] .= NaN
+            Hp     = copy(H)
+            Hp[H .== 0.0] .= NaN
+            
+            asp = copy(as)
+            CUDA.@sync @cuda threads = threads blocks = blocks as_clean(asp,H, nx, ny)
+            p1=heatmap(xc, yc, Array(Hp'); xlabel ="X", ylabel="Y", title ="Ice thickness", levels=20, color =:turbo, label="Ice thickness", aspect_ratio = 1,cbar=false)
+            contour!(xc, yc, Array(Hp'); levels=le:le, lw=2.0, color=:black, line=:solid, label="Outline of current state of ice thickness H")
+            contour!(xc, yc, Array(Hp_obs'); levels=le:le, lw=2.0, color=:red, line=:dash,label="Outline of synthetic ice thickness H")
+            #    p2 = plot(yc, Array(H[nx÷2,:]); xlabel = "y", ylabel = "H")
+            p2=plot(yc, Array((Hp_obs[nx÷2,:].-Hp[nx÷2,:])); xlabel="y", ylabel="H", title="elevation", label="Current ΔH",  legend=:top)
+            plot!(yc,Array(Hp_obs[nx÷2,:]).-H_ini_vis;xlabel="y",ylabel="H", label="Initial ΔH", legend=:top)
+            #plot!(yc,Array(B[nx÷2,:]), xlabel="y", ylabel="H", label="Bed rock", legend=:top)
+            p3=heatmap(xc[1:end-1], yc[1:end-1], Array(log10.(asp)'); xlabel="x", ylabel="y", label="as", title="Sliding coefficient as", aspect_ratio=1)
+            p4=plot(yc[1:end-1],Array(log10.(asp[nx÷2,:])); xlabel="y", ylabel="as", title="Sliding coefficient as",color=:blue, lw = 3, label="Current as (cross section)", legend=true)
+            #plot!(yc[1:end-1],Array(as_ini_vis[nx÷2,:]); xlabel="y", ylabel="as", color=:green, lw=3, label="Initial as for inversion", legend=true)
+            #plot!(yc[1:end-1],Array(as_syn[nx÷2,:]);xlabel="y", ylabel="as", color=:black, lw= 3, label="Synthetic as", legend=true)
+            #display(plot(p1,p2,p3,p4; layout=(2,2), size=(980,980)))
+
+            #p2 = heatmap(xc, yc, Array(log10.(as)'); xlabel = "x", ylabel = "y", label="as", title = "as", aspect_ratio=1)
+            #p3 = heatmap(xc[1:end-1], yc[1:end-1], Array(Jn'); xlabel="x", ylabel="y",title = "Gradient of cost function Jn", aspect_ratio=1)
+            p5 = plot(iter_evo, J_evo; shape = :circle, xlabel="Iterations", ylabel="J_old/J_ini", title="misfit", yaxis=:log10)
+            display(plot(p1,p2,p3,p4,p5))
+            #display(plot(p1,p2,p3,p4; layout=(2,2), size=(980,980)))
+            #display(plot(p5,p6; layout=(1,2), size=(980, 980)))
+       end 
 
         # check convergence?
         if J_old/J_ini < gd_ϵtol 
@@ -609,6 +647,7 @@ function adjoint_2D()
         end 
 
     end 
+    gif(anim, "adjoint_rhone_2D.gif"; fps=1)
 
     return 
 end 
