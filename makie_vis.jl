@@ -28,10 +28,10 @@ B = zeros(Float64, nx, ny)
 B = @. B0*(exp(-xc^2/w1 - yc'^2/w2) + exp(-xc^2/w2-(yc'-ly/ω)^2/w1))
 
 fig = Figure(resolution=(2500,25000), fontsize=42)
-ax = Axis3(fig[1,1][1,1]; aspect=:data, title="Synthetic glacier")
+ax = Axis3(fig[1,1][1,1]; aspect=(1,1,0.5), title="Synthetic glacier")
 
-GLMakie.surface!(ax, xc, yc, B; colormap=:lightterrain)
-#GLMakie.xlabel!(ax,"X in m")
+GLMakie.surface!(ax, xc, yc, B; colormap=:lightterrain,xlabel="X in m", ylabel="Y in m", zlabel="Height in m")
+#xlabel!(ax,"X in m")
 #GLMakie.ylabel!(ax,"Y in m")
 #GLMakie.zlabel!(ax,"Height in m")
 save("synthetic_glacier.png", fig)
