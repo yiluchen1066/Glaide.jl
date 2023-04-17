@@ -2,7 +2,7 @@ using CUDA,BenchmarkTools
 using Plots,Plots.Measures,Printf
 using DelimitedFiles
 using Enzyme 
-default(size=(980,980),framestyle=:box,label=false,grid=true,margin=10mm,lw=3.5, labelfontsize=11,tickfontsize=11,titlefontsize=14)
+default(size=(1320,980),framestyle=:box,label=false,grid=true,margin=8mm,lw=3.5, labelfontsize=11,tickfontsize=11,titlefontsize=14)
 
 const DO_VISU = true 
 macro get_thread_idx(A)  esc(:( begin ix =(blockIdx().x-1) * blockDim().x + threadIdx().x; iy = (blockIdx().y-1) * blockDim().y+threadIdx().y;end )) end 
@@ -600,18 +600,19 @@ function adjoint_2D()
              asp    = copy(as)
              CUDA.@sync @cuda threads=threads blocks=blocks as_clean(asp, H, nx, ny)
 
-             p1=heatmap(xc, yc, Array(Hp'); xlabel ="X", ylabel="Y", title ="Ice thickness", levels=20, color =:turbo, label="Ice thickness", aspect_ratio = 1,cbar=true)
-             contour!(xc, yc, Array(Hp'); levels=le:le, lw=2.0, color=:black, line=:solid, label="Outline of current state of ice thickness H")
-             contour!(xc, yc, Array(Hp_obs'); levels=le:le, lw=2.0, color=:red, line=:dash,label="Outline of synthetic ice thickness H")
+             p1=heatmap(xc, yc, Array(Hp'); xlabel ="X", ylabel="Y", title ="Ice thickness", xlims=extrema(xc), ylims=extrema(yc),levels=20, color =:turbo, aspect_ratio = 1,cbar=true)
+             #plot!(0.0, yc; label="Cross section", legend=true, line=:dash, color=:red)
+             #contour!(xc, yc, Array(Hp'); levels=le:le, lw=2.0, color=:black, line=:solid, label="Outline of current state of ice thickness H")
+             #contour!(xc, yc, Array(Hp_obs'); levels=le:le, lw=2.0, color=:red, line=:dash,label="Outline of synthetic ice thickness H")
              #p2 = plot(yc, Array(H[nx÷2,:]); xlabel = "y", ylabel = "H")
-             p2=plot(yc, Array(Hp_obs[nx÷2,:]); xlabel="y", ylabel="H", title="Ice thickness", label="Synthetic H (cross section)",  legend=:bottom)
-             plot!(yc,Array(Hp[nx÷2,:]);xlabel="y",ylabel="H", label="Current H (cross section)", legend=:bottom)
+             p2=plot(yc,Array(Hp[nx÷2,:]);xlabel="y",ylabel="H", label="Current H (cross section)", legend=:bottom)
+             plot!(Array(Hp_obs[nx÷2,:]),yc; xlabel="H", ylabel="Y", title="Ice thickness", label="Synthetic H (cross section)",  legend=:bottom)
              #plot!(yc,Array(B[nx÷2,:]), xlabel="y", ylabel="H", label="Bed rock", legend=:bottom)
              p3=heatmap(xc[1:end-1], yc[1:end-1], Array(log10.(asp)'); xlabel="x", ylabel="y", label="as", title="Sliding coefficient as", aspect_ratio=1)
              p4=plot(yc[1:end-1],Array(log10.(asp[nx÷2,:])); xlabel="y", ylabel="as", title="Sliding coefficient as",color=:blue, lw = 3, label="Current as (cross section)", legend=true)
              plot!(yc[1:end-1],Array(log10.(as_ini_vis[nx÷2,:])); xlabel="y", ylabel="as", color=:green, lw=3, label="Initial as for inversion", legend=true)
              plot!(yc[1:end-1],Array(log10.(as_syn[nx÷2,:]));xlabel="y", ylabel="as", color=:black, lw= 3, label="Synthetic as", legend=true)
-             display(plot(p1,p2,p3,p4; layout=(2,2), size=(980,980)))
+             display(plot(p1,p2,p3,p4; layout=(2,2)))
 
              #p2 = heatmap(xc, yc, Array(log10.(as)'); xlabel = "x", ylabel = "y", label="as", title = "as", aspect_ratio=1)
              #p3 = heatmap(xc[1:end-1], yc[1:end-1], Array(Jn'); xlabel="x", ylabel="y",title = "Gradient of cost function Jn", aspect_ratio=1)

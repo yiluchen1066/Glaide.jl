@@ -467,7 +467,7 @@ function adjoint_2D()
 
 
     # numerics 
-    gd_niter    = 100
+    gd_niter    = 15#100
     bt_niter     = 3 
     nx          = size(B_rhone)[1]
     ny          = size(B_rhone)[2]
@@ -617,15 +617,15 @@ function adjoint_2D()
             
             asp = copy(as)
             CUDA.@sync @cuda threads = threads blocks = blocks as_clean(asp,H, nx, ny)
-            p1=heatmap(xc, yc, Array(Hp'); xlabel ="X", ylabel="Y", title ="Ice thickness", levels=20, color =:turbo, label="Ice thickness", aspect_ratio = 1,cbar=false)
-            contour!(xc, yc, Array(Hp'); levels=le:le, lw=2.0, color=:black, line=:solid, label="Outline of current state of ice thickness H")
-            contour!(xc, yc, Array(Hp_obs'); levels=le:le, lw=2.0, color=:red, line=:dash,label="Outline of synthetic ice thickness H")
+            p1=heatmap(xc.*1e-3, yc.*1e-3, Array(Hp'); xlabel ="X in km", ylabel="Y in km", title ="Ice thickness", levels=20, color =:turbo, aspect_ratio = 1,cbar=false)
+            #contour!(xc, yc, Array(Hp'); levels=le:le, lw=2.0, color=:black, line=:solid, label="Outline of current state of ice thickness H")
+            #contour!(xc, yc, Array(Hp_obs'); levels=le:le, lw=2.0, color=:red, line=:dash,label="Outline of synthetic ice thickness H")
             #    p2 = plot(yc, Array(H[nx÷2,:]); xlabel = "y", ylabel = "H")
-            p2=plot(yc, Array((Hp_obs[nx÷2,:].-Hp[nx÷2,:])); xlabel="y", ylabel="H", title="elevation", label="Current ΔH",  legend=:top)
-            plot!(yc,Array(Hp_obs[nx÷2,:]).-H_ini_vis;xlabel="y",ylabel="H", label="Initial ΔH", legend=:top)
+            p2=plot(Array((Hp_obs[nx÷2,:].-Hp[nx÷2,:])),yc.*1e-3; xlabel="Y in km", ylabel="H", title="H_H_obs", label="Current ΔH",  legend=:top)
+            plot!(Array(Hp_obs[nx÷2,:]).-H_ini_vis,yc.*1e-3;xlabel="Y in km",ylabel="H", label="Initial ΔH", legend=:top)
             #plot!(yc,Array(B[nx÷2,:]), xlabel="y", ylabel="H", label="Bed rock", legend=:top)
-            p3=heatmap(xc[1:end-1], yc[1:end-1], Array(log10.(asp)'); xlabel="x", ylabel="y", label="as", title="Sliding coefficient as", aspect_ratio=1)
-            p4=plot(yc[1:end-1],Array(log10.(asp[nx÷2,:])); xlabel="y", ylabel="as", title="Sliding coefficient as",color=:blue, lw = 3, label="Current as (cross section)", legend=true)
+            p3=heatmap(xc[1:end-1].*1e-3, yc[1:end-1].*1e-3, Array(log10.(asp)'); xlabel="X in km", ylabel="Y in km", label="as", title="Sliding coefficient as", aspect_ratio=1)
+            p4=plot(yc[1:end-1]*1e-3,Array(log10.(asp[nx÷2,:])); xlabel="Y in km", ylabel="as", title="Sliding coefficient as",color=:blue, lw = 3, label="Current as (cross section)", legend=true)
             #plot!(yc[1:end-1],Array(as_ini_vis[nx÷2,:]); xlabel="y", ylabel="as", color=:green, lw=3, label="Initial as for inversion", legend=true)
             #plot!(yc[1:end-1],Array(as_syn[nx÷2,:]);xlabel="y", ylabel="as", color=:black, lw= 3, label="Synthetic as", legend=true)
             #display(plot(p1,p2,p3,p4; layout=(2,2), size=(980,980)))
