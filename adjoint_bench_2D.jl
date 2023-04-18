@@ -423,7 +423,7 @@ function adjoint_2D()
 
 
     # numerics 
-    gd_niter    = 100
+    gd_niter    = 30#100
     bt_niter     = 3 
     nx          = 128
     ny          = 128
@@ -431,7 +431,7 @@ function adjoint_2D()
     ϵtol        = (abs = 1e-4, rel = 1e-4)
     dmp_adj     = 2*1.7 
     ϵtol_adj    = 1e-8 
-    gd_ϵtol     = 5e-2#1e-3 
+    gd_ϵtol     = 1e-3 
     
     maxiter     = 5*nx^2
     ncheck      = ceil(Int,0.25*nx^2)
@@ -546,7 +546,7 @@ function adjoint_2D()
     @show(maximum(abs.(H.-H_obs)))
     J_ini = J_old
     
-    J_evo = Float64[]; iter_evo = Int[]
+    J_evo = Float64[1.0]; iter_evo = Int[0]
     # gradient descent iterations to update n 
     anim = @animate for gd_iter = 1:gd_niter 
         as_ini .= as
@@ -605,19 +605,20 @@ function adjoint_2D()
              #contour!(xc, yc, Array(Hp'); levels=le:le, lw=2.0, color=:black, line=:solid, label="Outline of current state of ice thickness H")
              #contour!(xc, yc, Array(Hp_obs'); levels=le:le, lw=2.0, color=:red, line=:dash,label="Outline of synthetic ice thickness H")
              #p2 = plot(yc, Array(H[nx÷2,:]); xlabel = "y", ylabel = "H")
-             p2=plot(yc,Array(Hp[nx÷2,:]);xlabel="y",ylabel="H", label="Current H (cross section)", legend=:bottom)
+             p2=plot(Array(Hp[nx÷2,:]),yc;xlabel="H",ylabel="Y", label="Current H (cross section)", legend=:bottom)
              plot!(Array(Hp_obs[nx÷2,:]),yc; xlabel="H", ylabel="Y", title="Ice thickness", label="Synthetic H (cross section)",  legend=:bottom)
              #plot!(yc,Array(B[nx÷2,:]), xlabel="y", ylabel="H", label="Bed rock", legend=:bottom)
-             p3=heatmap(xc[1:end-1], yc[1:end-1], Array(log10.(asp)'); xlabel="x", ylabel="y", label="as", title="Sliding coefficient as", aspect_ratio=1)
-             p4=plot(yc[1:end-1],Array(log10.(asp[nx÷2,:])); xlabel="y", ylabel="as", title="Sliding coefficient as",color=:blue, lw = 3, label="Current as (cross section)", legend=true)
-             plot!(yc[1:end-1],Array(log10.(as_ini_vis[nx÷2,:])); xlabel="y", ylabel="as", color=:green, lw=3, label="Initial as for inversion", legend=true)
-             plot!(yc[1:end-1],Array(log10.(as_syn[nx÷2,:]));xlabel="y", ylabel="as", color=:black, lw= 3, label="Synthetic as", legend=true)
+             p3=heatmap(xc[1:end-1], yc[1:end-1], Array(log10.(asp)'); xlabel="X", ylabel="Y", label="as", title="Sliding coefficient as", aspect_ratio=1)
+             p4=plot(Array(log10.(as[nx÷2,:])),yc[1:end-1]; xlabel="as", ylabel="Y", title="Sliding coefficient as",color=:blue, lw = 3, label="Current as (cross section)", legend=true)
+             plot!(Array(log10.(as_ini_vis[nx÷2,:])),yc[1:end-1]; xlabel="as", ylabel="Y", color=:green, lw=3, label="Initial as for inversion", legend=true)
+             plot!(Array(log10.(as_syn[nx÷2,:])),yc[1:end-1];xlabel="as", ylabel="Y", color=:red, lw= 3, label="Synthetic as", legend=true)
              display(plot(p1,p2,p3,p4; layout=(2,2)))
 
              #p2 = heatmap(xc, yc, Array(log10.(as)'); xlabel = "x", ylabel = "y", label="as", title = "as", aspect_ratio=1)
              #p3 = heatmap(xc[1:end-1], yc[1:end-1], Array(Jn'); xlabel="x", ylabel="y",title = "Gradient of cost function Jn", aspect_ratio=1)
-             #p5 = plot(iter_evo, J_evo; shape = :circle, xlabel="Iterations", ylabel="J_old/J_ini", title="misfit", yaxis=:log10)
-             display(plot(p1,p2,p3,p4; layout=(2,2), size=(980,980)))
+             p5 = plot(iter_evo, J_evo; shape = :circle, xlabel="Iterations", ylabel="J_old/J_ini", title="misfit", yaxis=:log10)
+             display(plot(p1,p2,p3,p4; layout=(2,2)))
+             #display(plot(p5;  size=(490,490)))
              #display(plot(p5,p6; layout=(1,2), size=(980, 980)))
         end 
 
@@ -632,7 +633,7 @@ function adjoint_2D()
         
 
     end 
-    gif(anim, "adjoint_bench_2D.gif"; fps=10)
+    gif(anim, "adjoint_bench_2D.gif"; fps=5)
 
     return 
 end 
