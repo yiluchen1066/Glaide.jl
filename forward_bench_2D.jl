@@ -2,7 +2,7 @@ using CUDA,BenchmarkTools
 using Plots,Plots.Measures,Printf
 using DelimitedFiles
 using Enzyme 
-#default(size=(800,600),framestyle=:box,label=false,grid=false,margin=10mm,lw=4,labelfontsize=9,tickfontsize=9,titlefontsize=12)
+default(size=(800,600),framestyle=:box,label=false,grid=false,margin=10mm,lw=2,labelfontsize=11,tickfontsize=11,titlefontsize=14)
 
 const DO_VISU = true 
 macro get_thread_idx(A)  esc(:( begin ix =(blockIdx().x-1) * blockDim().x + threadIdx().x; iy = (blockIdx().y-1) * blockDim().y+threadIdx().y;end )) end 
@@ -183,13 +183,16 @@ function adjoint_2D()
     # power law components 
     n        =  3 
     # dimensionally independet physics 
-    l        =  1.0#1e4#1.0 # length scale lx = 1e3 (natural value)
-    aρgn0    =  1.0#1.3517139631340713e-12 #1.0 # A*(ρg)^n # = 1.3475844936008e-12 (natural value)
+    l        =  1e4#1.0 # length scale lx = 1e3 (natural value)
+    aρgn0    =  1.3517139631340713e-12 #1.0 # A*(ρg)^n # = 1.3475844936008e-12 (natural value)
     #scales 
     tsc      =  1/aρgn0/l^n # also calculated from natural values tsc = 0.7420684971878533
     #non-dimensional numbers (calculated from natural values)
     s_f_syn  = 0.0003 # sliding to ice flow ratio: s_f_syn = asρgn0_syn/aρgn0/lx^2
-    s_f      = 0.003315789473684213 # sliding to ice flow ratio: s_f   = asρgn0/aρgn0/lx^2
+    s_f_no     = 0.0 # sliding to ice flow ratio: s_f   = asρgn0/aρgn0/lx^2
+    s_f_1      = 0.026315789473684206
+    s_f_2      = 2.6315789473684205e-6
+    s_f_3      = 0.0026315789473684214
     m_max_nd = 4.706167536706325e-12#m_max/lx*tsc m_max = 2.0 m/a lx = 1e3 tsc = 
     βtsc     = 2.353083768353162e-10#ratio between characteristic time scales of ice flow and accumulation/ablation βtsc = β0*tsc 
     β1tsc    = 3.5296256525297436e-10
@@ -215,12 +218,20 @@ function adjoint_2D()
     B0          = B0_l*l # 3500
     H_cut       = H_cut_l*l # 1.0e-2
     asρgn0_syn  = s_f_syn*aρgn0*l^2 #5.7e-20*(ρg)^n = 5.7e-20*(910*9.81)^3 = 4.055141889402214e-8
-    asρgn0      = s_f*aρgn0*l^2 #5.0e-18*(ρg)^n = 3.54627498316e-6
+    asρgn0_no   = s_f_no*aρgn0*l^2 #0.0 = 0.0 
+    asρgn0_1    = s_f_1*aρgn0*l^2 #5.0e-18*(ρg)^n  = 3.5571420082475557e-6
+    asρgn0_2    = s_f_2*aρgn0*l^2 #5.0e-22*(ρg)^n = 3.5571420082475552e-10
+    asρgn0_3    = s_f_3*aρgn0*l^2 # 5.0e-19*(ρg)^n = 3.557142008247556e-7
     m_max       = m_max_nd*l/tsc  #2.0 m/a = 6.341958396752917e-8 m/s
     β0          = βtsc/tsc    #0.01 /a = 3.1709791983764586e-10
     β1          = β1tsc/tsc #0.015/3600/24/365 = 4.756468797564688e-10
 
-    @show(asρgn0)
+
+    @show(asρgn0_no)
+    @show(asρgn0_1)
+    @show(asρgn0_2)
+    @show(asρgn0_3)
+    @show(asρgn0_syn)
     @show(lx)
     @show(ly)
     @show(lz)
@@ -235,18 +246,12 @@ function adjoint_2D()
     @show(H_cut)
 
     # numerics 
-    gd_niter    = 100
-    bt_niter     = 3 
     nx          = 128
     ny          = 128
     epsi        = 1e-4 
-    ϵtol        = (abs = 1e-8, rel = 1e-14)
-    dmp_adj     = 2*1.7 
-    ϵtol_adj    = 1e-8 
-    gd_ϵtol     = 1e-3 
-    γ0          = 1.0e-2
-    maxiter     = 500000
-    ncheck      = 1000
+    ϵtol        = (abs = 1e-4, rel = 1e-4)
+    maxiter     = 5*nx^2
+    ncheck      = ceil(Int,0.25*nx^2)
     ncheck_adj  = 1000
     threads     = (16,16)
     blocks      = ceil.(Int, (nx,ny)./threads)
@@ -266,12 +271,6 @@ function adjoint_2D()
     y0          = yc[round(Int, ny/2)]
     cfl          = max(dx^2, dy^2)/8.1
 
-
-    #bedrock properties
-    wx1, wy1 = 0.4lx, 0.2ly 
-    wx2, wy2 = 0.15lx, 0.15ly 
-    ω1 = 4 
-    ω2 = 6
 
     # initialization 
     S = zeros(Float64, nx, ny)
@@ -308,14 +307,18 @@ function adjoint_2D()
     H_ini = CuArray{Float64}(H_ini)
     β     = CuArray{Float64}(β)
     ela   = CuArray{Float64}(ela)
+    H_no  = copy(H)
+    H_1   = copy(H)
+    H_2   = copy(H)
+    H_3   = copy(H)
 
     #@show(extrema(B))
-    p1 = heatmap(xc, yc, Array((B)'); title = "B (forward problem initial)")
-    p2 = heatmap(xc, yc, Array(β'); title = "β")
-    p3 = heatmap(xc, yc, Array(ela'); title="ela")
+    #p1 = heatmap(xc, yc, Array((B)'); title = "B (forward problem initial)")
+    #p2 = heatmap(xc, yc, Array(β'); title = "β")
+    #p3 = heatmap(xc, yc, Array(ela'); title="ela")
     #p2 = plot(xc, yc, Array(B'); levels=20, aspect_ratio =1) 
     #p3 = plot(xc, Array(B[:,ceil(Int, ny/2)]))
-    display(plot(p1, p2, p3))
+    #display(plot(p1, p2, p3))
 
     D = CUDA.zeros(Float64,nx-1, ny-1)
     av_ya_∇Sx = CUDA.zeros(Float64, nx-1, ny-1)
@@ -326,31 +329,52 @@ function adjoint_2D()
 
 
 
-    as = asρgn0*CUDA.ones(nx-1, ny-1) 
-    as_ini = copy(as)
+    as_no = asρgn0_no*CUDA.ones(nx-1, ny-1) 
+    as_1 = asρgn0_1*CUDA.ones(nx-1, ny-1) 
+    as_2 = asρgn0_2*CUDA.ones(nx-1, ny-1) 
+    as_3 = asρgn0_3*CUDA.ones(nx-1, ny-1) 
     as_syn = asρgn0_syn*CUDA.ones(nx-1,ny-1)
-    as2 = similar(as) 
+
 
     Jn = CUDA.zeros(Float64,nx-1, ny-1)
     
     #Forwardproblem(H, B, D, gradS, av_ya_∇Sx, av_xa_∇Sy, qHx, qHy, β, as, n, a, b_max, z_ELA, dx, dy, nx, ny, epsi, cfl, ϵtol, maxiter, ncheck, threads, blocks)
     synthetic_problem = Forwardproblem(H_obs, B, D, gradS, av_ya_∇Sx, av_xa_∇Sy, qHx, qHy, β,as_syn, n, aρgn0, m_max, ela, dx, dy, nx, ny, epsi, cfl, ϵtol, maxiter, ncheck, threads, blocks)
     
-    forward_problem = Forwardproblem(H, B, D, gradS, av_ya_∇Sx, av_xa_∇Sy, qHx, qHy, β,as,n, aρgn0, m_max, ela, dx, dy, nx, ny, epsi, cfl, ϵtol, maxiter, ncheck, threads, blocks)
-    
-    
+    forward_problem_no = Forwardproblem(H_no, B, D, gradS, av_ya_∇Sx, av_xa_∇Sy, qHx, qHy, β,as_no,n, aρgn0, m_max, ela, dx, dy, nx, ny, epsi, cfl, ϵtol, maxiter, ncheck, threads, blocks)
+    forward_problem_1 = Forwardproblem(H_1, B, D, gradS, av_ya_∇Sx, av_xa_∇Sy, qHx, qHy, β,as_1,n, aρgn0, m_max, ela, dx, dy, nx, ny, epsi, cfl, ϵtol, maxiter, ncheck, threads, blocks)
+    forward_problem_2 = Forwardproblem(H_2, B, D, gradS, av_ya_∇Sx, av_xa_∇Sy, qHx, qHy, β,as_2,n, aρgn0, m_max, ela, dx, dy, nx, ny, epsi, cfl, ϵtol, maxiter, ncheck, threads, blocks)
+    forward_problem_3 = Forwardproblem(H_3, B, D, gradS, av_ya_∇Sx, av_xa_∇Sy, qHx, qHy, β,as_3,n, aρgn0, m_max, ela, dx, dy, nx, ny, epsi, cfl, ϵtol, maxiter, ncheck, threads, blocks)
+
     println("generating synthetic data (nx = $nx, ny = $ny)...")
     solve!(synthetic_problem)
     println("done.")
-    solve!(forward_problem)
+    solve!(forward_problem_no)
+    solve!(forward_problem_1)
+    solve!(forward_problem_2)
+    solve!(forward_problem_3)
+
     println("gradient descent")
 
-    p1=heatmap(xc, yc, Array((H.+B)'); levels=20, color =:turbo, label="H observation", aspect_ratio = 1)
-    contour!(xc, yc, Array(H'); levels=0.01:0.01, lw=2.0, color=:black, line=:solid,label="Current state of H")
-    contour!(xc, yc, Array(H_obs'); levels=0.01:0.01, lw=2.0, color=:red, line=:dash,label="Current state of H")
-    display(plot(p1; size=(980, 980)))
-    savefig("forward_0.004315789473684213.png")
+    Hp_obs = copy(H_obs)
+    Hp_no  = copy(H_no)
+    Hp_1  = copy(H_1)
+    Hp_2  = copy(H_2)
+    Hp_3  = copy(H_3)
 
+    Hp_obs[H_obs .==0.0] .= NaN
+    Hp_no[H_no.==0.0] .= NaN
+    Hp_1[H_1.==0.0] .= NaN
+    Hp_2[H_2.==0.0] .= NaN
+    Hp_3[H_3.==0.0] .= NaN
+
+    p2=plot(Array(Hp_no[nx÷2,:]),yc;xlabel="Y",ylabel="H", label="no sliding", legend=:outerbottom)
+    plot!(Array(Hp_1[nx÷2,:]),yc;xlabel="Y",ylabel="H",label="as=5.0e-18*(ρg)^n ", legend=:outerbottom)
+    plot!(Array(Hp_2[nx÷2,:]),yc;xlabel="Y",ylabel="H", label="as=5.0e-22*(ρg)^n", legend=:outerbottom)
+    plot!(Array(Hp_3[nx÷2,:]),yc;xlabel="Y",ylabel="H", label="as=5.0e-19*(ρg)^n", legend=:outerbottom)
+    plot!(Array(Hp_obs[nx÷2,:]),yc; xlabel="Y",ylabel="H",label="as=5.7e-20*(ρg)^n(synthetic)",  legend=:outerbottom)
+    display(plot(p2; size=(490, 490)))
+    savefig("forward_as.png")
 
     
 

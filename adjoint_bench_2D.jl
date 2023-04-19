@@ -2,6 +2,7 @@ using CUDA,BenchmarkTools
 using Plots,Plots.Measures,Printf
 using DelimitedFiles
 using Enzyme 
+using JLD2
 default(size=(1320,980),framestyle=:box,label=false,grid=true,margin=8mm,lw=3.5, labelfontsize=11,tickfontsize=11,titlefontsize=14)
 
 const DO_VISU = true 
@@ -455,12 +456,6 @@ function adjoint_2D()
     cfl          = max(dx^2, dy^2)/8.1
 
 
-    #bedrock properties
-    wx1, wy1 = 0.4lx, 0.2ly 
-    wx2, wy2 = 0.15lx, 0.15ly 
-    ω1 = 4 
-    ω2 = 6
-
     # initialization 
     S = zeros(Float64, nx, ny)
     H = zeros(Float64, nx, ny)
@@ -514,7 +509,8 @@ function adjoint_2D()
     qHx = CUDA.zeros(Float64, nx-1,ny-2)
     qHy = CUDA.zeros(Float64, nx-2,ny-1)
 
-
+    #save xc yc to static 
+    
 
     as = asρgn0*CUDA.ones(nx-1, ny-1) 
     as_ini_vis = copy(as)
@@ -536,6 +532,10 @@ function adjoint_2D()
     solve!(forward_problem)
     println("gradient descent")
 
+    Hp_obs = copy(H_obs)
+    Hp_obs[H_obs.==0.0] .= NaN
+
+    jldsave("synthetic_data/synthetic_static.jld2"; B=Array(B), H_obs=Array(Hp_obs), as_syn = Array(as_syn), as_ini_vis=Array(as_ini_vis), xc, yc, nx, ny, gd_niter)
     #S_obs .= B .+ H_obs 
     #S .= B .+ H 
     #CUDA.@sync @cuda threads=threads blocks=blocks update_S!(H_obs, S_obs, B, nx)
@@ -592,13 +592,21 @@ function adjoint_2D()
 
         push!(iter_evo, gd_iter); push!(J_evo, J_old/J_ini)
         CUDA.@sync @cuda threads=threads blocks=blocks update_S!(S, H, B, nx, ny)
+        # save H for each iteration 
+        # save as for each iteration 
+
+
+        Hp     = copy(H)
+        Hp[H .== 0.0] .= NaN
+        asp    = copy(as)
+        CUDA.@sync @cuda threads=threads blocks=blocks as_clean(asp, H, nx, ny)
+
+        jldsave("synthetic_data/synthetic_$gd_iter.jld2"; H=Array(Hp), as=Array(asp))
+
+
+
         if DO_VISU 
-             Hp_obs = copy(H_obs)
-             Hp_obs[H_obs.==0.0] .= NaN
-             Hp     = copy(H)
-             Hp[H .== 0.0] .= NaN
-             asp    = copy(as)
-             CUDA.@sync @cuda threads=threads blocks=blocks as_clean(asp, H, nx, ny)
+             
 
              p1=heatmap(xc, yc, Array(Hp'); xlabel ="X", ylabel="Y", title ="Ice thickness", xlims=extrema(xc), ylims=extrema(yc),levels=20, color =:turbo, aspect_ratio = 1,cbar=true)
              #plot!(0.0, yc; label="Cross section", legend=true, line=:dash, color=:red)
