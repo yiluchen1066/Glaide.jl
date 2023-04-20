@@ -1,4 +1,4 @@
-using CairoMakie
+using GLMakie
 using DelimitedFiles
 using LinearAlgebra
 using Rasters
@@ -17,7 +17,8 @@ nx      = size(B_rhone)[1]
 ny      = size(B_rhone)[2]
 B_off   = 0.1*ones(Float64, nx, ny)
 
-S_rhone[H_rhone.==0.0] .= B_rhone[H_rhone.==0.0] .- 0.1
+S_rhone[H_rhone.==0.0] .= NaN
+#S_rhone[H_rhone.==0.0] .= B_rhone[H_rhone.==0.0] .- 0.1
 
 xc = xc .- xc[1]
 yc = yc .- yc[1]
@@ -26,7 +27,7 @@ xc  = xc./1e3
 yc = yc ./1e3
 
 fig = Figure(resolution=(2800,1800), fontsize=42)
-ax = Axis3(fig[1,1][1,1]; aspect=(1,1,0.5), title="Synthetic glacier")
+ax = Axis3(fig[1,1][1,1]; aspect=(1,1,0.5), xlabel="X [km]", ylabel="Y [km]")
 
 surface!(ax,xc,yc,S_rhone;colormap=:ice         )
 surface!(ax,xc,yc,B_rhone;colormap=:lightterrain)
