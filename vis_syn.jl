@@ -1,8 +1,106 @@
 using JLD2
+using CairoMakie
 
-(B, H_obs, as_syn, as_ini_vis, xc, yc, nx, ny,gd_niter) = load("synthetic_data/synthetic_static.jld2", "B", "H_obs", "as_syn", "as_ini_vis", "xc", "yc","nx", "ny", "gd_niter")
 
-anim = @animate for gd_iter = 1:gd_niter 
+(B, H_obs, as_syn, as_ini_vis, xc, yc, nx, ny,gd_niter) = load("synthetic_data_output/synthetic_static.jld2", "B", "H_obs", "as_syn", "as_ini_vis", "xc", "yc","nx", "ny", "gd_niter")
+
+#xc = xc .- xc[1]
+#yc = yc .- yc[1]
+xc_1 = xc[1:end-1]
+yc_1 = yc[1:end-1]
+
+fig   = Figure(resolution=(1600, 800), fontsize =36)
+opts = (xaxisposition=:top,)
+
+axs  = (
+    # xticks
+    H    = Axis(fig[1,1]; xticks=-10:5:10, aspect=0.5, xlabel=L"x",ylabel=L"y",opts...),
+    H_s  = Axis(fig[1,2]; xticks=0.005:0.01:0.02,aspect=0.5, xlabel=L"H", opts...),
+    As   = Axis(fig[1,3]; xticks=-10:5:10, aspect=DataAspect(), xlabel=L"x",opts...),
+    As_s = Axis(fig[1,4]; aspect=1, xlabel=L"\log_{10}(A_s)",opts...),
+)
+
+# xlims
+xlims!(axs.H, -10, 10)
+xlims!(axs.H_s, 0.003, 0.02)
+xlims!(axs.As, -10,10)
+xlims!(axs.As_s, -2.2, -1.4)
+
+#ylims 
+for axname in eachindex(axs)
+   ylims!(axs[axname], -10, 10)
+end 
+
+#hide decorations
+#hidedecorations!(axs.H_s, ticks=false)
+#hidedecorations!(axs.As, ticks=(-10, 5, 10))
+#hidedecorations!(axs.As_s, ticks=false)
+
+nan_to_zero(x) = isnan(x) ? zero(x) : x
+
+(H, as) = load("synthetic_data_output/synthetic_1.jld2", "H", "as")
+as          = log10.(as)
+
+H_s         = H[nx÷2,:]
+H_obs_s     = H_obs[nx÷2,:]
+as_ini_vis  = log10.(as_ini_vis)
+as_syn      = log10.(as_syn)
+as_s        = as[nx÷2, :]
+as_ini_vis_s = as_ini_vis[nx÷2,:]
+as_syn_s    = as_syn[nx÷2,:]
+
+
+plts = (
+    #colorrange=(0, 400)
+    H = heatmap!(axs.H, xc, yc, H; colormap=:turbo,colorrange=(0.002, 0.02)),
+    H_v = vlines!(axs.H, xc[nx÷2]; color=:magenta, linwidth=4, linestyle=:dash),
+    H_s = (
+        lines!(axs.H_s, H_obs_s, yc; linewidth=4, color=:red, label="initial"), 
+        lines!(axs.H_s, H_s, yc; linewidth=4, color=:blue, label="current"),
+        
+    ), 
+    #colorrange= (-30, -10)
+    As  = heatmap!(axs.As, xc_1, yc_1, as; colormap=:viridis), 
+    As_v = vlines!(axs.As, xc_1[nx÷2]; linewidth=4, color=:magenta, linestyle=:dash), 
+    As_s = (
+        lines!(axs.As_s, as_s, yc_1; linewidth =4, color=:blue, label="current"), 
+        lines!(axs.As_s, as_ini_vis_s, yc_1; linewidth=4, color=:green, label="initial"), 
+        lines!(axs.As_s, as_syn_s, yc_1; linewidth=4, color=:red, label="synthetic"), 
+    ),
+)
+
+axislegend(axs.H_s; position=:lb, labelsize=20)
+axislegend(axs.As_s; position=:lb,labelsize=20)
+
+cb = Colorbar(fig[2,1], plts.H; vertical=false, label=L"H \text{ [m]}")
+Colorbar(fig[2,3], plts.As; vertical=false, label=L"\log_{10}(A_s)")
+
+colgap!(fig.layout, 50)
+
+colsize!(fig.layout, 1, axs.H.scene.px_area[].widths[1])
+colsize!(fig.layout, 2, axs.H.scene.px_area[].widths[1])
+colsize!(fig.layout, 3, axs.As.scene.px_area[].widths[1])
+colsize!(fig.layout, 4, axs.As.scene.px_area[].widths[1])
+
+record(fig, "adjoint_synthetic_2D.mp4", 1:gd_niter; framerate=3) do gd_iter
+    (H, as) = load("synthetic_data_output/synthetic_$gd_iter.jld2", "H", "as")
+    as   = log10.(as)
+    as_s = as[nx÷2,:]
+    H_s  = H[nx÷2,:]
+    as_s = as[nx÷2,:] 
+
+
+    plts.H[3][] = H
+    plts.As[3][] = as
+
+    plts.H_s[2][1][]  = Point2.(H_s,yc)
+    plts.As_s[1][1][] = Point2.(as_s,yc_1)
+end
+
+#gap between colorbar 
+#
+
+#= anim = @animate for gd_iter = 1:gd_niter 
     (H, as) = load("synthetic_data/synthetic_$gd_iter.jld2", "H", "as")
     p1=heatmap(xc, yc, Array(H'); xlabel ="X", ylabel="Y", title ="Ice thickness", xlims=extrema(xc), ylims=extrema(yc),levels=20, color =:turbo, aspect_ratio = 1,cbar=true)
     vline!(xc[nx ÷2])
@@ -20,3 +118,4 @@ anim = @animate for gd_iter = 1:gd_niter
 end 
 
 gif(anim, "adjoint_bench_2D.gif"; fps=5)
+ =#
