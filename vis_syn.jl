@@ -9,26 +9,26 @@ using CairoMakie
 xc_1 = xc[1:end-1]
 yc_1 = yc[1:end-1]
 
-fig   = Figure(resolution=(1600, 800), fontsize =36)
+fig   = Figure(resolution=(1600, 580), fontsize =32)
 opts = (xaxisposition=:top,)
 
 axs  = (
     # xticks
-    H    = Axis(fig[1,1]; xticks=-10:5:10, aspect=0.5, xlabel=L"x",ylabel=L"y",opts...),
-    H_s  = Axis(fig[1,2]; xticks=0.005:0.01:0.02,aspect=0.5, xlabel=L"H", opts...),
+    H    = Axis(fig[1,1]; xticks=-10:5:10, aspect=DataAspect(), xlabel=L"x",ylabel=L"y",opts...),
+    H_s  = Axis(fig[1,2]; xticks=0.005:0.01:0.02,aspect=1, xlabel=L"H", opts...),
     As   = Axis(fig[1,3]; xticks=-10:5:10, aspect=DataAspect(), xlabel=L"x",opts...),
     As_s = Axis(fig[1,4]; aspect=1, xlabel=L"\log_{10}(A_s)",opts...),
 )
 
 # xlims
-xlims!(axs.H, -10, 10)
-xlims!(axs.H_s, 0.003, 0.02)
-xlims!(axs.As, -10,10)
-xlims!(axs.As_s, -2.2, -1.4)
+CairoMakie.xlims!(axs.H, -10, 10)
+CairoMakie.xlims!(axs.H_s, 0.003, 0.02)
+CairoMakie.xlims!(axs.As, -10,10)
+CairoMakie.xlims!(axs.As_s, -2.2, -1.4)
 
 #ylims 
 for axname in eachindex(axs)
-   ylims!(axs[axname], -10, 10)
+    CairoMakie.ylims!(axs[axname], -10, 10)
 end 
 
 #hide decorations
@@ -52,28 +52,28 @@ as_syn_s    = as_syn[nx÷2,:]
 
 plts = (
     #colorrange=(0, 400)
-    H = heatmap!(axs.H, xc, yc, H; colormap=:turbo,colorrange=(0.002, 0.02)),
-    H_v = vlines!(axs.H, xc[nx÷2]; color=:magenta, linwidth=4, linestyle=:dash),
+    H = CairoMakie.heatmap!(axs.H, xc, yc, H; colormap=:turbo,colorrange=(0.002, 0.02)),
+    H_v = CairoMakie.vlines!(axs.H, xc[nx÷2]; color=:magenta, linewidth=4, linestyle=:dash),
     H_s = (
-        lines!(axs.H_s, H_obs_s, yc; linewidth=4, color=:red, label="initial"), 
-        lines!(axs.H_s, H_s, yc; linewidth=4, color=:blue, label="current"),
+        CairoMakie.lines!(axs.H_s, H_obs_s, yc; linewidth=4, color=:red, label="initial"), 
+        CairoMakie.lines!(axs.H_s, H_s, yc; linewidth=4, color=:blue, label="current"),
         
     ), 
     #colorrange= (-30, -10)
-    As  = heatmap!(axs.As, xc_1, yc_1, as; colormap=:viridis), 
-    As_v = vlines!(axs.As, xc_1[nx÷2]; linewidth=4, color=:magenta, linestyle=:dash), 
+    As  = CairoMakie.heatmap!(axs.As, xc_1, yc_1, as; colormap=:viridis,colorrange=(-2.0, -1.55)), 
+    As_v = CairoMakie.vlines!(axs.As, xc_1[nx÷2]; linewidth=4, color=:magenta, linestyle=:dash), 
     As_s = (
-        lines!(axs.As_s, as_s, yc_1; linewidth =4, color=:blue, label="current"), 
-        lines!(axs.As_s, as_ini_vis_s, yc_1; linewidth=4, color=:green, label="initial"), 
-        lines!(axs.As_s, as_syn_s, yc_1; linewidth=4, color=:red, label="synthetic"), 
+        CairoMakie.lines!(axs.As_s, as_s, yc_1; linewidth =4, color=:blue, label="current"), 
+        CairoMakie.lines!(axs.As_s, as_ini_vis_s, yc_1; linewidth=4, color=:green, label="initial"), 
+        CairoMakie.lines!(axs.As_s, as_syn_s, yc_1; linewidth=4, color=:red, label="synthetic"), 
     ),
 )
 
 axislegend(axs.H_s; position=:lb, labelsize=20)
 axislegend(axs.As_s; position=:lb,labelsize=20)
 
-cb = Colorbar(fig[2,1], plts.H; vertical=false, label=L"H \text{ [m]}")
-Colorbar(fig[2,3], plts.As; vertical=false, label=L"\log_{10}(A_s)")
+cb = Colorbar(fig[2,1], plts.H; vertical=false, label=L"H \text{ [m]}", ticksize=4.0)
+Colorbar(fig[2,3], plts.As; vertical=false, label=L"\log_{10}(A_s)", ticksize=4.0)
 
 colgap!(fig.layout, 50)
 
@@ -82,7 +82,7 @@ colsize!(fig.layout, 2, axs.H.scene.px_area[].widths[1])
 colsize!(fig.layout, 3, axs.As.scene.px_area[].widths[1])
 colsize!(fig.layout, 4, axs.As.scene.px_area[].widths[1])
 
-record(fig, "adjoint_synthetic_2D.mp4", 1:gd_niter; framerate=3) do gd_iter
+CairoMakie.record(fig, "adjoint_synthetic_2D.mp4", 1:gd_niter; framerate=3) do gd_iter
     (H, as) = load("synthetic_data_output/synthetic_$gd_iter.jld2", "H", "as")
     as   = log10.(as)
     as_s = as[nx÷2,:]
