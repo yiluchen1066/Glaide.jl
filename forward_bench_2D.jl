@@ -2,6 +2,7 @@ using CUDA,BenchmarkTools
 using Plots,Plots.Measures,Printf
 using DelimitedFiles
 using Enzyme 
+using CairoMakie
 default(size=(580,560),framestyle=:box,label=false,grid=true,margin=10mm,lw=3.5,labelfontsize=11,tickfontsize=11,titlefontsize=14)
 
 const DO_VISU = true 
@@ -368,16 +369,17 @@ function adjoint_2D()
     Hp_2[H_2.==0.0] .= NaN
     Hp_3[H_3.==0.0] .= NaN
 
-    p2=Plots.plot(Array(Hp_no[nx÷2,:]),yc;xlabel="Y",ylabel="H", xticks=0.005:0.01:0.04,label="no sliding", legend=:outerbottom,
+    p2=Plots.plot(Array(Hp_no[nx÷2,:]),yc;xlabel="H",ylabel="Y", xticks=0.005:0.01:0.04,label="no sliding", legend=:outerbottom,
     marker=(:dot,4,:blue))
-    Plots.plot!(Array(Hp_1[nx÷2,:]),yc;xlabel="Y",ylabel="H",label="as=5.0e-18*(ρg)^n ", legend=:outerbottom)
-    Plots.plot!(Array(Hp_2[nx÷2,:]),yc;xlabel="Y",ylabel="H", label="as=5.0e-22*(ρg)^n", legend=:outerbottom)
-    Plots.plot!(Array(Hp_3[nx÷2,:]),yc;xlabel="Y",ylabel="H", label="as=5.0e-19*(ρg)^n", legend=:outerbottom)
-    Plots.plot!(Array(Hp_obs[nx÷2,:]),yc; xlabel="Y",ylabel="H",label="as=5.7e-20*(ρg)^n(synthetic)",  legend=:outerbottom) 
-    p3 = Plots.p1=heatmap(xc, yc, Array((H_obs+B)'); xlabel ="X", ylabel="Y", title ="Surface Elevation", xlims=extrema(xc), ylims=extrema(yc),levels=20, color =:turbo, aspect_ratio = 1,cbar=true)
-    display(Plots.plot(p3))
-    #display(Plots.plot(p2))
-    #savefig("forward_as.png")
+    Plots.plot!(Array(Hp_1[nx÷2,:]),yc;xlabel="H",ylabel="Y",label="as=5.0e-18*(ρg)^n ", legend=:outerbottom)
+    Plots.plot!(Array(Hp_2[nx÷2,:]),yc;xlabel="H",ylabel="Y",label="as=5.0e-22*(ρg)^n", legend=:outerbottom)
+    Plots.plot!(Array(Hp_3[nx÷2,:]),yc;xlabel="H",ylabel="Y", label="as=5.0e-19*(ρg)^n", legend=:outerbottom)
+    Plots.plot!(Array(Hp_obs[nx÷2,:]),yc; xlabel="H",ylabel="Y",label="as=5.7e-20*(ρg)^n(synthetic)",  legend=:outerbottom) 
+    #p3 = CairoMakie.heatmap(xc, yc, Array((H_obs+B)'); xlabel ="X", ylabel="Y", title ="Surface Elevation", xlims=extrema(xc), ylims=extrema(yc),levels=20, color =:turbo, aspect_ratio = 1,cbar=true)
+    #CairoMakie.vline!(xc[nx÷2])
+    #display(Plots.plot(p3))
+    display(Plots.plot(p2))
+    savefig("forward_as.png")
     savefig("heatmap_benchmark.png")
 
     

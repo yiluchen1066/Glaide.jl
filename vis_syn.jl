@@ -55,7 +55,7 @@ plts = (
     H = CairoMakie.heatmap!(axs.H, xc, yc, H; colormap=:turbo,colorrange=(0.002, 0.02)),
     H_v = CairoMakie.vlines!(axs.H, xc[nx÷2]; color=:magenta, linewidth=4, linestyle=:dash),
     H_s = (
-        CairoMakie.lines!(axs.H_s, H_obs_s, yc; linewidth=4, color=:red, label="initial"), 
+        CairoMakie.lines!(axs.H_s, H_obs_s, yc; linewidth=4, color=:red, label="synthetic"), 
         CairoMakie.lines!(axs.H_s, H_s, yc; linewidth=4, color=:blue, label="current"),
         
     ), 
