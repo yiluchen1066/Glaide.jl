@@ -23,13 +23,13 @@ axs = (
     As_s = Axis(fig[1,4];xlabel=L"\log_{10}(A_s)\text{ [Pa}^{-3}\text{m}^{2}\text{s}^{-1}\text{]}",opts...),
 )
 
-xlims!(axs.H,0,6)
-xlims!(axs.H_s,-20,20)
-xlims!(axs.As,0,6)
-xlims!(axs.As_s, -30,-15)
+CairoMakie.xlims!(axs.H,0,6)
+CairoMakie.xlims!(axs.H_s,-30,30)
+CairoMakie.xlims!(axs.As,0,6)
+CairoMakie.xlims!(axs.As_s, -30,-15)
 
 for axname in eachindex(axs)
-    ylims!(axs[axname],0,10)
+    CairoMakie.ylims!(axs[axname],0,10)
 end
 
 hideydecorations!(axs.H_s, ticks = false)
@@ -46,16 +46,16 @@ as      = log10.(as./(910*9.81)^3)
 as_s    = as[nx÷2,:]
 
 plts = (
-    H   = heatmap!(axs.H ,xc_1, yc_1, H;colormap=:turbo,colorrange=(0,400)),
-    H_v = vlines!(axs.H,xc_1[nx ÷ 2];color=:magenta,linewidth=4,linestyle=:dash),
+    H   = CairoMakie.heatmap!(axs.H ,xc_1, yc_1, H;colormap=:turbo,colorrange=(0,400)),
+    H_v = CairoMakie.vlines!(axs.H,xc_1[nx ÷ 2];color=:magenta,linewidth=4,linestyle=:dash),
     H_s = (
-        lines!(axs.H_s,ΔH_ini, yc_1; linewidth=4,color=:blue,label="initial"),
-        lines!(axs.H_s,ΔH, yc_1; linewidth=4,color=:red,label="current"),
+        CairoMakie.lines!(axs.H_s,ΔH_ini, yc_1; linewidth=4,color=:blue,label="initial"),
+        CairoMakie.lines!(axs.H_s,ΔH, yc_1; linewidth=4,color=:red,label="current"),
     ),
-    As   = heatmap!(axs.As,xc_2, yc_2, as;colormap=:viridis,colorrange=(-30,-15)),
-    As_v = vlines!(axs.As,xc_2[nx ÷ 2];color=:magenta,linewidth=4,linestyle=:dash),
+    As   = CairoMakie.heatmap!(axs.As,xc_2, yc_2, as;colormap=:viridis,colorrange=(-30,-15)),
+    As_v = CairoMakie.vlines!(axs.As,xc_2[nx ÷ 2];color=:magenta,linewidth=4,linestyle=:dash),
     As_s = (
-        lines!(axs.As_s,as_s, yc_2; linewidth=4, color=:green),
+        CairoMakie.lines!(axs.As_s,as_s, yc_2; linewidth=4, color=:green),
     ),
 )
 
@@ -73,7 +73,7 @@ colsize!(fig.layout, 4, axs.As.scene.px_area[].widths[1])
 
 # resize_to_layout!(fig)
 
-record(fig, "adjoint_rhone_2D.mp4", 1:gd_niter; framerate=3) do gd_iter
+CairoMakie.record(fig, "adjoint_rhone_2D.mp4", 1:gd_niter; framerate=3) do gd_iter
     (H, as) = load("rhone_data_output/rhone_$gd_iter.jld2", "H", "as")
     as   = log10.(as./(910*9.81)^3)
     ΔH      = replace!(nan_to_zero,H_obs[nx÷2,:].-H[nx÷2,:])
