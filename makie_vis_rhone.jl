@@ -15,10 +15,11 @@ B_rhone, S_rhone, xc, yc = load_data("Rhone_data_padding/Archive/Rhone_BedElev_c
 H_rhone = S_rhone .- B_rhone
 nx      = size(B_rhone)[1]
 ny      = size(B_rhone)[2]
-B_off   = 0.1*ones(Float64, nx, ny)
 
-S_rhone[H_rhone.==0.0] .= NaN
-#S_rhone[H_rhone.==0.0] .= B_rhone[H_rhone.==0.0] .- 0.1
+oz = minimum(B_rhone)
+
+B_rhone .-= oz
+S_rhone .-= oz
 
 xc = xc .- xc[1]
 yc = yc .- yc[1]
@@ -26,12 +27,20 @@ yc = yc .- yc[1]
 xc  = xc./1e3
 yc = yc ./1e3
 
-fig = Figure(resolution=(2800,1800), fontsize=42)
-ax = Axis3(fig[1,1][1,1]; aspect=(1,1,0.5), xlabel="X [km]", ylabel="Y [km]")
+fig = Figure(resolution=(1300,900), fontsize=28)
+ax = Axis3(fig[1,1][1,1]; aspect=(1,1,0.5), xlabel="X [km]", ylabel="Y [km]",zlabel="Z [m]")
 
-surface!(ax,xc,yc,S_rhone;colormap=:ice         )
+ax.xlabeloffset[] = 60
+ax.ylabeloffset[] = 60
+ax.zlabeloffset[] = 100
+
+plt = surface!(ax,xc,yc,S_rhone;colormap=:turbo,color=H_rhone)
 surface!(ax,xc,yc,B_rhone;colormap=:lightterrain)
 
+cb = Colorbar(fig[1,1][2,1],plt;vertical=false)
+cb.tellwidth[] = false
+cb.width[] = 500
+cb.label[] = "H [m]"
 
 save("rhone_glacier.png", fig)
 
