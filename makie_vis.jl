@@ -38,6 +38,10 @@ yc = yc ./1e3
 fig = Figure(resolution=(3000,2500), fontsize=42)
 ax = Axis3(fig[1,1][1,1]; aspect=(1,1,0.5), xlabel="X [km]", ylabel="Y [km]")
 
+ax.xlabeloffset[] = 60
+ax.ylabeloffset[] = 60
+ax.zlabeloffset[] = 100
+
 surface!(ax, xc, yc, B; colormap=:lightterrain)
 #xlabel!(ax,"X in m")
 #GLMakie.ylabel!(ax,"Y in m")
