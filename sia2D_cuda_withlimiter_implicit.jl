@@ -1,7 +1,7 @@
 using CUDA,BenchmarkTools
 using Plots,Plots.Measures,Printf
 using DelimitedFiles
-default(size=(800,600),framestyle=:box,label=false,grid=false,margin=10mm,lw=4,labelfontsize=9,tickfontsize=9,titlefontsize=12)
+default(size=(580,560),framestyle=:box,label=false,grid=true,margin=10mm,lw=4,labelfontsize=11,tickfontsize=11,titlefontsize=14)
 
 macro get_thread_idx(A)  esc(:( begin ix = (blockIdx().x-1) * blockDim().x+threadIdx().x; iy = (blockIdx().y-1) * blockDim().y+threadIdx().y; end )) end
 macro av_xy(A)  esc(:( 0.25*($A[ix,iy]+$A[ix+1,iy]+$A[ix,iy+1]+$A[ix+1,iy+1]) )) end
@@ -190,9 +190,9 @@ function sia_2D()
     B[[1,end],:] .= B[[2,end-1],:]
     B[:,[1,end]] .= B[:,[2,end-1]]
     # plot
-    p1 = heatmap(xc, yc, B', aspect_ratio=1, xlims=(xc[1], xc[end]), ylims=(yc[1], yc[end]), c=:turbo, title= "H")
-    p2 = heatmap(xc, yc, M', aspect_ratio=1, xlims=(xc[1], xc[end]), ylims=(yc[1], yc[end]), c=:turbo, title = "B")
-    display(plot(p1, p2))
+    p1 = Plots.heatmap(xc, yc, B', aspect_ratio=1, xlims=(xc[1], xc[end]), ylims=(yc[1], yc[end]), c=:turbo, title= "H")
+    p2 = Plots.heatmap(xc, yc, M', aspect_ratio=1, xlims=(xc[1], xc[end]), ylims=(yc[1], yc[end]), c=:turbo, title = "B")
+    display(Plots.plot(p1, p2))
     # array initialization 
     H     = CuArray{Float64}(H) 
     B     = CuArray{Float64}(B)
@@ -236,13 +236,13 @@ function sia_2D()
             if (err < ϵtol) break; end 
         end 
     end 
-    p1 = heatmap(xc,yc,Array(S'), title="S, it=$(it)"; opts...)
-    p2 = heatmap(xc,yc,Array(H'), title="H"; opts...)
-    p3 = plot(xc, S_without_limiter[:,ceil(Int,ny/2)], label="S without limiter (explicit)",xlabel="X in m", ylabel="Height in m")
-    p3 = plot!(xc, S_without_limiter_implicit[:,ceil(Int,ny/2)], label="S without limiter (implicit)",xlabel="X in m", ylabel="Height in m")
-    p3 = plot!(xc, [Array(S[:,ceil(Int,ny/2)]),Array(B[:,ceil(Int,ny/2)])],label=["S with limiter (implicit)" "bedrock"],xlabel="X in m", ylabel="Height in m")
-    p4 = plot(xc, Array(H[:,ceil(Int,ny/2)]))
-    display(plot(p3, title="SIA 2D"))
+    p1 = Plots.heatmap(xc,yc,Array(S'), title="S, it=$(it)"; opts...)
+    p2 = Plots.heatmap(xc,yc,Array(H'), title="H"; opts...)
+    #p3 = Plots.plot(xc, S_without_limiter[:,ceil(Int,ny/2)], label="S without limiter (explicit)",xlabel="X in m", ylabel="Height in m")
+    p3 = Plots.plot(xc, S_without_limiter_implicit[:,ceil(Int,ny/2)], label="Surface elevation without limiter",xlabel="X [m]", ylabel="S [m]")
+    p3 = Plots.plot!(xc, [Array(S[:,ceil(Int,ny/2)]),Array(B[:,ceil(Int,ny/2)])],label=["Surface elevation with limiter" "Bedrock"],xlabel="X [m]", ylabel="S [m]")
+    p4 = Plots.plot(xc, Array(H[:,ceil(Int,ny/2)]))
+    display(Plots.plot(p3))
     savefig("2D_with_limiter_cross_section.png")
 
 end 
