@@ -215,7 +215,7 @@ function update_r!(r, R, dR, dt, H, H_cut, dmp, nx, ny)
                 R[ix,iy] = 0.0 
                 r[ix,iy] = 0.0 
             else 
-                R[ix,iy] = 0.0*R[ix,iy]*(1.0 - dmp/min(nx,ny)) + dt*dR[ix,iy] 
+                R[ix,iy] = 0.0*R[ix,iy]*(1.0 - dmp/min(nx,ny)) + dR[ix,iy] 
                 #R[ix,iy] = R[ix,iy]*(dmp/min(nx,ny)) + dt*dR[ix,iy] 
                 r[ix,iy] = r[ix,iy] + dt*R[ix,iy]
             end

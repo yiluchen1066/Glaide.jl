@@ -225,7 +225,7 @@ function update_r!(r, R, dR, dt, H, H_cut, dmp, nx, ny)
                 R[ix,iy] = 0.0 
                 r[ix,iy] = 0.0 
             else 
-                R[ix,iy] = 0.0*R[ix,iy]*(1.0 - dmp/min(nx,ny)) + dt*dR[ix,iy] 
+                R[ix,iy] = 0.0*R[ix,iy]*(1.0 - dmp/min(nx,ny)) + dR[ix,iy] 
                 #R[ix,iy] = R[ix,iy]*(dmp/min(nx,ny)) + dt*dR[ix,iy] 
                 r[ix,iy] = r[ix,iy] + dt*R[ix,iy]
             end
@@ -404,6 +404,7 @@ function adjoint_2D()
     ly       = yc[end]-yc[1] #8410m
     @show(size(B_rhone)[1])
     @show(size(S_rhone)[2])
+    error("check")
     @show(size(H_rhone))
     # plots the loaded bedrock and surface elevation as initial condition
     p1 = plot(xc,yc,B_rhone'; st=:surface, camera =(20,25), aspect_ratio=1)
