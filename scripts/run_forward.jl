@@ -37,7 +37,7 @@ function main()
     B0      = B0_l * lsc # 3500
     asρgn0  = s_f * aρgn0 * lsc^2 #5.7e-20*(ρg)^n = 5.7e-20*(910*9.81)^3 = 4.055141889402214e-8
     b_max   = b_max_nd * lsc / tsc  #2.0 m/a = 6.341958396752917e-8 m/s
-    β0      = βtsc / tsc    #0.01 /a = 3.1709791983764586e-10
+    β0      = βtsc / tsc  #0.01 /a = 3.1709791983764586e-10
     β1      = β1tsc / tsc #0.015/3600/24/365 = 4.756468797564688e-10
 
     ## numerics
@@ -63,7 +63,7 @@ function main()
     ω = 8 # TODO: check!
     B = (@. B0 * (exp(-xc^2 / w1 - yc'^2 / w2) +
                   exp(-xc^2 / w2 - (yc' - ly / ω)^2 / w1))) |> CuArray
-                  
+
     # other fields
     β       = CUDA.fill(β0, nx, ny) .+ β1 .* atan.(xc ./ lx)
     ELA     = CUDA.fill(z_ELA_0, nx, ny) .+ z_ELA_1 .* atan.(yc' ./ ly .+ 0 .* xc)
