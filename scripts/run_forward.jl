@@ -102,6 +102,8 @@ function main()
     @info "Solve SIA"
     solve_sia!(fwd_params...; visu=fwd_visu)
 
+    write("output/synthetic_new.dat", Array(H))
+
     return
 end
 

@@ -1,11 +1,12 @@
 using CUDA,BenchmarkTools
-using Plots,Plots.Measures,Printf
-using DelimitedFiles
+# using Plots,Plots.Measures
+using Printf
+# using DelimitedFiles
 using Enzyme 
-using JLD2
-default(size=(1320,980),framestyle=:box,label=false,grid=true,margin=8mm,lw=3.5, labelfontsize=11,tickfontsize=11,titlefontsize=14)
+# using JLD2
+# default(size=(1320,980),framestyle=:box,label=false,grid=true,margin=8mm,lw=3.5, labelfontsize=11,tickfontsize=11,titlefontsize=14)
 
-const DO_VISU = true 
+const DO_VISU = false 
 macro get_thread_idx(A)  esc(:( begin ix =(blockIdx().x-1) * blockDim().x + threadIdx().x; iy = (blockIdx().y-1) * blockDim().y+threadIdx().y;end )) end 
 macro av_xy(A)    esc(:(0.25*($A[ix,iy]+$A[ix+1,iy]+$A[ix, iy+1]+$A[ix+1,iy+1]))) end
 macro av_xa(A)    esc(:( 0.5*($A[ix, iy]+$A[ix+1, iy]) )) end
@@ -15,7 +16,7 @@ macro d_ya(A)     esc(:($A[ix, iy+1]-$A[ix,iy])) end
 macro d_xi(A)     esc(:($A[ix+1, iy+1]-$A[ix, iy+1])) end 
 macro d_yi(A)     esc(:($A[ix+1, iy+1]-$A[ix+1, iy])) end
 
-CUDA.device!(6) # GPU selection
+CUDA.device!(0) # GPU selection
 
 function compute_rel_error_1!(Err_rel, H, nx, ny)
     @get_thread_idx(H)
@@ -288,8 +289,8 @@ function solve!(problem::AdjointProblem)
             # p3 = heatmap(Array(dR'); aspect_ratio=1, title="dR")
             # # savefig(p1, "adjoint_debug/adjoint_R_$(iter).png")
             # display(plot(p1,p2,p3))
-            @printf("dR = %.1e\n", maximum(abs.(dR)))
-            error("here")
+            # @printf("dR = %.1e\n", maximum(abs.(dR)))
+            # error("here")
             @printf("error = %.1e\n", merr)
             (isfinite(merr) && merr >0 ) || error("adoint solve failed")
         end 
@@ -531,7 +532,7 @@ function adjoint_2D()
     println("generating synthetic data (nx = $nx, ny = $ny)...")
     solve!(synthetic_problem)
     println("done.")
-    write("synthetic_old.dat", Array(H_obs))
+    write("output/synthetic_old.dat", Array(H_obs))
 
     error("here")
 
@@ -631,9 +632,9 @@ function adjoint_2D()
 
              #p2 = heatmap(xc, yc, Array(log10.(as)'); xlabel = "x", ylabel = "y", label="as", title = "as", aspect_ratio=1)
              #p3 = heatmap(xc[1:end-1], yc[1:end-1], Array(Jn'); xlabel="x", ylabel="y",title = "Gradient of cost function Jn", aspect_ratio=1)
-             p5 = Plots.plot(iter_evo, J_evo; shape = :circle, xlabel="Iterations", ylabel="J_old/J_ini", title="misfit", yaxis=:log10)
+            #  p5 = Plots.plot(iter_evo, J_evo; shape = :circle, xlabel="Iterations", ylabel="J_old/J_ini", title="misfit", yaxis=:log10)
              #display(plot(p1,p2,p3,p4; layout=(2,2)))
-             display(Plots.plot(p5;  size=(490,490)))
+            #  display(Plots.plot(p5;  size=(490,490)))
              #display(plot(p5,p6; layout=(1,2), size=(980, 980)))
         end 
 
@@ -648,7 +649,7 @@ function adjoint_2D()
         
 
     end 
-    gif(anim, "adjoint_bench_2D.gif"; fps=5)
+    # gif(anim, "adjoint_bench_2D.gif"; fps=5)
 
     return 
 end 
