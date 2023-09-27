@@ -35,14 +35,14 @@ function main()
 
     ## numerics
     nx, ny   = 128, 128
-    ϵtol     = (abs=1e-4, rel=1e-4)
+    ϵtol     = (abs=1e-8, rel=1e-8)
     maxiter  = 5 * nx^2
     ncheck   = ceil(Int, 0.1 * nx^2)
     nthreads = (16, 16)
     nblocks  = ceil.(Int, (nx, ny) ./ nthreads)
 
     ## pre-processing
-    dx, dy = lx / nx, lx / ny
+    dx, dy = lx / nx, ly / ny
     xc = LinRange(-lx / 2 + dx / 2, lx / 2 - dx / 2, nx)
     yc = LinRange(-ly / 2 + dy / 2, ly / 2 - dy / 2, ny)
 
@@ -57,8 +57,7 @@ function main()
 
     # other fields
     β       = CUDA.fill(β0, nx, ny) .+ β1 .* atan.(xc ./ lx)
-    ELA     = (fill(z_ELA_0, nx, ny) .+ z_ELA_1 .* atan.(yc' ./ ly .+ 0 .* xc)) |> CuArray
-    write("output/ELA_new.dat", Array(ELA), z_ELA_0, z_ELA_1)
+    ELA     = fill(z_ELA_0, nx, ny) .+ z_ELA_1 .* atan.(yc' ./ ly .+ 0 .* xc) |> CuArray
 
     D       = CUDA.zeros(Float64, nx - 1, ny - 1)
     qHx     = CUDA.zeros(Float64, nx - 1, ny - 2)

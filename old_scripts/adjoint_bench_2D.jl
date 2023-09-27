@@ -433,7 +433,7 @@ function adjoint_2D()
     nx          = 128
     ny          = 128
     epsi        = 1e-4 
-    ϵtol        = (abs = 1e-4, rel = 1e-4)
+    ϵtol        = (abs = 1e-8, rel = 1e-8)
     dmp_adj     = 2*1.7 
     ϵtol_adj    = 1e-8 
     gd_ϵtol     = 1e-3 
@@ -467,9 +467,7 @@ function adjoint_2D()
     β = β0*ones(Float64, nx, ny)
 
     β   .+= β1 .*atan.(xc./lx)
-    ela = (fill(z_ELA_0, nx, ny) .+ z_ELA_1.*atan.(yc'./ly .+ 0 .*xc)) |> CuArray
-    write("output/ELA_old.dat", Array(ela), z_ELA_0, z_ELA_1)
-
+    ela = fill(z_ELA_0, nx, ny) .+ z_ELA_1.*atan.(yc'./ly .+ 0 .*xc) |> CuArray
 
     H_obs = copy(H)
     H_ini = copy(H)
