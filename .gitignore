@@ -1,6 +1,5 @@
-.DS_Store
-Rhone_data
-Rhone_data_padding
-rhone_data_output
-synthetic_data_output
+# Julia-specific
 Manifest.toml
+
+# Project-specific
+output/
