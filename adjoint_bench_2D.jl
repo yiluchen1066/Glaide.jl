@@ -140,8 +140,6 @@ function solve!(problem::Forwardproblem)
         end 
         CUDA.@sync @cuda threads=threads blocks=blocks compute_D!(D, gradS, av_ya_∇Sx, av_xa_∇Sy, H, B, a, as, n, nx, ny, dx, dy)
         CUDA.@sync @cuda threads=threads blocks=blocks compute_q!(qHx, qHy, D, H, B, nx, ny, dx, dy)
-        #CUDA.@sync @cuda threads=threads blocks=blocks timestep!(dτ, H, D, cfl, epsi, nx, ny)
-        # dτ=dx^2/maximum(D)/4.1
         dτ=1/(12.1*maximum(D)/dx^2 + maximum(β))
         CUDA.@sync @cuda threads=threads blocks=blocks residual!(RH, qHx, qHy, β, H, B, z_ELA, b_max, nx, ny , dx, dy)
         CUDA.@sync @cuda threads=threads blocks=blocks update_H!(H, RH, dτ, nx, ny)
@@ -155,10 +153,10 @@ function solve!(problem::Forwardproblem)
             err_abs = maximum(abs.(Err_abs))/err_abs0 
             err_rel = maximum(abs.(Err_rel))/maximum(H)
             @printf("iter/nx^2 = %.3e, err = [abs =%.3e, rel= %.3e] \n", iter/nx^2, err_abs, err_rel)
-            #p1 = heatmap(Array(H'); title = "S (forward problem)")
+            p1 = heatmap(Array(H'); title = "S (forward problem)")
             #p2 = heatmap(Array(Err_abs'); title = "Err_abs")
             #p3 = heatmap(Array(Err_rel'); title = "Err_rel")
-            #display(plot(p1,p2,p3))
+            display(plot(p1))
             #if debug
 
 
@@ -174,21 +172,21 @@ end
 #residual!(RH, qHx, qHy, β, H, B, z_ELA, b_max, nx, ny, dx, dy)
 function grad_residual_H_1!(tmp1, tmp2, qHx, dR_qHx, qHy, dR_qHy, β, H, dR_H, B, z_ELA, b_max, nx, ny, dx, dy)
     #tmp2 .= r 
-    Enzyme.autodiff_deferred(residual!, Duplicated(tmp1, tmp2), Duplicated(qHx, dR_qHx), Duplicated(qHy, dR_qHy), Const(β), Duplicated(H, dR_H), Const(B), Const(z_ELA), Const(b_max), Const(nx), Const(ny), Const(dx), Const(dy))
+    Enzyme.autodiff_deferred(Enzyme.Reverse,residual!, Duplicated(tmp1, tmp2), Duplicated(qHx, dR_qHx), Duplicated(qHy, dR_qHy), Const(β), Duplicated(H, dR_H), Const(B), Const(z_ELA), Const(b_max), Const(nx), Const(ny), Const(dx), Const(dy))
     return 
 end 
 
 #compute_q!(qHx, qHy, D, H, B, nx, ny, dx, dy)
 #compute dq_D, dq_H
 function grad_residual_H_2!(qHx, dR_qHx, qHy, dR_qHy, D, dq_D, H, dq_H, B, nx, ny, dx, dy)
-    Enzyme.autodiff_deferred(compute_q!, Duplicated(qHx, dR_qHx), Duplicated(qHy, dR_qHy), Duplicated(D, dq_D), Duplicated(H, dq_H), Const(B), Const(nx), Const(ny), Const(dx), Const(dy))
+    Enzyme.autodiff_deferred(Enzyme.Reverse,compute_q!, Duplicated(qHx, dR_qHx), Duplicated(qHy, dR_qHy), Duplicated(D, dq_D), Duplicated(H, dq_H), Const(B), Const(nx), Const(ny), Const(dx), Const(dy))
     return 
 end 
 
 #compute_D!(D, gradS, av_ya_∇Sx, av_xa_∇Sy, H, B, a, as, n, nx, ny, dx, dy)
 #compute dD_H
 function grad_residual_H_3!(D, dq_D, gradS, av_ya_∇Sx, av_xa_∇Sy, H, dD_H, B, a, as, n, nx, ny, dx, dy) 
-    Enzyme.autodiff_deferred(compute_D!, Duplicated(D, dq_D), Const(gradS), Const(av_ya_∇Sx), Const(av_xa_∇Sy), Duplicated(H, dD_H), Const(B), Const(a), Const(as), Const(n), Const(nx), Const(ny), Const(dx), Const(dy))
+    Enzyme.autodiff_deferred(Enzyme.Reverse,compute_D!, Duplicated(D, dq_D), Const(gradS), Const(av_ya_∇Sx), Const(av_xa_∇Sy), Duplicated(H, dD_H), Const(B), Const(a), Const(as), Const(n), Const(nx), Const(ny), Const(dx), Const(dy))
     return 
 end
 
@@ -263,7 +261,7 @@ function solve!(problem::AdjointProblem)
 
     #dt = min(dx^2, dy^2)/maximum(D)/60.1/2
     #dt = min(dx^2, dy^2)/maximum(D)/60.1
-    dt = 1.0/(8.1*maximum(D)/min(dx,dy)^2 + maximum(β))/7000.0
+    dt = 1.0/(8.1*maximum(D)/min(dx,dy)^2 + maximum(β))
     ∂J_∂H .= (H .- H_obs)#./sqrt(length(H))
     # initialization for tmp1 tmp2 tmp3 tmp4 
     merr = 2ϵtol; iter = 1
@@ -290,6 +288,8 @@ function solve!(problem::AdjointProblem)
             # p3 = heatmap(Array(dR'); aspect_ratio=1, title="dR")
             # # savefig(p1, "adjoint_debug/adjoint_R_$(iter).png")
             # display(plot(p1,p2,p3))
+            @printf("dR = %.1e\n", maximum(abs.(dR)))
+            error("here")
             @printf("error = %.1e\n", merr)
             (isfinite(merr) && merr >0 ) || error("adoint solve failed")
         end 
@@ -306,7 +306,7 @@ end
 # compute 
 #compute_D!(D, gradS, av_ya_∇Sx, av_xa_∇Sy, H, B, a, as, n, nx, ny, dx, dy)
 function grad_residual_as_1!(D,tmp2, gradS, av_ya_∇Sx, av_xa_∇Sy, H, B, a, as, Jn, n, nx, ny, dx, dy)
-    Enzyme.autodiff_deferred(compute_D!, Duplicated(D, tmp2), Const(gradS), Const(av_ya_∇Sx), Const(av_xa_∇Sy),Const(H), Const(B), Const(a), Duplicated(as, Jn), Const(n), Const(nx), Const(ny), Const(dx), Const(dy))
+    Enzyme.autodiff_deferred(Enzyme.Reverse,compute_D!, Duplicated(D, tmp2), Const(gradS), Const(av_ya_∇Sx), Const(av_xa_∇Sy),Const(H), Const(B), Const(a), Duplicated(as, Jn), Const(n), Const(nx), Const(ny), Const(dx), Const(dy))
     return
 end 
 
@@ -407,6 +407,7 @@ function adjoint_2D()
     le          = 1e-6#0.01 
 
     @show(asρgn0)
+    @show(asρgn0_syn)
     @show(lx)
     @show(ly)
     @show(lz)
@@ -421,6 +422,7 @@ function adjoint_2D()
     @show(H_cut)
     @show(γ0)
     @show(δ)
+
 
 
     # numerics 
@@ -529,6 +531,10 @@ function adjoint_2D()
     println("generating synthetic data (nx = $nx, ny = $ny)...")
     solve!(synthetic_problem)
     println("done.")
+    write("synthetic_old.dat", Array(H_obs))
+
+    error("here")
+
     solve!(forward_problem)
     println("gradient descent")
 
@@ -549,6 +555,7 @@ function adjoint_2D()
     J_evo = Float64[1.0]; iter_evo = Int[0]
     # gradient descent iterations to update n 
     anim = @animate for gd_iter = 1:gd_niter 
+        #starting from the initial guess as_ini
         as_ini .= as
         solve!(adjoint_problem)
         println("compute cost gradient")
@@ -608,25 +615,25 @@ function adjoint_2D()
         if DO_VISU 
              
 
-             p1=heatmap(xc, yc, Array(Hp'); xlabel ="X", ylabel="Y", title ="Ice thickness", xlims=extrema(xc), ylims=extrema(yc),levels=20, color =:turbo, aspect_ratio = 1,cbar=true)
-             plot!(0.0, yc; label="Cross section", legend=true, line=:dash, color=:red)
-             contour!(xc, yc, Array(Hp'); levels=le:le, lw=2.0, color=:black, line=:solid, label="Outline of current state of ice thickness H")
-             contour!(xc, yc, Array(Hp_obs'); levels=le:le, lw=2.0, color=:red, line=:dash,label="Outline of synthetic ice thickness H")
-             p2 = plot(yc, Array(H[nx÷2,:]); xlabel = "y", ylabel = "H")
-             p2=plot(Array(Hp[nx÷2,:]),yc;xlabel="H",ylabel="Y", label="Current H (cross section)", legend=:bottom)
-             plot!(Array(Hp_obs[nx÷2,:]),yc; xlabel="H", ylabel="Y", title="Ice thickness", label="Synthetic H (cross section)",  legend=:bottom)
-             plot!(yc,Array(B[nx÷2,:]), xlabel="y", ylabel="H", label="Bed rock", legend=:bottom)
-             p3=heatmap(xc[1:end-1], yc[1:end-1], Array(log10.(asp)'); xlabel="X", ylabel="Y", label="as", title="Sliding coefficient as", aspect_ratio=1)
-             p4=plot(Array(log10.(as[nx÷2,:])),yc[1:end-1]; xlabel="as", ylabel="Y", title="Sliding coefficient as",color=:blue, lw = 3, label="Current as (cross section)", legend=true)
-             plot!(Array(log10.(as_ini_vis[nx÷2,:])),yc[1:end-1]; xlabel="as", ylabel="Y", color=:green, lw=3, label="Initial as for inversion", legend=true)
-             plot!(Array(log10.(as_syn[nx÷2,:])),yc[1:end-1];xlabel="as", ylabel="Y", color=:red, lw= 3, label="Synthetic as", legend=true)
-             display(plot(p1,p2,p3,p4; layout=(2,2)))
+             #p1=heatmap(xc, yc, Array(Hp'); xlabel ="X", ylabel="Y", title ="Ice thickness", xlims=extrema(xc), ylims=extrema(yc),levels=20, color =:turbo, aspect_ratio = 1,cbar=true)
+             #plot!(0.0, yc; label="Cross section", legend=true, line=:dash, color=:red)
+             #contour!(xc, yc, Array(Hp'); levels=le:le, lw=2.0, color=:black, line=:solid, label="Outline of current state of ice thickness H")
+             #contour!(xc, yc, Array(Hp_obs'); levels=le:le, lw=2.0, color=:red, line=:dash,label="Outline of synthetic ice thickness H")
+             #p2 = plot(yc, Array(H[nx÷2,:]); xlabel = "y", ylabel = "H")
+             #p2=plot(Array(Hp[nx÷2,:]),yc;xlabel="H",ylabel="Y", label="Current H (cross section)", legend=:bottom)
+             #plot!(Array(Hp_obs[nx÷2,:]),yc; xlabel="H", ylabel="Y", title="Ice thickness", label="Synthetic H (cross section)",  legend=:bottom)
+             #plot!(yc,Array(B[nx÷2,:]), xlabel="y", ylabel="H", label="Bed rock", legend=:bottom)
+             #p3=heatmap(xc[1:end-1], yc[1:end-1], Array(log10.(asp)'); xlabel="X", ylabel="Y", label="as", title="Sliding coefficient as", aspect_ratio=1)
+             #p4=plot(Array(log10.(as[nx÷2,:])),yc[1:end-1]; xlabel="as", ylabel="Y", title="Sliding coefficient as",color=:blue, lw = 3, label="Current as (cross section)", legend=true)
+             #plot!(Array(log10.(as_ini_vis[nx÷2,:])),yc[1:end-1]; xlabel="as", ylabel="Y", color=:green, lw=3, label="Initial as for inversion", legend=true)
+             #plot!(Array(log10.(as_syn[nx÷2,:])),yc[1:end-1];xlabel="as", ylabel="Y", color=:red, lw= 3, label="Synthetic as", legend=true)
+             #display(plot(p1,p2,p3,p4; layout=(2,2)))
 
              #p2 = heatmap(xc, yc, Array(log10.(as)'); xlabel = "x", ylabel = "y", label="as", title = "as", aspect_ratio=1)
              #p3 = heatmap(xc[1:end-1], yc[1:end-1], Array(Jn'); xlabel="x", ylabel="y",title = "Gradient of cost function Jn", aspect_ratio=1)
-             #p5 = Plots.plot(iter_evo, J_evo; shape = :circle, xlabel="Iterations", ylabel="J_old/J_ini", title="misfit", yaxis=:log10)
+             p5 = Plots.plot(iter_evo, J_evo; shape = :circle, xlabel="Iterations", ylabel="J_old/J_ini", title="misfit", yaxis=:log10)
              #display(plot(p1,p2,p3,p4; layout=(2,2)))
-             #display(Plots.plot(p5;  size=(490,490)))
+             display(Plots.plot(p5;  size=(490,490)))
              #display(plot(p5,p6; layout=(1,2), size=(980, 980)))
         end 
 
