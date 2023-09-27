@@ -43,9 +43,9 @@ function main()
     ## numerics
     nx       = 128
     ny       = 128
-    ϵtol     = (abs=1e-4, rel=1e-4)
+    ϵtol     = (abs=1e-6, rel=1e-6)
     maxiter  = 5 * nx^2
-    ncheck   = ceil(Int, 0.25 * nx^2)
+    ncheck   = ceil(Int, 0.1 * nx^2)
     nthreads = (16, 16)
     nblocks  = ceil.(Int, (nx, ny) ./ nthreads)
 
@@ -76,20 +76,24 @@ function main()
     Err_abs = CUDA.zeros(Float64, nx, ny)
 
     ## init visualization 
-    fig = Figure(; resolution=(2000, 1500), fontsize=32)
+    fig = Figure(; resolution=(1200, 800), fontsize=32)
 
     axs = (H   = Axis(fig[1, 1][1, 1]; aspect=DataAspect(), title="Ice thickness"),
            As  = Axis(fig[1, 2][1, 1]; aspect=DataAspect(), title="log10(Sliding coefficient)"),
-           Err = Axis(fig[1, 3]; aspect=1, title="Convergence history"))
+           Err = Axis(fig[2, 1]; aspect=1, yscale=log10, title="Convergence history"))
 
-    plt = (H  = heatmap!(axs.H, xc, yc, Array(H); colormap=:turbo),
-           As = heatmap!(axs.As, xc, yc, Array(log10.(As)); colormap=:viridis))
+    ylims!(axs.Err, 0.1ϵtol.rel, 2)
+
+    plt = (H=heatmap!(axs.H, xc, yc, Array(H); colormap=:turbo),
+           As=heatmap!(axs.As, xc, yc, Array(log10.(As)); colormap=:viridis),
+           Err=(scatterlines!(axs.Err, Point2{Float64}[]),
+                scatterlines!(axs.Err, Point2{Float64}[])))
 
     Colorbar(fig[1, 1][1, 2], plt.H)
     Colorbar(fig[1, 2][1, 2], plt.As)
 
     ## pack parameters
-    fwd_params = (fields           = (; H, H_ini, B, β, ELA, D, qHx, qHy, As, RH, Err_rel, Err_abs),
+    fwd_params = (fields           = (; H, B, β, ELA, D, qHx, qHy, As, RH, Err_rel, Err_abs),
                   scalars          = (; aρgn0, b_max, npow),
                   numerical_params = (; nx, ny, dx, dy, maxiter, ncheck, ϵtol),
                   launch_config    = (; nthreads, nblocks))
@@ -100,3 +104,5 @@ function main()
 
     return
 end
+
+main()

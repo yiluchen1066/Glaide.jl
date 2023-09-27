@@ -25,7 +25,7 @@ function solve_sia!(fields, scalars, numerical_params, launch_config; visu=nothi
         if iter == 1 || iter % ncheck == 0
             CUDA.@sync Err_rel .= H
         end
-        @cuda threads = nthreads blocks = nblocks compute_D!(D, H, B, aρgn0, As, npow, dx, dy)
+        @cuda threads = nthreads blocks = nblocks compute_D!(D, H, B, As, aρgn0, npow, dx, dy)
         @cuda threads = nthreads blocks = nblocks compute_q!(qHx, qHy, D, H, B, dx, dy)
         CUDA.synchronize()
         # compute stable time step
@@ -45,7 +45,7 @@ function solve_sia!(fields, scalars, numerical_params, launch_config; visu=nothi
             push!(err_evo.iters, iter / nx)
             push!(err_evo.abs, err_abs)
             push!(err_evo.rel, err_rel)
-            @printf("iter/nx^2=%.3e, err= [abs=%.3e, rel=%.3e] \n", iter / nx^2, err_abs, err_rel)
+            @printf("  iter/nx^2=%.3e, err= [abs=%.3e, rel=%.3e] \n", iter / nx^2, err_abs, err_rel)
             isnothing(visu) || update_visualisation!(visu, fields, err_evo)
             if err_rel < ϵtol.rel
                 break
@@ -71,8 +71,7 @@ function compute_D!(D, H, B, As, aρgn0, n, dx, dy)
                (H[ix + 1, iy + 1] - H[ix + 1, iy]) / dy +
                (B[ix, iy + 1] - B[ix, iy]) / dy +
                (H[ix, iy + 1] - H[ix, iy]) / dy)
-        gradS = sqrt(∇Sx^2 + ∇Sy^2)
-        D[ix, iy] = (aρgn0 * @av_xy(H)^(n + 2) + As[ix, iy] * @av_xy(H)^n) * gradS^(n - 1)
+        D[ix, iy] = (aρgn0 * @av_xy(H)^(n + 2) + As[ix, iy] * @av_xy(H)^n) * sqrt(∇Sx^2 + ∇Sy^2)^(n - 1)
     end
     return
 end
@@ -143,9 +142,9 @@ function update_visualisation!(visu, fields, err_evo)
     (; fig, plt)    = visu
     (; H, As)       = fields
     plt.H[3]        = Array(H)
-    plt.As[3]       = Array(As)
-    plt.Err[1][2][] = Point2.(err_evo.iters, err_evo.abs)
-    plt.Err[1][2][] = Point2.(err_evo.iters, err_evo.rel)
+    plt.As[3]       = Array(log10.(As))
+    plt.Err[1][1][] = Point2.(err_evo.iters, err_evo.abs)
+    plt.Err[2][1][] = Point2.(err_evo.iters, err_evo.rel)
     display(fig)
     return
 end
