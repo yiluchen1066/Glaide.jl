@@ -1,3 +1,4 @@
 style  = "yas"
 margin = 120
 align_assignment = true
+pipe_to_function_call = false
