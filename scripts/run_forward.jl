@@ -19,30 +19,22 @@ function main()
     β1tsc    = 3.5296256525297436e-10
 
     # geometry 
-    lx_l      = 25.0  # horizontal length to characteristic length ratio
-    ly_l      = 20.0  # horizontal length to characteristic length ratio 
-    w1_l      = 100.0 #width to charactertistic length ratio 
-    w2_l      = 10.0  # width to characteristic length ratio
-    B0_l      = 0.35  # maximum bed rock elevation to characteristic length ratio
-    z_ela_l   = 0.215 # ela to domain length ratio z_ela_l = 
-    z_ela_1_l = 0.09
+    lx_l, ly_l           = 25.0, 20.0  # horizontal length to characteristic length ratio
+    w1_l, w2_l           = 100.0, 10.0 # width to charactertistic length ratio 
+    B0_l                 = 0.35  # maximum bed rock elevation to characteristic length ratio
+    z_ela_l_1, z_ela_l_2 = 0.215, 0.09 # ela to domain length ratio z_ela_l = 
 
     # dimensionally dependent parameters 
-    lx      = lx_l * lsc #250000
-    ly      = ly_l * lsc #200000
-    w1      = w1_l * lsc^2 #1e10
-    w2      = w2_l * lsc^2 #1e9
-    z_ELA_0 = z_ela_l * lsc # 2150
-    z_ELA_1 = z_ela_1_l * lsc #900
-    B0      = B0_l * lsc # 3500
-    asρgn0  = s_f * aρgn0 * lsc^2 #5.7e-20*(ρg)^n = 5.7e-20*(910*9.81)^3 = 4.055141889402214e-8
-    b_max   = b_max_nd * lsc / tsc  #2.0 m/a = 6.341958396752917e-8 m/s
-    β0      = βtsc / tsc  #0.01 /a = 3.1709791983764586e-10
-    β1      = β1tsc / tsc #0.015/3600/24/365 = 4.756468797564688e-10
+    lx, ly           = lx_l * lsc, ly_l * lsc  # 250000, 200000
+    w1, w2           = w1_l * lsc^2, w2_l * lsc^2 # 1e10, 1e9
+    z_ELA_0, z_ELA_1 = z_ela_l_1 * lsc, z_ela_l_2 * lsc # 2150, 900
+    B0               = B0_l * lsc # 3500
+    asρgn0           = s_f * aρgn0 * lsc^2 #5.7e-20*(ρg)^n = 5.7e-20*(910*9.81)^3 = 4.055141889402214e-8
+    b_max            = b_max_nd * lsc / tsc  #2.0 m/a = 6.341958396752917e-8 m/s
+    β0, β1           = βtsc / tsc, β1tsc / tsc  # 3.1709791983764586e-10, 4.756468797564688e-10
 
     ## numerics
-    nx       = 128
-    ny       = 128
+    nx, ny   = 128, 128
     ϵtol     = (abs=1e-6, rel=1e-6)
     maxiter  = 5 * nx^2
     ncheck   = ceil(Int, 0.1 * nx^2)
@@ -50,8 +42,7 @@ function main()
     nblocks  = ceil.(Int, (nx, ny) ./ nthreads)
 
     ## pre-processing
-    dx = lx / nx
-    dy = lx / ny
+    dx, dy = lx / nx, lx / ny
     xc = LinRange(-lx / 2 + dx / 2, lx / 2 - dx / 2, nx)
     yc = LinRange(-ly / 2 + dy / 2, ly / 2 - dy / 2, ny)
 
