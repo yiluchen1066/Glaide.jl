@@ -34,20 +34,6 @@ open("output/synthetic_new.dat", "r") do io
     read!(io, fld_new.β)
 end
 
-yc_old = zeros(ny)
-yc_new = zeros(ny)
-
-
-open("output/ELA_old.dat", "r") do io
-    read!(io, fld_new.ELA)
-    read!(io, yc_old)
-end
-
-open("output/ELA_new.dat", "r") do io
-    read!(io, fld_new.ELA)
-    read!(io, yc_new)
-end
-
 @show maximum(abs.(fld_old.H   .- fld_new.H))
 @show maximum(abs.(fld_old.D   .- fld_new.D))
 @show maximum(abs.(fld_old.As  .- fld_new.As))
