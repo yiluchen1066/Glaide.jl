@@ -13,10 +13,10 @@ function main()
     tsc = 1 / aρgn0 / lsc^npow
 
     # non-dimensional numbers 
-    s_f      = 0.01  # sliding to ice flow ratio: s_f   = asρgn0/aρgn0/lx^2
+    s_f      = 0.01                  # sliding to ice flow ratio: s_f   = asρgn0/aρgn0/lx^2
     b_max_nd = 4.706167536706325e-12 # m_max/lx*tsc m_max = 2.0 m/a lx = 1e3 tsc = 
-    βtsc     = 2.353083768353162e-10 # ratio between characteristic time scales of ice flow and accumulation/ablation βtsc = β0*tsc 
-    β1tsc    = 3.5296256525297436e-10
+    β1tsc    = 2.353083768353162e-10 # ratio between characteristic time scales of ice flow and accumulation/ablation βtsc = β0*tsc 
+    β2tsc    = 3.5296256525297436e-10
 
     # geometry 
     lx_l, ly_l           = 25.0, 20.0  # horizontal length to characteristic length ratio
@@ -31,11 +31,11 @@ function main()
     B0               = B0_l * lsc # 3500
     asρgn0           = s_f * aρgn0 * lsc^2 #5.7e-20*(ρg)^n = 5.7e-20*(910*9.81)^3 = 4.055141889402214e-8
     b_max            = b_max_nd * lsc / tsc  #2.0 m/a = 6.341958396752917e-8 m/s
-    β0, β1           = βtsc / tsc, β1tsc / tsc  # 3.1709791983764586e-10, 4.756468797564688e-10
+    β0, β1           = β1tsc / tsc, β2tsc / tsc  # 3.1709791983764586e-10, 4.756468797564688e-10
 
     ## numerics
     nx, ny   = 128, 128
-    ϵtol     = (abs=1e-6, rel=1e-6)
+    ϵtol     = (abs=1e-4, rel=1e-4)
     maxiter  = 5 * nx^2
     ncheck   = ceil(Int, 0.1 * nx^2)
     nthreads = (16, 16)
@@ -57,7 +57,9 @@ function main()
 
     # other fields
     β       = CUDA.fill(β0, nx, ny) .+ β1 .* atan.(xc ./ lx)
-    ELA     = CUDA.fill(z_ELA_0, nx, ny) .+ z_ELA_1 .* atan.(yc' ./ ly .+ 0 .* xc)
+    ELA     = (fill(z_ELA_0, nx, ny) .+ z_ELA_1 .* atan.(yc' ./ ly .+ 0 .* xc)) |> CuArray
+    write("output/ELA_new.dat", Array(ELA), z_ELA_0, z_ELA_1)
+
     D       = CUDA.zeros(Float64, nx - 1, ny - 1)
     qHx     = CUDA.zeros(Float64, nx - 1, ny - 2)
     qHy     = CUDA.zeros(Float64, nx - 2, ny - 1)
@@ -93,7 +95,7 @@ function main()
     @info "Solve SIA"
     solve_sia!(fwd_params...; visu=fwd_visu)
 
-    write("output/synthetic_new.dat", Array(H))
+    write("output/synthetic_new.dat", Array(H), Array(D), Array(As), Array(ELA), Array(β))
 
     return
 end

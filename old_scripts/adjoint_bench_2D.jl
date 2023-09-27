@@ -1,4 +1,5 @@
-using CUDA,BenchmarkTools
+using CUDA
+# using BenchmarkTools
 # using Plots,Plots.Measures
 using Printf
 # using DelimitedFiles
@@ -154,10 +155,10 @@ function solve!(problem::Forwardproblem)
             err_abs = maximum(abs.(Err_abs))/err_abs0 
             err_rel = maximum(abs.(Err_rel))/maximum(H)
             @printf("iter/nx^2 = %.3e, err = [abs =%.3e, rel= %.3e] \n", iter/nx^2, err_abs, err_rel)
-            p1 = heatmap(Array(H'); title = "S (forward problem)")
+            # p1 = heatmap(Array(H'); title = "S (forward problem)")
             #p2 = heatmap(Array(Err_abs'); title = "Err_abs")
             #p3 = heatmap(Array(Err_rel'); title = "Err_rel")
-            display(plot(p1))
+            # display(plot(p1))
             #if debug
 
 
@@ -464,10 +465,11 @@ function adjoint_2D()
     H = zeros(Float64, nx, ny)
     B = zeros(Float64, nx, ny)
     β = β0*ones(Float64, nx, ny)
-    ela = z_ELA_0*ones(Float64, nx, ny)
 
     β   .+= β1 .*atan.(xc./lx)
-    ela .+=  z_ELA_1.*atan.(yc'./ly .+ 0 .*xc)
+    ela = (fill(z_ELA_0, nx, ny) .+ z_ELA_1.*atan.(yc'./ly .+ 0 .*xc)) |> CuArray
+    write("output/ELA_old.dat", Array(ela), z_ELA_0, z_ELA_1)
+
 
     H_obs = copy(H)
     H_ini = copy(H)
@@ -492,7 +494,6 @@ function adjoint_2D()
     H_obs = CuArray{Float64}(H_obs)
     H_ini = CuArray{Float64}(H_ini)
     β     = CuArray{Float64}(β)
-    ela   = CuArray{Float64}(ela)
 
     #@show(extrema(B))
     Bp     = copy(B)
@@ -532,7 +533,7 @@ function adjoint_2D()
     println("generating synthetic data (nx = $nx, ny = $ny)...")
     solve!(synthetic_problem)
     println("done.")
-    write("output/synthetic_old.dat", Array(H_obs))
+    write("output/synthetic_old.dat", Array(H_obs), Array(D), Array(as_syn), Array(ela), Array(β))
 
     error("here")
 
@@ -555,7 +556,7 @@ function adjoint_2D()
     
     J_evo = Float64[1.0]; iter_evo = Int[0]
     # gradient descent iterations to update n 
-    anim = @animate for gd_iter = 1:gd_niter 
+    anim = #=@animate=# for gd_iter = 1:gd_niter 
         #starting from the initial guess as_ini
         as_ini .= as
         solve!(adjoint_problem)
