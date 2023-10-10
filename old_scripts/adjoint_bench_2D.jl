@@ -265,6 +265,7 @@ function solve!(problem::AdjointProblem)
     #dt = min(dx^2, dy^2)/maximum(D)/60.1
     dt = 1.0/(8.1*maximum(D)/min(dx,dy)^2 + maximum(β))
     ∂J_∂H .= (H .- H_obs)#./sqrt(length(H))
+    @show(maximum(∂J_∂H))
     # initialization for tmp1 tmp2 tmp3 tmp4 
     merr = 2ϵtol; iter = 1
     while merr >= ϵtol  && iter < niter 
@@ -293,6 +294,7 @@ function solve!(problem::AdjointProblem)
             # @printf("dR = %.1e\n", maximum(abs.(dR)))
             # error("here")
             @printf("error = %.1e\n", merr)
+            @printf("R = %.1e\n", maximum(abs.(R)))
             (isfinite(merr) && merr >0 ) || error("adoint solve failed")
         end 
         iter += 1
@@ -302,6 +304,7 @@ function solve!(problem::AdjointProblem)
         error("adjoint solve not converged")
     end 
     @printf("adjoint solve converged: #iter/nx = %.1f, err = %.1e\n", iter/nx, merr)
+    write("output/adjoint_old.dat", Array(r), Array(dR), Array(dR_qHx), Array(dR_qHy), Array(dq_D))
     return 
 end 
 
@@ -408,25 +411,6 @@ function adjoint_2D()
     δ           = δ_nd*l^(4-2n)*tsc^(-2)#0.1
     le          = 1e-6#0.01 
 
-    @show(asρgn0)
-    @show(asρgn0_syn)
-    @show(lx)
-    @show(ly)
-    @show(lz)
-    @show(w1)
-    @show(w2)
-    @show(B0)
-    @show(z_ELA_0)
-    @show(m_max)
-    @show(β0)
-    @show(z_ELA_1)
-    @show(β1)
-    @show(H_cut)
-    @show(γ0)
-    @show(δ)
-
-
-
     # numerics 
     gd_niter    = 30#100
     bt_niter     = 3 
@@ -443,6 +427,31 @@ function adjoint_2D()
     ncheck_adj  = 1000
     threads     = (16,16)
     blocks      = ceil.(Int, (nx,ny)./threads)
+
+    #check
+    @show(asρgn0_syn)
+    @show(asρgn0)
+    @show(lx)
+    @show(ly)
+    @show(w1)
+    @show(w2)
+    @show(B0)
+    @show(z_ELA_0)
+    @show(z_ELA_1)
+    @show(m_max)
+    @show(β0)
+    @show(β1)
+    @show(H_cut)
+    @show(nx)
+    @show(ny)
+    @show(ϵtol)
+    @show(maxiter)
+    @show(ncheck)
+    @show(threads)
+    @show(blocks)
+    @show(ϵtol_adj)
+    @show(ncheck_adj)
+
 
 
     # derived numerics
@@ -514,11 +523,11 @@ function adjoint_2D()
     #save xc yc to static 
     
 
-    as = asρgn0*CUDA.ones(nx-1, ny-1) 
-    as_ini_vis = copy(as)
-    as_ini     = copy(as)
-    as_syn = asρgn0_syn*CUDA.ones(nx-1,ny-1)
-    as2 = similar(as) 
+    as          = asρgn0*CUDA.ones(nx-1, ny-1) 
+    as_ini_vis  = copy(as)
+    as_ini      = copy(as)
+    as_syn      = asρgn0_syn*CUDA.ones(nx-1,ny-1)
+    as2         = similar(as) 
 
     Jn = CUDA.zeros(Float64,nx-1, ny-1)
     
@@ -529,14 +538,26 @@ function adjoint_2D()
     adjoint_problem = AdjointProblem(H, H_obs,B, D, qHx, qHy, β, as, gradS, av_ya_∇Sx, av_xa_∇Sy, ela, m_max, nx, ny, dx, dy, aρgn0, n, dmp_adj, H_cut, ϵtol_adj, maxiter, ncheck_adj, threads, blocks)
 
     println("generating synthetic data (nx = $nx, ny = $ny)...")
+    println("solve synthetic")
+    @show maximum(as_syn)
     solve!(synthetic_problem)
     println("done.")
     write("output/synthetic_old.dat", Array(H_obs), Array(D), Array(as_syn), Array(ela), Array(β))
 
-    error("here")
-
+    println("solve forward")
+    @show maximum(as)
     solve!(forward_problem)
+    println("done.")
+    write("output/forward_old.dat", Array(H), Array(D), Array(as), Array(ela), Array(β))
+
+
     println("gradient descent")
+    println("solve adjoint")
+    solve!(adjoint_problem)
+    println("done")
+
+
+    error("here")
 
     Hp_obs = copy(H_obs)
     Hp_obs[H_obs.==0.0] .= NaN

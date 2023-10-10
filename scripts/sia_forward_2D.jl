@@ -5,9 +5,9 @@ using Printf
 include("macros.jl")
 
 # integrate SIA equations to steady state
-function solve_sia!(fields, scalars, numerical_params, launch_config; visu=nothing)
+function solve_sia!(As, fields, scalars, numerical_params, launch_config; visu=nothing)
     # extract variables from tuples
-    (; H, B, β, ELA, D, qHx, qHy, As, RH, Err_rel, Err_abs) = fields
+    (; H, B, β, ELA, D, qHx, qHy, RH, Err_rel, Err_abs) = fields
     (; aρgn0, b_max, npow)                                  = scalars
     (; nx, ny, dx, dy, maxiter, ncheck, ϵtol)               = numerical_params
     (; nthreads, nblocks)                                   = launch_config
@@ -46,7 +46,7 @@ function solve_sia!(fields, scalars, numerical_params, launch_config; visu=nothi
             push!(err_evo.abs, err_abs)
             push!(err_evo.rel, err_rel)
             @printf("  iter/nx^2=%.3e, err= [abs=%.3e, rel=%.3e] \n", iter / nx^2, err_abs, err_rel)
-            isnothing(visu) || update_visualisation!(visu, fields, err_evo)
+            isnothing(visu) || update_visualisation!(As, visu, fields, err_evo)
             if err_rel < ϵtol.rel
                 break
             end
@@ -138,9 +138,9 @@ function compute_abs_error!(Err_abs, RH, H)
     return
 end
 
-function update_visualisation!(visu, fields, err_evo)
+function update_visualisation!(As, visu, fields, err_evo)
     (; fig, plt)    = visu
-    (; H, As)       = fields
+    (; H)       = fields
     plt.H[3]        = Array(H)
     plt.As[3]       = Array(log10.(As))
     plt.Err[1][1][] = Point2.(err_evo.iters, err_evo.abs)

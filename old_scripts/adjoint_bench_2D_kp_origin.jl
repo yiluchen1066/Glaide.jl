@@ -238,6 +238,8 @@ end
     #dt = 1.0/(8.1*maximum(D)/min(dx,dy)^2+maximum(β))/7000
     dt = 1.0/(8.1*maximum(D)/min(dx,dy)^2+maximum(β))
     ∂J_∂H .= H .- H_obs
+    @show(maximum(∂J_∂H))
+    @show(H_cut)
 
     merr = 2ϵtol_adj; iter = 1
     while merr >= ϵtol_adj && iter < maxiter
@@ -275,7 +277,6 @@ end
             @printf("error = %.1e\n", merr) 
             # visualization for adjoint solver
             @printf("H̄ = %.1e\n", maximum(abs.(H̄)))
-            error("here")
             (isfinite(merr) && merr >0) || error("adjoint solve failed")
         end 
 
@@ -406,23 +407,6 @@ end
     le          = 1e-6#0.01 
     #observations
 
-    @show(asρgn0)
-    @show(asρgn0_syn)
-    @show(lx)
-    @show(ly)
-    @show(lz)
-    @show(w1)
-    @show(w2)
-    @show(B0)
-    @show(z_ELA_0)
-    @show(b_max)
-    @show(β0)
-    @show(z_ELA_1)
-    @show(β1)
-    @show(H_cut)
-    @show(γ0)
-    @show(δ)
-
 
     #numerics
     ngd   = 30 
@@ -430,7 +414,7 @@ end
     nx          = 128 
     ny          = 128 
     epsi        = 1e-4 
-    ϵtol        = (abs = 1e-4, rel = 1e-4)
+    ϵtol        = (abs = 1e-8, rel = 1e-8)
     dmp_adj     = 2*1.7 
     ϵtol_adj    = 1e-8
     gd_ϵtol     = 1e-3 
@@ -442,9 +426,34 @@ end
     threads     = (16,16)
     blocks      = ceil.(Int, (nx, ny)./threads)
 
+    #check 
+    @show(asρgn0_syn)
+    @show(asρgn0)
+    @show(lx)
+    @show(ly)
+    @show(w1)
+    @show(w2)
+    @show(B0)
+    @show(z_ELA_0)
+    @show(z_ELA_1)
+    @show(b_max)
+    @show(β0)
+    @show(β1)
+    @show(H_cut)
+    @show(nx)
+    @show(ny)
+    @show(ϵtol)
+    @show(maxiter)
+    @show(ncheck)
+    @show(threads)
+    @show(blocks)
+    @show(ϵtol_adj)
+    @show(ncheck_adj)
+
+
     #perprocessing
     dx          = lx/nx 
-    dy          = lx/ny 
+    dy          = ly/ny 
     xc          = LinRange(-lx/2+dx/2, lx/2-dx/2, nx)
     yc          = LinRange(-ly/2+dy/2, ly/2-dy/2, ny)
     cfl          = max(dx^2,dy^2)/8.1  
@@ -549,14 +558,12 @@ end
 
     @info "Synthetic solve" 
     #solve for synthetic forward model using As_syn for H_obs
+    @show(maximum(logAs_syn))
     forward_solve!(logAs_syn, fwd_params...; visu=fwd_visu)
     H_obs .= H #the observed data is just the synthetic data
 
-    write("synthetic_new.dat", Array(H_obs))
+    write("output/synthetic_old_2.dat", Array(H_obs), Array(D), Array(As), Array(ELA), Array(β))
 
-    error("here")
-
-    
     adj_params = (
         fields       = (;q̄Hx, q̄Hy, D̄, H̄, R̄H, Ās, ψ_H, ∂J_∂H),
         iter_params = (;ϵtol_adj, ncheck_adj, H_cut),
