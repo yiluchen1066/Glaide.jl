@@ -563,7 +563,7 @@ end
     H_obs .= H #the observed data is just the synthetic data
 
     write("output/synthetic_old_2.dat", Array(H_obs), Array(D), Array(As), Array(ELA), Array(β))
-
+    @info "Done"
     adj_params = (
         fields       = (;q̄Hx, q̄Hy, D̄, H̄, R̄H, Ās, ψ_H, ∂J_∂H),
         iter_params = (;ϵtol_adj, ncheck_adj, H_cut),
@@ -579,7 +579,18 @@ end
     J(_logAs)          = loss(_logAs, fwd_params, loss_params)
     ∇J!(_Ās,_logAs)    = ∇loss!(_Ās, _logAs, fwd_params, adj_params, loss_params; reg)
     @info "Inversion for As"
+    @info "Forward solve"
     forward_solve!(logAs, fwd_params...; visu=fwd_visu)
+
+    write("output/forward_old_2.dat", Array(H), Array(D), Array(As), Array(ELA), Array(β))
+    @info "Done"
+    #adjoint_solve!(logAs, fwd_params, adj_params, loss_params)
+    @info "Adjoint solve"
+    adjoint_solve!(logAs, fwd_params, adj_params, loss_params)
+    write("output/adjoint_old_2.dat", Array(ψ_H), Array(H̄), Array(q̄Hx), Array(q̄Hy), Array(D̄))
+    @info "Done"
+
+    error("here")
     #initial guess
 
     γ = γ0

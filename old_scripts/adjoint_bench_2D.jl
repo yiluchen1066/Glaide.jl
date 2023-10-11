@@ -203,7 +203,7 @@ end
 #Enzyme.autodiff_deferred(compute_q!, Duplicated(qHx, dR_qHx), Duplicated(qHy, dR_qHy), Duplicated(D, dq_D), Duplicated(H, dq_H), Const(B), Const(nx), Const(ny), Const(dx), Const(dy))
 
 function update_r!(r, R, dR, dt, H, H_cut, dmp, nx, ny)
-    @get_thread_idx(R) 
+    @get_thread_idx(dR) 
     if ix <= nx && iy <= ny
         if ix > 1 && ix < nx && iy > 1 && iy < ny
             # H_cut = 1.0e-2
@@ -212,12 +212,12 @@ function update_r!(r, R, dR, dt, H, H_cut, dmp, nx, ny)
                H[ix+1, iy] <= H_cut ||
                H[ix, iy-1] <= H_cut ||
                H[ix, iy+1] <= H_cut
-                R[ix,iy] = 0.0 
+                dR[ix,iy] = 0.0 
                 r[ix,iy] = 0.0 
             else 
-                R[ix,iy] = 0.0*R[ix,iy]*(1.0 - dmp/min(nx,ny)) + dR[ix,iy] 
+                # R[ix,iy] = 0.0*R[ix,iy]*(1.0 - dmp/min(nx,ny)) + dR[ix,iy] 
                 #R[ix,iy] = R[ix,iy]*(dmp/min(nx,ny)) + dt*dR[ix,iy] 
-                r[ix,iy] = r[ix,iy] + dt*R[ix,iy]
+                r[ix,iy] = r[ix,iy] + dt*dR[ix,iy]
             end
         end
         if ix ==1 || ix == nx 
@@ -264,6 +264,7 @@ function solve!(problem::AdjointProblem)
     #dt = min(dx^2, dy^2)/maximum(D)/60.1/2
     #dt = min(dx^2, dy^2)/maximum(D)/60.1
     dt = 1.0/(8.1*maximum(D)/min(dx,dy)^2 + maximum(β))
+    @show(dt)
     ∂J_∂H .= (H .- H_obs)#./sqrt(length(H))
     @show(maximum(∂J_∂H))
     # initialization for tmp1 tmp2 tmp3 tmp4 
@@ -279,6 +280,11 @@ function solve!(problem::AdjointProblem)
         CUDA.@sync @cuda threads = threads blocks = blocks grad_residual_H_3!(D, dq_D, gradS, av_ya_∇Sx, av_xa_∇Sy, H, dD_H, B, a, as, n, nx, ny, dx, dy)
         CUDA.@sync @cuda threads = threads blocks = blocks grad_residual_H!(dR, dD_H, dq_H, dR_H, nx, ny)
         CUDA.@sync @cuda threads = threads blocks = blocks update_r!(r, R, dR, dt, H, H_cut, dmp, nx, ny)
+        if iter <= 10 
+            write("output/adjoint_old_$(iter).dat", Array(r), Array(dR), Array(dR_qHx), Array(dR_qHy), Array(dq_D))
+        else
+            error("nth iteration")
+        end
 
         
         # if iter > 10 error("Stop") end

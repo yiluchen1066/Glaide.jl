@@ -83,7 +83,7 @@ open("output/forward_new.dat", "r") do io
     read!(io, fld_new_fwd.β)
 end
 
-open("output/adjoint_old.dat", "r") do io 
+open("output/adjoint_old_2.dat", "r") do io 
     read!(io, fld_old_adj.r)
     read!(io, fld_old_adj.dR)
     read!(io, fld_old_adj.dR_qHx)
@@ -91,7 +91,7 @@ open("output/adjoint_old.dat", "r") do io
     read!(io, fld_old_adj.dq_D)
 end 
 
-open("output/adjoint_new.dat", "r") do io 
+open("output/adjoint_new_2.dat", "r") do io 
     read!(io, fld_new_adj.ψ_H)
     read!(io, fld_new_adj.H̄)
     read!(io, fld_new_adj.q̄Hx)
@@ -114,26 +114,35 @@ end
 @show maximum(abs.(fld_old_adj.dR_qHy  .- fld_new_adj.q̄Hy))
 @show maximum(abs.(fld_old_adj.dq_D    .- fld_new_adj.D̄))
 
+@show maximum(abs.(fld_old_adj.dR))
+@show maximum(abs.(fld_new_adj.H̄))
+
+@show maximum(abs.(fld_old_adj.r))
+@show maximum(abs.(fld_new_adj.ψ_H))
+
 fig = Figure(; resolution=(1200, 800), fontsize=32)
 
 #ax  = Axis(fig[1, 1][1, 1]; aspect=DataAspect(), title="ΔH")
 #plt = heatmap!(ax, fld_old.H .- fld_new.H; colormap=:turbo)
 
 axs = (
-    H_syn   = Axis(fig[1,1]; aspect=DataAspect(), title="ΔH_syn"), 
-    H_fwd   = Axis(fig[1,2]; aspect=DataAspect(), title="ΔH_fwd"),
-    ΔH      = Axis(fig[2,1]; aspect=DataAspect(), title="ΔH"),
-    Δψ_H    = Axis(fig[2,2]; aspect=DataAspect(), title="Δψ_H")
+    H_syn   = Axis(fig[1,1][1,1]; aspect=DataAspect(), title="ΔH_syn"), 
+    H_fwd   = Axis(fig[1,2][1,1]; aspect=DataAspect(), title="ΔH_fwd"),
+    ΔH      = Axis(fig[2,1][1,1]; aspect=DataAspect(), title="ΔH"),
+    Δψ_H    = Axis(fig[2,2][1,1]; aspect=DataAspect(), title="Δψ_H")
 )
 
 plts = (
     H_syn = heatmap!(axs.H_syn, fld_old_syn.H_obs-fld_new_syn.H_obs; colormap =:turbo), 
     H_fwd = heatmap!(axs.H_fwd, fld_old_fwd.H-fld_new_fwd.H; colormap =:turbo),
-    ΔH    = heatmap!(axs.ΔH, ΔH_old-ΔH_new; colormap =:turbo), 
+    ΔH    = heatmap!(axs.ΔH, fld_old_adj.dR-fld_new_adj.H̄; colormap =:turbo), 
     Δψ_H  = heatmap!(axs.Δψ_H, fld_old_adj.r- fld_new_adj.ψ_H; colormap=:turbo)
     
 )
 
-#Colorbar(fig[1, 1][1, 2][1,3], plts)
+Colorbar(fig[1, 1][1, 2], plts.H_syn)
+Colorbar(fig[1, 2][1, 2], plts.H_fwd)
+Colorbar(fig[2, 1][1, 2], plts.ΔH)
+Colorbar(fig[2, 2][1, 2], plts.Δψ_H)
 
 display(fig)

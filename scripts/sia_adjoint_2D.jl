@@ -21,7 +21,9 @@ function solve_adjoint_sia!(H_obs, ∂J_∂H, fwd_params, adj_params)
     ∂J_∂H .= H .- H_obs
     merr = 2ϵtol_adj
     iter = 1
+    @show dt 
     @show(H_cut)
+    #CUDA.synchronize()
     while merr >= ϵtol_adj && iter < maxiter
         #initialization 
         R̄H  .= ψ_H
@@ -29,24 +31,36 @@ function solve_adjoint_sia!(H_obs, ∂J_∂H, fwd_params, adj_params)
         q̄Hy .= 0.0
         H̄   .= .-∂J_∂H
         D̄   .= 0.0
+        H̄_1 .= 0.0 
+        H̄_2 .= 0.0 
+        H̄_3 .= 0.0 
+        #CUDA.synchronize()
         @cuda threads = nthreads blocks = nblocks ∇(residual!,
                                                              DupNN(RH, R̄H),
                                                              DupNN(qHx, q̄Hx),
                                                              DupNN(qHy, q̄Hy),
                                                              Const(β),
-                                                             DupNN(H, H̄),
+                                                             DupNN(H, H̄_1), # dR_H
                                                              Const(B), Const(ELA), Const(b_max), Const(dx), Const(dy))
         @cuda threads = nthreads blocks = nblocks ∇(compute_q!,
                                                              DupNN(qHx, q̄Hx),
                                                              DupNN(qHy, q̄Hy),
                                                              DupNN(D, D̄),
-                                                             DupNN(H, H̄),
+                                                             DupNN(H, H̄_2), # dq_H
                                                              Const(B), Const(dx), Const(dy))
         @cuda threads = nthreads blocks = nblocks ∇(compute_D!,
                                                              DupNN(D, D̄),
-                                                             DupNN(H, H̄),
+                                                             DupNN(H, H̄_3), # dD_H
                                                              Const(B), Const(As), Const(aρgn0), Const(npow), Const(dx), Const(dy))
+        H̄ .+= H̄_1 .+ H̄_2 .+ H̄_3
         @cuda threads = nthreads blocks = nblocks update_ψ!(H, H̄, ψ_H, H_cut, dt)
+        
+        # if iter <= 10
+        #     write("output/adjoint_new_$(iter).dat", Array(ψ_H), Array(H̄), Array(q̄Hx), Array(q̄Hy), Array(D̄))
+        # else
+        #     error("nth iteration")
+        # end
+        
         # in the new code formulation, H̄ equals to dR/R 
         if iter % ncheck_adj == 0
             merr = maximum(abs.(dt .* H̄[2:(end - 1), 2:(end - 1)])) / maximum(abs.(ψ_H))
@@ -71,12 +85,12 @@ function update_ψ!(H, H̄, ψ_H, H_cut, dt)
     @get_indices
     @inbounds if ix <= size(H, 1) && iy <= size(H, 2)
         if ix > 1 && ix < size(H, 1) && iy > 1 && iy < size(H, 2)
-            if H[ix,   iy]     <= H_cut ||
+            if H[ix,   iy] <= H_cut ||
                H[ix-1, iy] <= H_cut ||
                H[ix+1, iy] <= H_cut ||
                H[ix, iy-1] <= H_cut ||
                H[ix, iy+1] <= H_cut
-                H̄[ix,iy]    = 0.0
+                H̄[ix, iy]   = 0.0
                 ψ_H[ix, iy] = 0.0
             else
                 ψ_H[ix, iy] = ψ_H[ix, iy] + dt * H̄[ix, iy]

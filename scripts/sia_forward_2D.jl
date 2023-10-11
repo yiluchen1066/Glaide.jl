@@ -16,6 +16,7 @@ function solve_sia!(As, fields, scalars, numerical_params, launch_config; visu=n
     RH .= 0
     Err_rel .= 0
     Err_abs .= 0
+    H       .= 0.0
     CUDA.synchronize()
     # iterative loop 
     err_evo = (iters = Float64[],
