@@ -41,14 +41,16 @@ cost(H, H_obs) = 0.5*sum((H.-H_obs).^2)
 function compute_D!(D, gradS, av_ya_∇Sx, av_xa_∇Sy, H, B, a, as, n, nx, ny, dx, dy)
     @get_thread_idx(H)
     if ix <= nx-1 && iy <= ny-1 
-        av_ya_∇Sx[ix,iy] = 0.5*((B[ix+1, iy+1]-B[ix,iy+1])/dx + (H[ix+1, iy+1]-H[ix,iy+1])/dx + (B[ix+1,iy]-B[ix,iy])/dx + (H[ix+1,iy]-H[ix,iy])/dx)
-        av_xa_∇Sy[ix,iy] = 0.5*((B[ix+1, iy+1]-B[ix+1,iy])/dy + (H[ix+1, iy+1]-H[ix+1,iy])/dy + (B[ix,iy+1]-B[ix,iy])/dy + (H[ix,iy+1]-H[ix,iy])/dy)
-        gradS[ix, iy] = sqrt(av_ya_∇Sx[ix,iy]^2+av_xa_∇Sy[ix,iy]^2)
-        D[ix, iy] = (a*@av_xy(H)^(n+2)+as[ix,iy]*@av_xy(H)^n)*gradS[ix,iy]^(n-1)
+        # av_ya_∇Sx[ix,iy] = 0.5*((B[ix+1, iy+1]-B[ix,iy+1])/dx + (H[ix+1, iy+1]-H[ix,iy+1])/dx + (B[ix+1,iy]-B[ix,iy])/dx + (H[ix+1,iy]-H[ix,iy])/dx)
+        # av_xa_∇Sy[ix,iy] = 0.5*((B[ix+1, iy+1]-B[ix+1,iy])/dy + (H[ix+1, iy+1]-H[ix+1,iy])/dy + (B[ix,iy+1]-B[ix,iy])/dy + (H[ix,iy+1]-H[ix,iy])/dy)
+        ∇Sx = 0.5*((B[ix+1, iy+1]-B[ix,iy+1])/dx + (H[ix+1, iy+1]-H[ix,iy+1])/dx + (B[ix+1,iy]-B[ix,iy])/dx + (H[ix+1,iy]-H[ix,iy])/dx)
+        ∇Sy = 0.5*((B[ix+1, iy+1]-B[ix+1,iy])/dy + (H[ix+1, iy+1]-H[ix+1,iy])/dy + (B[ix,iy+1]-B[ix,iy])/dy + (H[ix,iy+1]-H[ix,iy])/dy)
+        # gradS[ix, iy] = sqrt(av_ya_∇Sx[ix,iy]^2+av_xa_∇Sy[ix,iy]^2)
+        # D[ix, iy] = (a*@av_xy(H)^(n+2)+as[ix,iy]*@av_xy(H)^n)*gradS[ix,iy]^(n-1)
+        D[ix, iy] = (a*@av_xy(H)^(n+2)+as[ix,iy]*@av_xy(H)^n)*sqrt(∇Sx^2+∇Sy^2)^(n-1)
     end 
     return 
 end 
-
 function compute_q!(qHx, qHy, D, H, B, nx, ny, dx, dy)
     @get_thread_idx(H)
     if ix <= nx-1 && iy <= ny-2
@@ -274,14 +276,25 @@ function solve!(problem::AdjointProblem)
         # compute dQ/dH 
         dR_qHx .= 0; dR_qHy .= 0 ; dR_H .= 0; dq_D .= 0.0; dq_H .= 0; dD_H .= 0
         dR .= .-∂J_∂H; tmp2 .= r 
+
+        # if iter == 1
+        #     write("output/adjoint_old_start.dat", Array(tmp2), Array(dR_qHx), Array(dR_qHy),Array(dR), Array(dq_D), Array(dR_H), Array(dq_H), Array(dD_H))
+        # else 
+        #     error("check adjoint start")
+        # end
         
         CUDA.@sync @cuda threads = threads blocks = blocks grad_residual_H_1!(tmp1, tmp2, qHx, dR_qHx, qHy, dR_qHy, β, H, dR_H, B, z_ELA, b_max, nx, ny, dx, dy)
+        # if iter <= 10
+        #     write("output/adjoint_old_start_1_$(iter).dat", Array(tmp2), Array(dR_qHx), Array(dR_qHy), Array(dR_H))
+        # else
+        #     error("nth iteration")
+        # end
         CUDA.@sync @cuda threads = threads blocks = blocks grad_residual_H_2!(qHx, dR_qHx, qHy, dR_qHy, D, dq_D, H, dq_H, B, nx, ny, dx, dy)
         CUDA.@sync @cuda threads = threads blocks = blocks grad_residual_H_3!(D, dq_D, gradS, av_ya_∇Sx, av_xa_∇Sy, H, dD_H, B, a, as, n, nx, ny, dx, dy)
         CUDA.@sync @cuda threads = threads blocks = blocks grad_residual_H!(dR, dD_H, dq_H, dR_H, nx, ny)
         CUDA.@sync @cuda threads = threads blocks = blocks update_r!(r, R, dR, dt, H, H_cut, dmp, nx, ny)
         if iter <= 10 
-            write("output/adjoint_old_$(iter).dat", Array(r), Array(dR), Array(dR_qHx), Array(dR_qHy), Array(dq_D))
+            write("output/adjoint_old_$(iter).dat", Array(r), Array(dR), Array(dR_qHx), Array(dR_qHy), Array(dq_D), Array(dR_H), Array(dq_H), Array(dD_H))
         else
             error("nth iteration")
         end
@@ -310,7 +323,7 @@ function solve!(problem::AdjointProblem)
         error("adjoint solve not converged")
     end 
     @printf("adjoint solve converged: #iter/nx = %.1f, err = %.1e\n", iter/nx, merr)
-    write("output/adjoint_old.dat", Array(r), Array(dR), Array(dR_qHx), Array(dR_qHy), Array(dq_D))
+    write("output/adjoint_old.dat", Array(r), Array(dR), Array(dR_qHx), Array(dR_qHy), Array(dq_D), Array(dR_H), Array(dq_H), Array(dD_H))
     return 
 end 
 
@@ -562,8 +575,6 @@ function adjoint_2D()
     solve!(adjoint_problem)
     println("done")
 
-
-    error("here")
 
     Hp_obs = copy(H_obs)
     Hp_obs[H_obs.==0.0] .= NaN

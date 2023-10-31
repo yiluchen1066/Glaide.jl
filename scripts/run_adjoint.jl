@@ -12,7 +12,6 @@ function main()
 
     # time scale
     tsc = 1 / aρgn0 / lsc^npow
-
     # non-dimensional numbers 
     s_f_syn  = 0.01                  # sliding to ice flow ratio: s_f   = asρgn0/aρgn0/lx^2
     s_f      = 0.026315789473684213 # sliding to ice flow ratio: s_f   = asρgn0/aρgn0/lx^2
@@ -104,6 +103,9 @@ function main()
     q̄Hy     = CUDA.zeros(Float64, nx - 2, ny - 1)
     D̄       = CUDA.zeros(Float64, nx - 1, ny - 1)
     H̄       = CUDA.zeros(Float64, nx, ny)
+    H̄_1     = CUDA.zeros(Float64, nx, ny)
+    H̄_2     = CUDA.zeros(Float64, nx, ny)
+    H̄_3     = CUDA.zeros(Float64, nx, ny)
     R̄H      = CUDA.zeros(Float64, nx, ny)
     Ās      = CUDA.zeros(Float64, nx - 1, ny - 1)
     ψ_H     = CUDA.zeros(Float64, nx, ny)
@@ -134,10 +136,10 @@ function main()
                   launch_config     = (; nthreads, nblocks))
     fwd_visu =   (; plt, fig)
 
-    adj_params = (fields            = (;q̄Hx, q̄Hy, D̄, R̄H, Ās, ψ_H, H̄),
+    adj_params = (fields            = (;q̄Hx, q̄Hy, D̄, R̄H, Ās, ψ_H, H̄, H̄_1, H̄_2, H̄_3),
                   numerical_params = (; ϵtol_adj, ncheck_adj, H_cut))
 
-    #loss_params = (fields           = (;H_obs, ∂J_∂H))
+    loss_params = (fields           = (;H_obs, ∂J_∂H),)
 
     @info "Solve SIA"
     @show maximum(As_syn)
@@ -150,8 +152,11 @@ function main()
     write("output/forward_new.dat", Array(H), Array(D), Array(As), Array(ELA), Array(β))
 
     @show(Float64(maximum(H.-H_obs)))
-    solve_adjoint_sia!(H_obs, ∂J_∂H, fwd_params, adj_params)
-    write("output/adjoint_new.dat", Array(ψ_H), Array(H̄), Array(q̄Hx), Array(q̄Hy), Array(D̄))
+    solve_adjoint_sia!(fwd_params, adj_params, loss_params)
+    plt.H[3] = Array(ψ_H)
+    display(fig)
+
+    write("output/adjoint_new.dat", Array(ψ_H), Array(H̄), Array(q̄Hx), Array(q̄Hy), Array(D̄), Array(H̄_1), Array(H̄_2), Array(H̄_3))
 
     return
 end

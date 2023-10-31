@@ -7,7 +7,7 @@ include("macros.jl")
 # integrate SIA equations to steady state
 function solve_sia!(As, fields, scalars, numerical_params, launch_config; visu=nothing)
     # extract variables from tuples
-    (; H, B, β, ELA, D, qHx, qHy, RH, Err_rel, Err_abs) = fields
+    (; H, B, β, ELA, D, qHx, qHy, RH, Err_rel, Err_abs)     = fields
     (; aρgn0, b_max, npow)                                  = scalars
     (; nx, ny, dx, dy, maxiter, ncheck, ϵtol)               = numerical_params
     (; nthreads, nblocks)                                   = launch_config
@@ -16,7 +16,6 @@ function solve_sia!(As, fields, scalars, numerical_params, launch_config; visu=n
     RH .= 0
     Err_rel .= 0
     Err_abs .= 0
-    H       .= 0.0
     CUDA.synchronize()
     # iterative loop 
     err_evo = (iters = Float64[],
@@ -38,10 +37,7 @@ function solve_sia!(As, fields, scalars, numerical_params, launch_config; visu=n
             @cuda threads = nthreads blocks = nblocks compute_abs_error!(Err_abs, RH, H)
             Err_rel .-= H
             CUDA.synchronize()
-            if iter == 1
-                err_abs0 = maximum(abs.(Err_abs))
-            end
-            err_abs = maximum(abs.(Err_abs)) / err_abs0
+            err_abs = maximum(abs.(Err_abs))
             err_rel = maximum(abs.(Err_rel)) / maximum(H)
             push!(err_evo.iters, iter / nx)
             push!(err_evo.abs, err_abs)
