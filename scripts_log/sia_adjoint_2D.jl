@@ -21,8 +21,6 @@ function solve_adjoint_sia!(fwd_params, adj_params, loss_params)
     ∂J_∂H .= H .- H_obs
     merr = 2ϵtol_adj
     iter = 1
-    @show dt    
-    @show(H_cut)
     #CUDA.synchronize()
     while merr >= ϵtol_adj && iter < maxiter
         #initialization 
@@ -61,8 +59,6 @@ function solve_adjoint_sia!(fwd_params, adj_params, loss_params)
             CUDA.synchronize()
             merr = maximum(abs.(dt .* H̄[2:(end - 1), 2:(end - 1)])) / maximum(abs.(ψ_H))
             @printf("error = %.1e\n", merr)
-            # visualization for adjoint solver
-            @printf("H̄ = %.1e\n", maximum(abs.(H̄)))
             (isfinite(merr) && merr > 0) || error("adjoint solve failed")
         end
 

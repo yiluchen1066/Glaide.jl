@@ -1,8 +1,8 @@
 using CairoMakie
 
-include("sia_forward_2D.jl")
-include("sia_adjoint_2D.jl")
-include("sia_loss_2D.jl")
+include("sia_forward_flux_2D.jl")
+include("sia_adjoint_flux_2D.jl")
+include("sia_loss_flux_2D.jl")
 
 function adjoint_2D()
     ## physics
@@ -47,13 +47,14 @@ function adjoint_2D()
     nx, ny     = 128, 128
     ϵtol       = (abs=1e-8, rel=1e-8)
     maxiter    = 5 * nx^2
-    ncheck     = ceil(Int, 0.05 * nx^2)
+    ncheck     = ceil(Int, 0.25 * nx^2)
     nthreads   = (16, 16)
     nblocks    = ceil.(Int, (nx, ny) ./ nthreads)
     ϵtol_adj   = 1e-8
-    ncheck_adj = ceil(Int, 0.05 * nx^2)
+    ncheck_adj = ceil(Int, 0.25 * nx^2)
     ngd        = 100
     bt_niter   = 5
+    Δγ         = 0.2
 
     ## pre-processing
     dx, dy = lx / nx, ly / ny
@@ -76,17 +77,20 @@ function adjoint_2D()
     β   = CUDA.fill(β0, nx, ny) .+ β1 .* atan.(xc ./ lx)
     ELA = fill(z_ELA_0, nx, ny) .+ z_ELA_1 .* atan.(yc' ./ ly .+ 0 .* xc) |> CuArray
 
-    D          = CUDA.zeros(Float64, nx - 1, ny - 1)
-    qHx        = CUDA.zeros(Float64, nx - 1, ny - 2)
-    qHy        = CUDA.zeros(Float64, nx - 2, ny - 1)
-    As_syn     = CUDA.fill(asρgn0_syn, nx - 1, ny - 1)
-    As         = CUDA.fill(asρgn0, nx - 1, ny - 1)
-    RH         = CUDA.zeros(Float64, nx, ny)
-    Err_rel    = CUDA.zeros(Float64, nx, ny)
-    Err_abs    = CUDA.zeros(Float64, nx, ny)
-    As_ini     = copy(As)
-    logAs      = copy(As)
-    logAs_syn  = copy(As)
+    D         = CUDA.zeros(Float64, nx - 1, ny - 1)
+    qHx       = CUDA.zeros(Float64, nx - 1, ny - 2)
+    qHy       = CUDA.zeros(Float64, nx - 2, ny - 1)
+    qHx_obs   = CUDA.zeros(Float64, nx - 1, ny - 2)
+    qHy_obs   = CUDA.zeros(Float64, nx - 2, ny - 1)
+    As_syn    = CUDA.fill(asρgn0_syn, nx - 1, ny - 1)
+    As        = CUDA.fill(asρgn0, nx - 1, ny - 1)
+    RH        = CUDA.zeros(Float64, nx, ny)
+    Err_rel   = CUDA.zeros(Float64, nx, ny)
+    Err_abs   = CUDA.zeros(Float64, nx, ny)
+    As_ini    = copy(As)
+    logAs     = copy(As)
+    logAs_syn = copy(As)
+    logAs_ini = copy(As)
     #init adjoint storage
     q̄Hx = CUDA.zeros(Float64, nx - 1, ny - 2)
     q̄Hy = CUDA.zeros(Float64, nx - 2, ny - 1)
@@ -94,20 +98,27 @@ function adjoint_2D()
     H̄ = CUDA.zeros(Float64, nx, ny)
     R̄H = CUDA.zeros(Float64, nx, ny)
     Ās = CUDA.zeros(Float64, nx - 1, ny - 1)
+    logĀs = CUDA.zeros(Float64, nx - 1, ny - 1)
     Tmp = CUDA.zeros(Float64, nx - 1, ny - 1)
     ψ_H = CUDA.zeros(Float64, nx, ny)
     ∂J_∂H = CUDA.zeros(Float64, nx, ny)
+    ∂J_∂qx = CUDA.zeros(Float64, nx - 1, ny - 2)
+    ∂J_∂qy = CUDA.zeros(Float64, nx - 2, ny - 1)
+
+    cost_evo = Float64[]
+    iter_evo = Float64[]
 
     # setup visualisation
     begin
         #init visualization 
-        fig = Figure(; resolution=(1400, 1200), fontsize=32)
+        fig = Figure(; resolution=(1600, 1200), fontsize=32)
         #opts    = (xaxisposition=:top,) # save for later 
 
         axs = (H    = Axis(fig[1, 1][1, 1]; aspect=DataAspect(), xlabel=L"x", ylabel=L"y", title=L"H"),
                H_s  = Axis(fig[1, 2]; aspect=1, xlabel=L"H"),
                As   = Axis(fig[2, 1][1, 1]; aspect=DataAspect(), xlabel=L"x", title=L"\log_{10}(A_s)"),
-               As_s = Axis(fig[2, 2]; aspect=1, xlabel=L"\log_{10}(A_s)"))
+               As_s = Axis(fig[2, 2]; aspect=1, xlabel=L"\log_{10}(A_s)"),
+               err  = Axis(fig[2, 3]; yscale=log10, title=L"convergence", xlabel="iter", ylabel=L"error"))
 
         #xlims CairoMakie.xlims!()
         #ylims 
@@ -124,12 +135,13 @@ function adjoint_2D()
         plts = (H    = heatmap!(axs.H, xc, yc, Array(H); colormap=:turbo),
                 H_v  = vlines!(axs.H, xc[nx ÷ 2]; color=:magenta, linewidth=4, linestyle=:dash),
                 H_s  = (lines!(axs.H_s, Point2.(Array(H_obs[nx ÷ 2, :]), yc); linewidth=4, color=:red, label="synthetic"),
-                        lines!(axs.H_s, Point2.(Array(H[nx ÷ 2, :]), yc); linewidth=4, color=:blue, label="current")),
+                lines!(axs.H_s, Point2.(Array(H[nx ÷ 2, :]), yc); linewidth=4, color=:blue, label="current")),
                 As   = heatmap!(axs.As, xc_1, yc_1, Array(logAs); colormap=:viridis),
                 As_v = vlines!(axs.As, xc_1[nx ÷ 2]; linewidth=4, color=:magenta, linewtyle=:dash),
                 As_s = (lines!(axs.As_s, Point2.(Array(logAs[nx ÷ 2, :]), yc_1); linewith=4, color=:blue, label="current"),
-                        lines!(axs.As_s, Point2.(Array(logAs_ini[nx ÷ 2, :]), yc_1); linewidth=4, color=:green, label="initial"),
-                        lines!(axs.As_s, Point2.(Array(logAs_syn[nx ÷ 2, :]), yc_1); linewidth=4, color=:red, label="synthetic")))
+                lines!(axs.As_s, Point2.(Array(logAs_ini[nx ÷ 2, :]), yc_1); linewidth=4, color=:green, label="initial"),
+                lines!(axs.As_s, Point2.(Array(logAs_syn[nx ÷ 2, :]), yc_1); linewidth=4, color=:red, label="synthetic")),
+                err  = scatterlines!(axs.err, Point2.(iter_evo, cost_evo); linewidth=4))
 
         Colorbar(fig[1, 1][1, 2], plts.H)
         Colorbar(fig[2, 1][1, 2], plts.As)
@@ -148,61 +160,57 @@ function adjoint_2D()
     @show maximum(As_syn)
     #solve_sia!(As_syn, fwd_params...; visu=fwd_visu)
     H .= 0.0
-    solve_sia!(As_syn, fwd_params...)
+    solve_sia!(logAs_syn, fwd_params...)
     H_obs .= H
+    qHx_obs .= qHx
+    qHy_obs .= qHy
     @info "synthetic solve done"
 
     adj_params = (fields=(; q̄Hx, q̄Hy, D̄, R̄H, Ās, ψ_H, H̄),
                   numerical_params=(; ϵtol_adj, ncheck_adj, H_cut))
 
-    loss_params = (fields=(; H_obs, ∂J_∂H),)
+    loss_params = (fields=(; H_obs, qHx_obs, qHy_obs, ∂J_∂H, ∂J_∂qx, ∂J_∂qy),)
 
     #this is to switch on/off the smooth of the sensitivity 
     reg = (; nsm=20, Tmp)
 
     #Define loss functions 
-    J(_As) = loss(As, fwd_params, loss_params)
-    ∇J!(_Ās, _As) = ∇loss!(Ās, As, fwd_params, adj_params, loss_params; reg)
+    J(_logAs) = loss(logAs, fwd_params, loss_params)
+    ∇J!(_logĀs, _logAs) = ∇loss!(logĀs, logAs, fwd_params, adj_params, loss_params; reg)
     @info "inversion for As"
 
     #initial guess
     As .= As_ini
+    logAs .= log10.(As)
     γ = γ0
     J_old = 0.0
     J_new = 0.0
     #solve for H with As and compute J_old
-    H    .= 0.0
-    J_old = J(As)
+    H .= 0.0
+    @show maximum(logAs)
+    J_old = J(logAs)
     J_ini = J_old
 
     @info "Gradient descent - inversion for As"
-    cost_evo = Float64[]
-    iter_evo = Float64[]
     for igd in 1:ngd
-        As_ini .= As
+        #As_ini .= As
         println("GD iteration $igd \n")
-        ∇J!(Ās, As)
-        for bt_iter in 1:bt_niter
-            @. As = clamp(As - γ * Ās, 0.0, Inf)
-            J_new = J(As)
-            if J_new < J_old
-                γ *= 1.1
-                J_old = J_new
-                @printf("new solution accepted \n")
-                break
-            else
-                As .= As_ini
-                γ = γ * 0.5
-            end
-        end
+        ∇J!(logĀs, logAs)
+        γ = Δγ / maximum(abs.(logĀs))
+        @. logAs -= γ * logĀs
+
         push!(iter_evo, igd)
-        push!(cost_evo, J(As))
+        push!(cost_evo, J(logAs))
         #visualization 
-        
+
+        @printf " min(As) = %1.2e \n" minimum(exp10.(logAs))
+        @printf " --> Loss J = %1.2e (γ = %1.2e) \n" last(cost_evo) / first(cost_evo) γ
+
         plts.H[3]       = Array(H)
         plts.H_s[2][1]  = Point2.(Array(H[nx ÷ 2, :]), yc)
         plts.As[3]      = Array(log10.(As))
         plts.As_s[1][1] = Point2.(Array(log10.(As[nx ÷ 2, :])), yc_1)
+        plts.err[1]     = Point2.(iter_evo, cost_evo ./ 0.99cost_evo[1])
         display(fig)
     end
     return

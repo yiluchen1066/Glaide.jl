@@ -1,4 +1,4 @@
-include("sia_forward_2D.jl")
+include("sia_forward_flux_2D.jl")
 
 function main()
     ## physics
@@ -31,7 +31,7 @@ function main()
     z_ELA_0, z_ELA_1 = z_ela_l_1 * lsc, z_ela_l_2 * lsc # 2150, 900
     B0               = B0_l * lsc # 3500
     asρgn0           = s_f * aρgn0 * lsc^2 #5.7e-20*(ρg)^n = 5.7e-20*(910*9.81)^3 = 4.055141889402214e-8
-    asρgn0_syn       = s_f_syn*aρgn0*lsc^2 #5.0e-18*(ρg)^n = 3.54627498316e-6
+    asρgn0_syn       = s_f_syn * aρgn0 * lsc^2 #5.0e-18*(ρg)^n = 3.54627498316e-6
     b_max            = b_max_nd * lsc / tsc  #2.0 m/a = 6.341958396752917e-8 m/s
     β0, β1           = β1tsc / tsc, β2tsc / tsc  # 3.1709791983764586e-10, 4.756468797564688e-10
 
@@ -76,8 +76,8 @@ function main()
 
     ## init arrays
     # ice thickness
-    H         = CUDA.zeros(Float64, nx, ny)
-    H_obs     = CUDA.zeros(Float64, nx, ny)
+    H     = CUDA.zeros(Float64, nx, ny)
+    H_obs = CUDA.zeros(Float64, nx, ny)
 
     # bedrock elevation
     ω = 8 # TODO: check!
@@ -85,14 +85,14 @@ function main()
                   exp(-xc^2 / w2 - (yc' - ly / ω)^2 / w1))) |> CuArray
 
     # other fields
-    β       = CUDA.fill(β0, nx, ny) .+ β1 .* atan.(xc ./ lx)
-    ELA     = fill(z_ELA_0, nx, ny) .+ z_ELA_1 .* atan.(yc' ./ ly .+ 0 .* xc) |> CuArray
+    β   = CUDA.fill(β0, nx, ny) .+ β1 .* atan.(xc ./ lx)
+    ELA = fill(z_ELA_0, nx, ny) .+ z_ELA_1 .* atan.(yc' ./ ly .+ 0 .* xc) |> CuArray
 
     D       = CUDA.zeros(Float64, nx - 1, ny - 1)
     qHx     = CUDA.zeros(Float64, nx - 1, ny - 2)
     qHy     = CUDA.zeros(Float64, nx - 2, ny - 1)
     As      = CUDA.fill(asρgn0, nx - 1, ny - 1)
-    As_syn  = CUDA.fill(asρgn0_syn, nx-1, ny-1)
+    As_syn  = CUDA.fill(asρgn0_syn, nx - 1, ny - 1)
     RH      = CUDA.zeros(Float64, nx, ny)
     Err_rel = CUDA.zeros(Float64, nx, ny)
     Err_abs = CUDA.zeros(Float64, nx, ny)
@@ -125,17 +125,14 @@ function main()
     @show maximum(As_syn)
     solve_sia!(As_syn, fwd_params...; visu=fwd_visu)
     H_obs .= H
-    write("output/synthetic_new.dat", Array(H_obs), Array(D), Array(As_syn), Array(ELA), Array(β))
 
     @info "solve SIA"
     @show maximum(As)
-    solve_sia!(As, fwd_params...; visu=fwd_visu) 
-    write("output/forward_new.dat", Array(H), Array(D), Array(As), Array(ELA), Array(β))
+    solve_sia!(As, fwd_params...; visu=fwd_visu)
 
-    @show(maximum(H.- H_obs))
+    @show(maximum(H .- H_obs))
 
     return
 end
 
 main()
-

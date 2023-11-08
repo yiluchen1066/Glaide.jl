@@ -5,17 +5,18 @@ using Printf
 include("macros.jl")
 
 # integrate SIA equations to steady state
-function solve_sia!(As, fields, scalars, numerical_params, launch_config; visu=nothing)
+function solve_sia!(logAs, fields, scalars, numerical_params, launch_config; visu=nothing)
     # extract variables from tuples
-    (; H, B, β, ELA, D, qHx, qHy, RH, Err_rel, Err_abs)     = fields
-    (; aρgn0, b_max, npow)                                  = scalars
-    (; nx, ny, dx, dy, maxiter, ncheck, ϵtol)               = numerical_params
-    (; nthreads, nblocks)                                   = launch_config
+    (; H, B, β, ELA, D, qHx, qHy, As, RH, Err_rel, Err_abs) = fields
+    (; aρgn0, b_max, npow)                              = scalars
+    (; nx, ny, dx, dy, maxiter, ncheck, ϵtol)           = numerical_params
+    (; nthreads, nblocks)                               = launch_config
     # initialize 
     err_abs0 = Inf
     RH .= 0
     Err_rel .= 0
     Err_abs .= 0
+    As      .= exp10.(logAs)
     CUDA.synchronize()
     # iterative loop 
     err_evo = (iters = Float64[],
@@ -137,7 +138,7 @@ end
 
 function update_visualisation!(As, visu, fields, err_evo)
     (; fig, plt)    = visu
-    (; H)       = fields
+    (; H)           = fields
     plt.H[3]        = Array(H)
     plt.As[3]       = Array(log10.(As))
     plt.Err[1][1][] = Point2.(err_evo.iters, err_evo.abs)

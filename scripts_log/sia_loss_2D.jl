@@ -21,16 +21,16 @@ function smooth!(As, As2, nsm, nthreads, nblocks)
 end
 
 #compute the cost function 
-function loss(As, fwd_params, loss_params; kwags...)
+function loss(logAs, fwd_params, loss_params; kwags...)
     (; H_obs) = loss_params.fields
     @info "Forward solve"
-    solve_sia!(As, fwd_params...; kwags...)
+    solve_sia!(logAs, fwd_params...; kwags...)
     H = fwd_params.fields.H
     return 0.5 * sum((H .- H_obs) .^ 2)
 end
 
 #compute the sensitivity: hradient of the loss function
-function ∇loss!(Ās, As, fwd_params, adj_params, loss_params; reg=nothing, kwags...)
+function ∇loss!(logĀs, logAs, fwd_params, adj_params, loss_params; reg=nothing, kwags...)
     #unpack
     (; RH, qHx, qHy, β, H, B, D, ELA, As) = fwd_params.fields
     (; dx, dy)                            = fwd_params.numerical_params
@@ -40,12 +40,12 @@ function ∇loss!(Ās, As, fwd_params, adj_params, loss_params; reg=nothing, kw
     (; H_obs, ∂J_∂H)                      = loss_params.fields
 
     @info "Forward solve"
-    solve_sia!(As, fwd_params...; kwags...)
+    solve_sia!(logAs, fwd_params...; kwags...)
 
     @info "Adjoint solve"
     solve_adjoint_sia!(fwd_params, adj_params, loss_params)
 
-    Ās  .= 0.0
+    logĀs  .= 0.0
     R̄H  .= .-ψ_H
     q̄Hx .= 0.0
     q̄Hy .= 0.0
@@ -71,21 +71,21 @@ function ∇loss!(Ās, As, fwd_params, adj_params, loss_params; reg=nothing, kw
     @cuda threads = nthreads blocks = nblocks ∇(compute_D!,
                                                 DupNN(D, D̄),
                                                 Const(H), Const(B),
-                                                DupNN(As, Ās), Const(aρgn0), Const(npow), Const(dx), Const(dy))
+                                                DupNN(As, logĀs), Const(aρgn0), Const(npow), Const(dx), Const(dy))
 
-    Ās[[1, end], :] = Ās[[2, end - 1], :]
-    Ās[:, [1, end]] = Ās[:, [2, end - 1]]
+    logĀs[[1, end], :] = logĀs[[2, end - 1], :]
+    logĀs[:, [1, end]] = logĀs[:, [2, end - 1]]
 
     #smoothing 
+    # so now we also change to smoothing the logĀs
     if !isnothing(reg)
         (; nsm, Tmp) = reg
-        Tmp .= Ās
-        smooth!(Ās, Tmp, nsm, nthreads, nblocks)
+        Tmp .= logĀs
+        smooth!(logĀs, Tmp, nsm, nthreads, nblocks)
     end
-    # so what is reg used for: 
-    # in the example code, reg is for 
+
     # convert to dJ/dlogAs
-    #Ās .*= As 
+    logĀs .*= As 
 
     return
 end

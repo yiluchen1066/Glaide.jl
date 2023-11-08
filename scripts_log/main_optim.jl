@@ -1,4 +1,5 @@
 using CairoMakie
+using Optim
 
 include("sia_forward_2D.jl")
 include("sia_adjoint_2D.jl")
@@ -114,7 +115,7 @@ function adjoint_2D()
                H_s  = Axis(fig[1, 2]; aspect=1, xlabel=L"H"),
                As   = Axis(fig[2, 1][1, 1]; aspect=DataAspect(), xlabel=L"x", title=L"\log_{10}(A_s)"),
                As_s = Axis(fig[2, 2]; aspect=1, xlabel=L"\log_{10}(A_s)"),
-               err  = Axis(fig[2, 3]; yscale=log10, title=L"convergence", xlabel="iter", ylabel=L"error"),)
+               err  = Axis(fig[2, 3]; yscale=log10, title=L"convergence", xlabel="iter", ylabel=L"error"))
 
         #xlims CairoMakie.xlims!()
         #ylims 
@@ -137,7 +138,7 @@ function adjoint_2D()
                 As_s = (lines!(axs.As_s, Point2.(Array(logAs[nx ÷ 2, :]), yc_1); linewith=4, color=:blue, label="current"),
                 lines!(axs.As_s, Point2.(Array(logAs_ini[nx ÷ 2, :]), yc_1); linewidth=4, color=:green, label="initial"),
                 lines!(axs.As_s, Point2.(Array(logAs_syn[nx ÷ 2, :]), yc_1); linewidth=4, color=:red, label="synthetic")),
-                err = scatterlines!(axs.err, Point2.(iter_evo, cost_evo), linewidth = 4),)
+                err  = scatterlines!(axs.err, Point2.(iter_evo, cost_evo); linewidth=4))
 
         Colorbar(fig[1, 1][1, 2], plts.H)
         Colorbar(fig[2, 1][1, 2], plts.As)
@@ -159,7 +160,6 @@ function adjoint_2D()
     H_obs .= H
     @info "synthetic solve done"
 
-
     adj_params = (fields=(; q̄Hx, q̄Hy, D̄, R̄H, Ās, ψ_H, H̄),
                   numerical_params=(; ϵtol_adj, ncheck_adj, H_cut))
 
@@ -176,36 +176,24 @@ function adjoint_2D()
     #initial guess
     As .= As_ini
     logAs .= log10.(As)
-    J_old = 0.0
-    J_new = 0.0
-    #solve for H with As and compute J_old
-    H .= 0.0
-    @show maximum(logAs)
-    J_old = J(logAs)
-    J_ini = J_old
-
-    @info "Gradient descent - inversion for As"
-
-    for igd in 1:ngd
-        println("GD iteration $igd \n")
-        ∇J!(logĀs, logAs)
-        γ = Δγ /maximum(abs.(logĀs))
-        @. logAs -= γ * logĀs
-
-        push!(iter_evo, igd)
-        push!(cost_evo, J(logAs))
-
-        @printf "  min(As) = %1.2e \n" minimum(exp10.(logAs))
-        @printf "  --> Loss J = %1.2e (γ = %1.2e)\n" last(cost_evo)/first(cost_evo) γ
-
-        #visualization 
-        plts.H[3]       = Array(H)
-        plts.H_s[2][1]  = Point2.(Array(H[nx ÷ 2, :]), yc)
-        plts.As[3]      = Array(logAs)
-        plts.As_s[1][1] = Point2.(Array(logAs[nx ÷ 2, :]), yc_1)
-        plts.err[1]     = Point2.(iter_evo, cost_evo ./ 0.99cost_evo[1])
-        display(fig)
-    end
+    #Optim 
+    opt = Optim.Options(; f_tol=1e-2,
+                        g_tol=1e-6,
+                        iterations=20,
+                        store_trace=true, show_trace=true)
+    result = optimize(J, ∇J!, logAs, LBFGS(), opt)
+    logAs .= Optim.minimizer(result)
+    @show result
+    cost_evo = Optim.f_trace(result)
+    cost_evo ./= cost_evo[1]
+    iter_evo = 1:length(cost_evo)
+    #visualization 
+    plts.H[3]       = Array(H)
+    plts.H_s[2][1]  = Point2.(Array(H[nx ÷ 2, :]), yc)
+    plts.As[3]      = Array(logAs)
+    plts.As_s[1][1] = Point2.(Array(logAs[nx ÷ 2, :]), yc_1)
+    plts.err[1]     = Point2.(iter_evo, cost_evo ./ 0.99cost_evo[1])
+    display(fig)
     return
 end
 
