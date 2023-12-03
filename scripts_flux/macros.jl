@@ -6,6 +6,7 @@ macro get_indices()
         iy = (blockIdx().y-1) * blockDim().y + threadIdx().y;
     end ))
 end 
+#CUDA specific 
 
 # averaging
 macro av_xy(A) esc(:( 0.25*($A[ix, iy    ] + $A[ix + 1, iy    ] +
