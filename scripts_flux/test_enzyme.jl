@@ -94,11 +94,6 @@ end
 function grad_loss_semi!(Ās, q̄x, q̄y, H̄, D̄, qx, qy, qmag, qmag_o, H, B, D, As, n, dx, dy)
 
 
-    @show H
-    @show size(H)
-    @show typeof(H)
-
-
     error("check")
 
     model!(qx, qy, qmag, H, B, D, As, A, n, dx, dy)
@@ -210,6 +205,10 @@ end
     # Colorbar(fig[2, 3][1, 2], plt.Δq)
 
     # display(fig)
+
+    @show H
+    @show size(H)
+    @show typeof(H)
 
 
     grad_loss_semi!(Ās_semi, q̄x, q̄y, H̄, D̄, qx, qy, qmag, qmag_o, H, B, D, As, n, dx, dy)
