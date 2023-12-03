@@ -54,24 +54,38 @@ function compute_q!(qx, qy, H, B, D, dx, dy)
     return
 end
 
-function model!(qx, qy, q_mag, H, B, D, As, A, n, dx, dy)
+function compute_qmag!(qmag, qx, qy, H)
+    nx, ny = size(H)
+    for iy in 1:(ny-1)
+        for ix in 1:(nx-1)
+            if ix <= nx-2 && iy <= ny -2 
+                qmag[ix,iy] = sqrt(@av_xa(qx)^2 + @av_ya(qy)^2)
+            end 
+        end 
+    end 
+    return 
+end 
+
+
+function model!(qx, qy, qmag, H, B, D, As, A, n, dx, dy)
     compute_D!(D, H, B, As, A, n, dx, dy)
     compute_q!(qx, qy, H, B, D, dx, dy)
-    q_mag .= sqrt.(avx(qx) .^ 2 .+ avy(qy) .^ 2)
+    compute_qmag!(qmag, qx, qy, H)
+    #q_mag .= sqrt.(@av_xa(qx) .^ 2 .+ @av_ya(qy) .^ 2)
     return
 end
 
-function ∂J_∂qx_vec!(q̄x, q_mag, q_obs_mag, qx)
+function ∂J_∂qx_vec!(q̄x, qmag, q_obs_mag, qx)
     q̄x                    .= 0.0
-    @. q̄x[1:(end - 1), :] += (q_mag - q_obs_mag) * (qx[1:(end - 1), :] + qx[2:end, :]) / 2 / (2 * qmag)
-    @. q̄x[2:end, :]       += (q_mag - q_obs_mag) * (qx[1:(end - 1), :] + qx[2:end, :]) / 2 / (2 * qmag)
+    @. q̄x[1:(end - 1), :] += (qmag - q_obs_mag) * (qx[1:(end - 1), :] + qx[2:end, :]) / 2 / (2 * qmag)
+    @. q̄x[2:end, :]       += (qmag - q_obs_mag) * (qx[1:(end - 1), :] + qx[2:end, :]) / 2 / (2 * qmag)
     return
 end
 
-function ∂J_∂qy_vec!(q̄y, q_mag, q_obs_mag, qy)
+function ∂J_∂qy_vec!(q̄y, qmag, q_obs_mag, qy)
     q̄y                    .= 0.0
-    @. q̄y[:, 1:(end - 1)] += (q_mag - q_obs_mag) * (qy[:, 1:(end - 1)] + qy[:, 2:end]) / 2 / (2 * qmag)
-    @. q̄y[:, 2:end]       += (q_mag - q_obs_mag) * (qy[:, 1:(end - 1)] + qy[:, 2:end]) / 2 / (2 * qmag)
+    @. q̄y[:, 1:(end - 1)] += (qmag - q_obs_mag) * (qy[:, 1:(end - 1)] + qy[:, 2:end]) / 2 / (2 * qmag)
+    @. q̄y[:, 2:end]       += (qmag - q_obs_mag) * (qy[:, 1:(end - 1)] + qy[:, 2:end]) / 2 / (2 * qmag)
     return
 end
 
@@ -91,10 +105,7 @@ function loss(qx, qy, qmag, qmag_o, D, H, B, As, A, n, dx, dy)
     return J
 end
 
-function grad_loss_semi!(Ās, q̄x, q̄y, H̄, D̄, qx, qy, qmag, qmag_o, H, B, D, As, n, dx, dy)
-
-
-    error("check")
+function grad_loss_semi!(Ās, q̄x, q̄y, H̄, D̄, qx, qy, qmag, qmag_o, H, B, D, As, A, n, dx, dy)
 
     model!(qx, qy, qmag, H, B, D, As, A, n, dx, dy)
     ∂J_∂qx_vec!(q̄x, qmag, qmag_o, qx)
@@ -171,6 +182,7 @@ end
     # forward model run with As_i to compute initial loss
     J0 = loss(qx, qy, qmag, qmag_o, D, H, B, As_i, A, n, dx, dy)
     # adjoint sensitivities
+    H̄       = zeros(size(H))
     q̄x      = zeros(size(qx))
     q̄y      = zeros(size(qy))
     Ās_full = zeros(size(As_i))
@@ -205,16 +217,8 @@ end
     # Colorbar(fig[2, 3][1, 2], plt.Δq)
 
     # display(fig)
-
-    @show H
-    @show size(H)
-    @show typeof(H)
-
-
-    grad_loss_semi!(Ās_semi, q̄x, q̄y, H̄, D̄, qx, qy, qmag, qmag_o, H, B, D, As, n, dx, dy)
-
-    #grad_loss_full!(Ās_full, qx, qy, q̄x, q̄y, q̄mag, D̄, qmag, qmag_o, D, H, B, As, A, n, dx, dy)
-
+    grad_loss_semi!(Ās_semi, q̄x, q̄y, H̄, D̄, qx, qy, qmag, qmag_o, H, B, D, As, A, n, dx, dy)
+    grad_loss_full!(Ās_full, qx, qy, q̄x, q̄y, q̄mag, D̄, qmag, qmag_o, D, H, B, As, A, n, dx, dy)
 
     @assert Ās_full ≈ Ās_semi
 
