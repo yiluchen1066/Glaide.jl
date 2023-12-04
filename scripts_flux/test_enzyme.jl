@@ -112,7 +112,7 @@ function grad_loss_semi!(Ās, q̄x, q̄y, H̄, D̄, qx, qy, qmag, qmag_o, H, B,
     ∂J_∂qy_vec!(q̄y, qmag, qmag_o, qy)
 
     #compute_q!(qx, qy, H, B, D, dx, dy)
-    Enzyme.autodiff(Reverse, compute_q!,
+    Enzyme.autodiff(Enzyme.Reverse, compute_q!,
                     DupNN(qx, q̄x),
                     DupNN(qy, q̄y),
                     DupNN(H, H̄),
@@ -121,7 +121,7 @@ function grad_loss_semi!(Ās, q̄x, q̄y, H̄, D̄, qx, qy, qmag, qmag_o, H, B,
                     Const(dx), Const(dy))
 
     #compute_D!(D, H, B, As, A, n, dx, dy)
-    Enzyme.autodiff(Reverse, compute_D!,
+    Enzyme.autodiff(Enzyme.Reverse, compute_D!,
                     DupNN(D, D̄),
                     Const(H), Const(B),
                     DupNN(As, Ās),
@@ -224,6 +224,11 @@ end
 
     @show Ās_semi 
     @show Ās_full
+
+    @show extrema(Ās_full)
+    @show extrema(Ās_semi)
+
+    @show norm(Ās_full .- Ās_semi, Inf)
 
     @assert Ās_full ≈ Ās_semi
 
