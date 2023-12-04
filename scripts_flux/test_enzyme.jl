@@ -220,6 +220,11 @@ end
     grad_loss_semi!(Ās_semi, q̄x, q̄y, H̄, D̄, qx, qy, qmag, qmag_o, H, B, D, As, A, n, dx, dy)
     grad_loss_full!(Ās_full, qx, qy, q̄x, q̄y, q̄mag, D̄, qmag, qmag_o, D, H, B, As, A, n, dx, dy)
 
+    
+
+    @show Ās_semi 
+    @show Ās_full
+
     @assert Ās_full ≈ Ās_semi
 
     @show norm(Ās_full .- Ās_semi, Inf)
