@@ -1,5 +1,7 @@
 using Enzyme
-#using GLMakie
+using GLMakie
+
+using LinearAlgebra
 
 # Enzyme shortcuts
 const DupNN = DuplicatedNoNeed
@@ -21,6 +23,9 @@ macro d_xi(A) esc(:($A[ix + 1, iy + 1] - $A[ix, iy + 1])) end
 macro d_yi(A) esc(:($A[ix + 1, iy + 1] - $A[ix + 1, iy])) end
 #! format: on
 
+@views avx(A) = 0.5 .* (A[1:end-1, :] .+ A[2:end, :])
+@views avy(A) = 0.5 .* (A[:, 1:end-1] .+ A[:, 2:end])
+
 # diffusion coefficient
 function compute_D!(D, H, B, As, A, n, dx, dy)
     for iy in axes(D, 2)
@@ -41,8 +46,8 @@ end
 # ice flow flux
 function compute_q!(qx, qy, H, B, D, dx, dy)
     nx, ny = size(H)
-    for iy in 1:(ny - 1)
-        for ix in 1:(nx - 1)
+    for iy in 1:(ny-1)
+        for ix in 1:(nx-1)
             if ix <= nx - 1 && iy <= ny - 2
                 qx[ix, iy] = -@av_ya(D) * (@d_xi(H) + @d_xi(B)) / dx
             end
@@ -56,36 +61,32 @@ end
 
 function compute_qmag!(qmag, qx, qy, H)
     nx, ny = size(H)
-    for iy in 1:(ny-1)
-        for ix in 1:(nx-1)
-            if ix <= nx-2 && iy <= ny -2 
-                qmag[ix,iy] = sqrt(@av_xa(qx)^2 + @av_ya(qy)^2)
-            end 
-        end 
-    end 
-    return 
-end 
-
+    for iy in 1:(ny-2)
+        for ix in 1:(nx-2)
+            qmag[ix, iy] = sqrt(@av_xa(qx)^2 + @av_ya(qy)^2)
+        end
+    end
+    return
+end
 
 function model!(qx, qy, qmag, H, B, D, As, A, n, dx, dy)
     compute_D!(D, H, B, As, A, n, dx, dy)
     compute_q!(qx, qy, H, B, D, dx, dy)
     compute_qmag!(qmag, qx, qy, H)
-    #q_mag .= sqrt.(@av_xa(qx) .^ 2 .+ @av_ya(qy) .^ 2)
     return
 end
 
 function ∂J_∂qx_vec!(q̄x, qmag, q_obs_mag, qx)
-    q̄x                    .= 0.0
-    @. q̄x[1:(end - 1), :] += (qmag - q_obs_mag) * (qx[1:(end - 1), :] + qx[2:end, :]) / 2 / (2 * qmag)
-    @. q̄x[2:end, :]       += (qmag - q_obs_mag) * (qx[1:(end - 1), :] + qx[2:end, :]) / 2 / (2 * qmag)
+    q̄x                .= 0
+    @. q̄x[1:end-1, :] += (qmag - q_obs_mag) * $avx(qx) / (2 * qmag)
+    @. q̄x[2:end, :]   += (qmag - q_obs_mag) * $avx(qx) / (2 * qmag)
     return
 end
 
 function ∂J_∂qy_vec!(q̄y, qmag, q_obs_mag, qy)
-    q̄y                    .= 0.0
-    @. q̄y[:, 1:(end - 1)] += (qmag - q_obs_mag) * (qy[:, 1:(end - 1)] + qy[:, 2:end]) / 2 / (2 * qmag)
-    @. q̄y[:, 2:end]       += (qmag - q_obs_mag) * (qy[:, 1:(end - 1)] + qy[:, 2:end]) / 2 / (2 * qmag)
+    q̄y                .= 0
+    @. q̄y[:, 1:end-1] += (qmag - q_obs_mag) * $avy(qy) / (2 * qmag)
+    @. q̄y[:, 2:end]   += (qmag - q_obs_mag) * $avy(qy) / (2 * qmag)
     return
 end
 
@@ -97,15 +98,17 @@ function loss(qx, qy, qmag, qmag_o, D, H, B, As, A, n, dx, dy)
     J = 0.0
     for iy in axes(qmag, 2)
         for ix in axes(qmag, 1)
-            # |q| = sqrt(qx^2 + qy^2)
             qmag[ix, iy] = sqrt(@av_xa(qx)^2 + @av_ya(qy)^2)
-            J += (qmag[ix, iy] - qmag_o[ix, iy])^2
+            J += 0.5 * (qmag[ix, iy] - qmag_o[ix, iy])^2
         end
     end
     return J
 end
 
-function grad_loss_semi!(Ās, q̄x, q̄y, H̄, D̄, qx, qy, qmag, qmag_o, H, B, D, As, A, n, dx, dy)
+function grad_loss_semi!(Ās, q̄x, q̄y, D̄, qx, qy, qmag, qmag_o, H, B, D, As, A, n, dx, dy)
+    q̄x .= 0
+    q̄y .= 0
+    D̄  .= 0
 
     model!(qx, qy, qmag, H, B, D, As, A, n, dx, dy)
     ∂J_∂qx_vec!(q̄x, qmag, qmag_o, qx)
@@ -115,7 +118,7 @@ function grad_loss_semi!(Ās, q̄x, q̄y, H̄, D̄, qx, qy, qmag, qmag_o, H, B,
     Enzyme.autodiff(Enzyme.Reverse, compute_q!,
                     DupNN(qx, q̄x),
                     DupNN(qy, q̄y),
-                    DupNN(H, H̄),
+                    Const(H),
                     Const(B),
                     DupNN(D, D̄),
                     Const(dx), Const(dy))
@@ -130,8 +133,12 @@ function grad_loss_semi!(Ās, q̄x, q̄y, H̄, D̄, qx, qy, qmag, qmag_o, H, B,
     return
 end
 
-function grad_loss_full!(Ās, qx, qy, q̄x, q̄y, q̄mag, D̄, qmag, qmag_o, D, H, B, As, A, n, dx, dy)
+function grad_loss_full!(Ās, q̄x, q̄y, q̄mag, D̄, qx, qy, qmag, qmag_o, D, H, B, As, A, n, dx, dy)
     loss(qx, qy, qmag, qmag_o, D, H, B, As, A, n, dx, dy)
+    q̄x   .= 0
+    q̄y   .= 0
+    q̄mag .= 0
+    D̄    .= 0
     Enzyme.autodiff(Enzyme.Reverse, loss, Active,
                     DupNN(qx, q̄x),
                     DupNN(qy, q̄y),
@@ -158,7 +165,7 @@ end
     # preprocessing
     dx, dy = lx / nx, ly / ny
     xc, yc = range(-lx / 2, lx / 2, nx), range(-ly / 2, ly / 2, ny)
-    xv, yv = 0.5 .* (xc[1:(end - 1)] .+ xc[2:end]), 0.5 .* (yc[1:(end - 1)] .+ yc[2:end])
+    xv, yv = 0.5 .* (xc[1:end-1] .+ xc[2:end]), 0.5 .* (yc[1:end-1] .+ yc[2:end])
     # fields
     H    = zeros(nx, ny)
     B    = zeros(nx, ny)
@@ -177,12 +184,11 @@ end
     # synthetic solve with As_s
     compute_D!(D, H, B, As_s, A, n, dx, dy)
     compute_q!(qx, qy, H, B, D, dx, dy)
-    qmag_o = sqrt.(0.5 .* (qx[1:(end - 1), :] .+ qx[2:end, :]) .^ 2 .+
-                   0.5 .* (qy[:, 1:(end - 1)] .+ qy[:, 2:end]) .^ 2)
+    qmag_o = sqrt.(0.5 .* (qx[1:end-1, :] .+ qx[2:end, :]) .^ 2 .+
+                   0.5 .* (qy[:, 1:end-1] .+ qy[:, 2:end]) .^ 2)
     # forward model run with As_i to compute initial loss
     J0 = loss(qx, qy, qmag, qmag_o, D, H, B, As_i, A, n, dx, dy)
     # adjoint sensitivities
-    H̄       = zeros(size(H))
     q̄x      = zeros(size(qx))
     q̄y      = zeros(size(qy))
     Ās_full = zeros(size(As_i))
@@ -217,6 +223,7 @@ end
     # Colorbar(fig[2, 3][1, 2], plt.Δq)
 
     # display(fig)
+<<<<<<< HEAD
     grad_loss_semi!(Ās_semi, q̄x, q̄y, H̄, D̄, qx, qy, qmag, qmag_o, H, B, D, As, A, n, dx, dy)
     grad_loss_full!(Ās_full, qx, qy, q̄x, q̄y, q̄mag, D̄, qmag, qmag_o, D, H, B, As, A, n, dx, dy)
 
@@ -282,6 +289,83 @@ end
             yield()
         end
     end
+=======
+    grad_loss_semi!(Ās_semi, q̄x, q̄y, D̄, qx, qy, qmag, qmag_o, H, B, D, As, A, n, dx, dy)
+
+    grad_loss_full!(Ās_full, q̄x, q̄y, q̄mag, D̄, qx, qy, qmag, qmag_o, D, H, B, As, A, n, dx, dy)
+
+    Ās_diff = Ās_semi .- Ās_full
+
+    fig = Figure(; size=(600, 800))
+    ax = (Ās_semi=Axis(fig[1, 1][1, 1]; aspect=DataAspect()),
+          Ās_full=Axis(fig[2, 1][1, 1]; aspect=DataAspect()),
+          Ās_diff=Axis(fig[3, 1][1, 1]; aspect=DataAspect()))
+    plt = (Ās_semi=heatmap!(ax.Ās_semi, xv, yv, Ās_semi; colormap=:turbo),
+           Ās_full=heatmap!(ax.Ās_full, xv, yv, Ās_full; colormap=:turbo),
+           Ās_diff=heatmap!(ax.Ās_diff, xv, yv, Ās_diff; colormap=:turbo))
+
+    Colorbar(fig[1, 1][1, 2], plt.Ās_semi)
+    Colorbar(fig[2, 1][1, 2], plt.Ās_full)
+    Colorbar(fig[3, 1][1, 2], plt.Ās_diff)
+
+    display(fig)
+
+    # @show Ās_semi
+    # @show Ās_full
+
+    # @assert Ās_full ≈ Ās_semi
+
+    # @show norm(Ās_full .- Ās_semi, Inf)
+    # @show extrema(Ās_full)
+
+    # error("check")
+
+    # # gradient descent
+    # for igd in 1:5000
+    #     q̄x .= 0
+    #     q̄y .= 0
+    #     Ās .= 0
+    #     # d(loss)/(dAs) with reverse mode
+    #     Enzyme.autodiff(Enzyme.Reverse, loss, Active,
+    #                     DupNN(qx, q̄x),
+    #                     DupNN(qy, q̄y),
+    #                     DupNN(qmag, q̄mag),
+    #                     Const(qmag_o),
+    #                     DupNN(D, D̄),
+    #                     Const(H),
+    #                     Const(B),
+    #                     DupNN(As, Ās),
+    #                     Const(A), Const(n), Const(dx), Const(dy))
+    #     # tune learning rate to never change As too much
+    #     γ = 5e-2 / maximum(abs.(Ās))
+    #     As .= As .- γ .* Ās
+    #     # smooth As (Tikhonov regularisation)
+    #     for _ in 1:1
+    #         As[2:end-1, 2:end-1] .+= 0.01 .* (As[1:end-2, 2:end-1] .+
+    #                                           As[3:end, 2:end-1] .+
+    #                                           As[2:end-1, 1:end-2] .+
+    #                                           As[2:end-1, 3:end] .-
+    #                                           4.0 .* As[2:end-1, 2:end-1])
+    #     end
+    #     # check loss (computes fluxes and magnitudes as side effect)
+    #     J = loss(qx, qy, qmag, qmag_o, D, H, B, As, A, n, dx, dy)
+
+    #     # report intermediate results
+    #     if igd % 50 == 0
+    #         push!(J_J0, J / J0)
+    #         push!(iters, igd)
+
+    #         plt.Ā[3] = Ās
+    #         plt.A[3] = log10.(As)
+    #         plt.A_sl[3][2] = As[:, ny÷2]
+    #         plt.Δq[3] = qmag .- qmag_o
+    #         plt.J[1] = Point2.(iters, J_J0)
+    #         autolimits!(ax.J)
+    #         autolimits!(ax.A_sl)
+    #         yield()
+    #     end
+    # end
+>>>>>>> 6f1bc869aa8fff88d54ef26c7fbd801dec67c9dc
 
     return
 end
