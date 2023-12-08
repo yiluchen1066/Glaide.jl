@@ -56,7 +56,7 @@ end
 # kernels
 
 # compute diffusion coefficient
-function compute_D!(D, H, B, As, aρgn0, n, dx, dy)
+function compute_D!(D, H, B, As, aρgn0, npow, dx, dy)
     @get_indices
     @inbounds if ix <= size(D, 1) && iy <= size(D, 2)
         ∇Sx = 0.5 *
@@ -69,7 +69,7 @@ function compute_D!(D, H, B, As, aρgn0, n, dx, dy)
                (H[ix + 1, iy + 1] - H[ix + 1, iy]) / dy +
                (B[ix, iy + 1] - B[ix, iy]) / dy +
                (H[ix, iy + 1] - H[ix, iy]) / dy)
-        D[ix, iy] = (aρgn0 * @av_xy(H)^(n + 2) + As[ix, iy] * @av_xy(H)^n) * sqrt(∇Sx^2 + ∇Sy^2)^(n - 1)
+        D[ix, iy] = (aρgn0 * @av_xy(H)^(npow + 2) + As[ix, iy] * @av_xy(H)^npow) * sqrt(∇Sx^2 + ∇Sy^2)^(npow - 1)
     end
     return
 end
