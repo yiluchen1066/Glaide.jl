@@ -85,22 +85,18 @@ function ∇loss!(logĀs, logAs, fwd_params, adj_params, loss_params; reg=nothi
                                                 DupNN(qHx, q̄Hx),
                                                 DupNN(qHy, q̄Hy),
                                                 DupNN(D, D̄),
-                                                DupNN(H, H̄),
+                                                Const(H),
                                                 Const(B), Const(dx), Const(dy))
     @cuda threads = nthreads blocks = nblocks ∇(compute_D!,
                                                 DupNN(D, D̄),
-                                                DupNN(H, H̄), Const(B),
+                                                Const(H), Const(B),
                                                 DupNN(As, logĀs), Const(aρgn0), Const(npow), Const(dx), Const(dy))
 
     logĀs[[1, end], :] = logĀs[[2, end - 1], :]
     logĀs[:, [1, end]] = logĀs[:, [2, end - 1]]
 
     #smoothing 
-    if !isnothing(reg)
-        (; nsm, Tmp) = reg
-        Tmp .= logĀs
-        smooth!(logĀs, Tmp, nsm, nthreads, nblocks)
-    end
+    
     # convert to dJ/dlogAs
     logĀs .*= As
 
@@ -113,18 +109,17 @@ function adjoint_2D()
     npow = 3
 
     # dimensionally independent physics 
-    lsc   = 1.0 #1e4 # length scale  
+    lsc   = 80.0 #1e4 # length scale  
     aρgn0 = 1.0 #1.3517139631340709e-12 # A*(ρg)^n = 1.9*10^(-24)*(910*9.81)^3
 
     # time scale
     tsc = 1 / aρgn0 / lsc^npow
     # non-dimensional numbers 
-    s_f_syn  = 0.01                  # sliding to ice flow ratio: s_f   = asρgn0/aρgn0/lx^2
-    s_f      = 0.026315789473684213 # sliding to ice flow ratio: s_f   = asρgn0/aρgn0/lx^2
+    s_f_syn  = 1e-4                  # sliding to ice flow ratio: s_f   = asρgn0/aρgn0/lx^2
+    s_f      =  0.01 # sliding to ice flow ratio: s_f   = asρgn0/aρgn0/lx^2
     b_max_nd = 4.706167536706325e-12 # m_max/lx*tsc m_max = 2.0 m/a lx = 1e3 tsc = 
     β1tsc    = 2.353083768353162e-10 # ratio between characteristic time scales of ice flow and accumulation/ablation βtsc = β0*tsc 
     β2tsc    = 3.5296256525297436e-10
-    γ_nd     = 1e2
 
     # geometry 
     lx_l, ly_l           = 25.0, 20.0  # horizontal length to characteristic length ratio
@@ -143,8 +138,7 @@ function adjoint_2D()
     asρgn0           = s_f * aρgn0 * lsc^2 #5.0e-18*(ρg)^n = 3.54627498316e-6
     b_max            = b_max_nd * lsc / tsc  #2.0 m/a = 6.341958396752917e-8 m/s
     β0, β1           = β1tsc / tsc, β2tsc / tsc  # 3.1709791983764586e-10, 4.756468797564688e-10
-    γ0               = γ_nd * lsc^(2 - 2npow) * tsc^(-2) #1.0e-2
-
+    
     ## numerics
     nx, ny     = 128, 128
     ϵtol       = (abs=1e-8, rel=1e-8)
@@ -152,9 +146,9 @@ function adjoint_2D()
     ncheck     = ceil(Int, 0.25 * nx^2)
     nthreads   = (16, 16)
     nblocks    = ceil.(Int, (nx, ny) ./ nthreads)
-    ngd        = 100
+    ngd        = 500
     bt_niter   = 5
-    Δγ         = 1e-10
+    Δγ         = 1e-1
 
     ## pre-processing
     dx, dy = lx / nx, ly / ny
@@ -221,6 +215,8 @@ function adjoint_2D()
 
         nan_to_zero(x) = isnan(x) ? zero(x) : x
 
+        # As_ini .= CuArray(asρgn0.*(1.0 .+ 1e1.*CUDA.rand(Float64, size(As_ini))))
+
         logAs     = log10.(As)
         logAs_syn = log10.(As_syn)
         logAs_ini = log10.(As_ini)
@@ -265,41 +261,50 @@ function adjoint_2D()
     @info "synthetic solve done"
 
     # define reg
-    reg = (; nsm=1, Tmp)
+    reg = (; nsm=100, Tmp)
 
     J(_logAs) = loss(logAs, fwd_params, loss_params)
     ∇J!(_logĀs, _logAs) = ∇loss!(logĀs, logAs, fwd_params, adj_params, loss_params; reg)
 
     #initial guess 
-    As .= As_syn
+    As .= As_ini
     @show maximum(As)
     logAs .= log10.(As)
-    γ = γ0
-    J_old = 0.0
-    J_new = 0.0
-    J_old = J(logAs)
-    J_ini = J_old
+    J0 = J(logAs)
+
+    push!(cost_evo, 1.0)
+    push!(iter_evo, 0)
 
     @info "Gradient descent - inversion for As"
     for igd in 1:ngd
         println("GD iteration $igd \n")
         ∇J!(logĀs, logAs)
         @show maximum(exp10.(logAs))
-        @show maximum(logĀs)
+        @show maximum(abs.(logĀs))
         γ = Δγ / maximum(abs.(logĀs))
         @. logAs -= γ * logĀs
+        As .= exp10.(logAs)
+
+        if !isnothing(reg)
+            (; nsm, Tmp) = reg
+            Tmp .= As
+            smooth!(As, Tmp, nsm, nthreads, nblocks)
+        end
+
         push!(iter_evo, igd)
-        push!(cost_evo, J(logAs))
+        push!(cost_evo, J(logAs)/J0)
 
         @printf " min(As) = %1.2e \n" minimum(exp10.(logAs))
-        @printf " --> Loss J = %1.2e (γ = %1.2e) \n" last(cost_evo) / first(cost_evo) γ
+        @printf " --> Loss J = %1.2e (γ = %1.2e) \n" last(cost_evo) γ
 
-        plts.H[3]       = Array(H)
-        plts.H_s[2][1]  = Point2.(Array(H[nx÷2, :]), yc)
-        plts.As[3]      = Array(log10.(As))
-        plts.As_s[1][1] = Point2.(Array(log10.(As[nx÷2, :])), yc_1)
-        plts.err[1]     = Point2.(iter_evo, cost_evo ./ 0.99cost_evo[1])
-        display(fig)
+        if igd % 10 == 0
+            plts.H[3]       = Array(H)
+            plts.H_s[2][1]  = Point2.(Array(H[nx÷2, :]), yc)
+            plts.As[3]      = Array(log10.(As))
+            plts.As_s[1][1] = Point2.(Array(log10.(As[nx÷2, :])), yc_1)
+            plts.err[1]     = Point2.(iter_evo, cost_evo)
+            display(fig)
+        end
     end
     return
 end
