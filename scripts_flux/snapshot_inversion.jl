@@ -24,7 +24,7 @@ function smooth!(As, As2, nsm, nthreads, nblocks)
         As, As2 = As2, As
     end
     return
-end
+end 
 
 function forward_model!(logAs, fwd_params)
     (; D, H, B, As, qHx, qHy, qmag) = fwd_params.fields
@@ -36,7 +36,6 @@ function forward_model!(logAs, fwd_params)
     @cuda threads = nthreads blocks = nblocks compute_D!(D, H, B, As, aρgn0, npow, dx, dy)
     @cuda threads = nthreads blocks = nblocks compute_q!(qHx, qHy, D, H, B, dx, dy)
     @. qmag = sqrt($avx(qHx)^2 + $avy(qHy)^2)
-
     return
 end
 

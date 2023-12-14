@@ -1,4 +1,5 @@
 using CairoMakie
+using Optim
 
 include("sia_forward_flux_2D.jl")
 include("sia_adjoint_flux_2D.jl")
@@ -55,9 +56,6 @@ function adjoint_2D()
     ngd        = 100
     bt_niter   = 5
     Δγ         = 0.2
-
-    w_H = 0.0
-    w_q = 1.0
 
     ## pre-processing
     dx, dy = lx / nx, ly / ny
@@ -176,7 +174,7 @@ function adjoint_2D()
                   numerical_params=(; ϵtol_adj, ncheck_adj, H_cut))
 
     loss_params = (fields=(; H_obs, qHx_obs, qHy_obs, qobs_mag, ∂J_∂H, ∂J_∂qx, ∂J_∂qy),
-                   scalars=(; w_H, w_q))
+                    scalars=(;w_H = 0.5, w_q=0.5))
 
     #this is to switch on/off the smooth of the sensitivity 
     reg = (; nsm=20, Tmp)
@@ -189,43 +187,26 @@ function adjoint_2D()
     #initial guess
     As .= As_ini
     logAs .= log10.(As)
-    γ = γ0
-    J_old = 0.0
-    J_new = 0.0
-    #solve for H with As and compute J_old
-    H .= 0.0
-    @show maximum(logAs)
-    J_old = J(logAs)
-    J_ini = J_old
+    #Optim 
+    opt = Optim.Options(; f_tol=1e-2,
+                        g_tol=1e-6,
+                        iterations=20,
+                        store_trace=true, show_trace=true)
+    result = optimize(J, ∇J!, logAs, LBFGS(), opt)
+    logAs .= Optim.minimizer(result)
+    @show result
+    cost_evo = Optim.f_trace(result)
+    cost_evo ./= cost_evo[1]
+    iter_evo = 1:length(cost_evo)
 
-    @info "Gradient descent - inversion for As"
-    for igd in 1:ngd
-        #As_ini .= As
-        println("GD iteration $igd \n")
-        ∇J!(logĀs, logAs)
-        γ = Δγ / maximum(abs.(logĀs))
-        @. logAs -= γ * logĀs
+    plts.H[3]       = Array(H)
+    plts.H_s[2][1]  = Point2.(Array(H[nx÷2, :]), yc)
+    plts.As[3]      = Array(log10.(As))
+    plts.As_s[1][1] = Point2.(Array(log10.(As[nx÷2, :])), yc_1)
+    plts.err[1]     = Point2.(iter_evo, cost_evo ./ 0.99cost_evo[1])
+    display(fig)
 
-        if !isnothing(reg)
-            (; nsm, Tmp) = reg
-            Tmp .= As
-            smooth!(As, Tmp, nsm, nthreads, nblocks)
-        end
 
-        push!(iter_evo, igd)
-        push!(cost_evo, J(logAs))
-        #visualization 
-
-        @printf " min(As) = %1.2e \n" minimum(exp10.(logAs))
-        @printf " --> Loss J = %1.2e (γ = %1.2e) \n" last(cost_evo) / first(cost_evo) γ
-
-        plts.H[3]       = Array(H)
-        plts.H_s[2][1]  = Point2.(Array(H[nx÷2, :]), yc)
-        plts.As[3]      = Array(log10.(As))
-        plts.As_s[1][1] = Point2.(Array(log10.(As[nx÷2, :])), yc_1)
-        plts.err[1]     = Point2.(iter_evo, cost_evo ./ 0.99cost_evo[1])
-        display(fig)
-    end
     return
 end
 

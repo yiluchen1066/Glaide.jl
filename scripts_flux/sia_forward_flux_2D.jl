@@ -7,7 +7,7 @@ include("macros.jl")
 # integrate SIA equations to steady state
 function solve_sia!(logAs, fields, scalars, numerical_params, launch_config; visu=nothing)
     # extract variables from tuples
-    (; H, B, β, ELA, D, qHx, qHy, As, RH, Err_rel, Err_abs) = fields
+    (; H, B, β, ELA, D, qHx, qHy, As, RH, qmag, Err_rel, Err_abs) = fields
     (; aρgn0, b_max, npow)                              = scalars
     (; nx, ny, dx, dy, maxiter, ncheck, ϵtol)           = numerical_params
     (; nthreads, nblocks)                               = launch_config
@@ -29,6 +29,7 @@ function solve_sia!(logAs, fields, scalars, numerical_params, launch_config; vis
         @cuda threads = nthreads blocks = nblocks compute_D!(D, H, B, As, aρgn0, npow, dx, dy)
         @cuda threads = nthreads blocks = nblocks compute_q!(qHx, qHy, D, H, B, dx, dy)
         CUDA.synchronize()
+        @. qmag = sqrt($avx(qHx)^2 + $avy(qHy)^2)
         # compute stable time step
         dτ = 1 / (12.1 * maximum(D) / dx^2 + maximum(β))
         @cuda threads = nthreads blocks = nblocks residual!(RH, qHx, qHy, β, H, B, ELA, b_max, dx, dy)

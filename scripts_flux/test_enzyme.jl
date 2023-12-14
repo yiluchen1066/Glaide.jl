@@ -223,7 +223,6 @@ end
     # Colorbar(fig[2, 3][1, 2], plt.Δq)
 
     # display(fig)
-<<<<<<< HEAD
     grad_loss_semi!(Ās_semi, q̄x, q̄y, H̄, D̄, qx, qy, qmag, qmag_o, H, B, D, As, A, n, dx, dy)
     grad_loss_full!(Ās_full, qx, qy, q̄x, q̄y, q̄mag, D̄, qmag, qmag_o, D, H, B, As, A, n, dx, dy)
 
@@ -289,7 +288,6 @@ end
             yield()
         end
     end
-=======
     grad_loss_semi!(Ās_semi, q̄x, q̄y, D̄, qx, qy, qmag, qmag_o, H, B, D, As, A, n, dx, dy)
 
     grad_loss_full!(Ās_full, q̄x, q̄y, q̄mag, D̄, qx, qy, qmag, qmag_o, D, H, B, As, A, n, dx, dy)
@@ -365,7 +363,6 @@ end
     #         yield()
     #     end
     # end
->>>>>>> 6f1bc869aa8fff88d54ef26c7fbd801dec67c9dc
 
     return
 end
