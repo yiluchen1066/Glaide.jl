@@ -205,6 +205,7 @@ function adjoint_2D()
         ∇J!(logĀs, logAs)
         γ = Δγ / maximum(abs.(logĀs))
         @. logAs -= γ * logĀs
+        As .= exp10.(logAs)
 
         if !isnothing(reg)
             (; nsm, Tmp) = reg

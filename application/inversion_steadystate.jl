@@ -9,7 +9,7 @@ function inversion_steadystate(geometry, observed, initial, physics, numerics, o
     (; B, xc, yc) = geometry
     (; H_obs, qobs_mag) = observed
     (; H_ini, As_ini) = initial
-    (; npow, aρgn0, β, ELA, b_max, H_cut, w_H, w_q) = physics
+    (; npow, aρgn0, β, ELA, b_max, H_cut, γ0, w_H, w_q) = physics
     (; ϵtol, ϵtol_adj, maxiter) = numerics
     (; Δγ, ngd) = optim_params
 
@@ -128,6 +128,13 @@ function inversion_steadystate(geometry, observed, initial, physics, numerics, o
         ∇J!(logĀs, logAs)
         γ = Δγ / maximum(abs.(logĀs))
         @. logAs -= γ * logĀs
+        As .= exp10.(logAs)
+
+        if !isnothing(reg)
+            (; nsm, Tmp) = reg
+            Tmp .= As
+            smooth!(As, Tmp, nsm, nthreads, nblocks)
+        end
 
         push!(iter_evo, igd)
         push!(cost_evo, J(logAs))

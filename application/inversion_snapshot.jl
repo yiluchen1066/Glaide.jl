@@ -1,15 +1,14 @@
 using CairoMakie
 using Enzyme
 
-include("macros.jl")
-include("sia_forward_flux_2D.jl")
-
+include("scripts_flux/macros.jl")
+include("snapshot_loss.jl")
 
 function inversion_snapshot(geometry, observed, initial, physics, numerics, optim_params)
     (; B, xc, yc) = geometry
-    (; H_obs, qobs_mag) = observed
+    (; H_obs, qx_obs, qy_obs, qobs_mag) = observed
     (; H_ini, As_ini) = initial
-    (; npow, aρgn0, β, ELA, b_max) = physics
+    (; npow, aρgn0, β, ELA, γ0) = physics
     (; ϵtol, maxiter) = numerics
     (; Δγ, ngd) = optim_params
     
@@ -18,33 +17,25 @@ function inversion_snapshot(geometry, observed, initial, physics, numerics, opti
     ny = length(yc)
     dx = xc[2] - xc[1]
     dy = yc[2] - yc[1]
-    nx, ny     = 128, 128
-    ϵtol       = (abs=1e-8, rel=1e-8)
-    maxiter    = 5 * nx^2
-    ncheck     = ceil(Int, 0.25 * nx^2)
     nthreads   = (16, 16)
     nblocks    = ceil.(Int, (nx, ny) ./ nthreads)
 
     ## init arrays
     # ice thickness
-    H     = CUDA.zeros(Float64, nx, ny)
+    H     = copy(H_ini)
     D         = CUDA.zeros(Float64, nx - 1, ny - 1)
-    qHx       = CUDA.zeros(Float64, nx - 1, ny - 2)
-    qHy       = CUDA.zeros(Float64, nx - 2, ny - 1)
-    qHx_obs   = CUDA.zeros(Float64, nx - 1, ny - 2)
-    qHy_obs   = CUDA.zeros(Float64, nx - 2, ny - 1)
-    As_syn    = CUDA.fill(asρgn0_syn, nx - 1, ny - 1)
+    qx       = CUDA.zeros(Float64, nx - 1, ny - 2)
+    qy       = CUDA.zeros(Float64, nx - 2, ny - 1)
+    qx_obs   = CUDA.zeros(Float64, nx - 1, ny - 2)
+    qy_obs   = CUDA.zeros(Float64, nx - 2, ny - 1)
     As        = CUDA.fill(asρgn0, nx - 1, ny - 1)
-    RH        = CUDA.zeros(Float64, nx, ny)
-    Err_rel   = CUDA.zeros(Float64, nx, ny)
-    Err_abs   = CUDA.zeros(Float64, nx, ny)
     As_ini    = copy(As)
     logAs     = copy(As)
     logAs_syn = copy(As)
     logAs_ini = copy(As)
     #init adjoint storage
-    q̄Hx      = CUDA.zeros(Float64, nx - 1, ny - 2)
-    q̄Hy      = CUDA.zeros(Float64, nx - 2, ny - 1)
+    q̄x      = CUDA.zeros(Float64, nx - 1, ny - 2)
+    q̄y      = CUDA.zeros(Float64, nx - 2, ny - 1)
     D̄        = CUDA.zeros(Float64, nx - 1, ny - 1)
     H̄        = CUDA.zeros(Float64, nx, ny)
     logĀs    = CUDA.zeros(Float64, nx - 1, ny - 1)
@@ -97,14 +88,12 @@ function inversion_snapshot(geometry, observed, initial, physics, numerics, opti
     end
 
     #pack parameters
-    fwd_params = (fields           = (; H, B, β, ELA, D, qHx, qHy, As, RH, Err_rel, Err_abs, qmag),
-                  scalars          = (; aρgn0, b_max, npow),
-                  numerical_params = (; nx, ny, dx, dy, maxiter, ncheck, ϵtol),
+    fwd_params = (fields           = (; H, B, β, ELA, D, qx, qy, As, qmag),
+                  scalars          = (; aρgn0, npow),
+                  numerical_params = (; nx, ny, dx, dy, maxiter, ϵtol),
                   launch_config    = (; nthreads, nblocks))
-    adj_params = (fields=(; q̄Hx, q̄Hy, D̄, H̄),)
-    loss_params = (fields=(; qHx_obs, qHy_obs, qobs_mag),)
-
-    fwd_visu = (; plts, fig)
+    adj_params = (fields=(; q̄x, q̄y, D̄, H̄),)
+    loss_params = (fields=(; qx_obs, qy_obs, qobs_mag),)
 
     # define reg
     reg = (; nsm=100, Tmp)
@@ -114,8 +103,8 @@ function inversion_snapshot(geometry, observed, initial, physics, numerics, opti
 
     #initial guess 
     As .= As_ini
-    @show maximum(As)
     logAs .= log10.(As)
+    γ = γ0
     J0 = J(logAs)
 
     push!(cost_evo, 1.0)

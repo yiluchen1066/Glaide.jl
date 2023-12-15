@@ -119,6 +119,7 @@ function adjoint_2D()
     b_max_nd = 4.706167536706325e-12 # m_max/lx*tsc m_max = 2.0 m/a lx = 1e3 tsc = 
     β1tsc    = 2.353083768353162e-10 # ratio between characteristic time scales of ice flow and accumulation/ablation βtsc = β0*tsc 
     β2tsc    = 3.5296256525297436e-10
+    γ_nd     = 1e2
 
     # geometry 
     lx_l, ly_l           = 25.0, 20.0  # horizontal length to characteristic length ratio
@@ -126,7 +127,6 @@ function adjoint_2D()
     B0_l                 = 0.35  # maximum bed rock elevation to characteristic length ratio
     z_ela_l_1, z_ela_l_2 = 0.215, 0.09 # ela to domain length ratio z_ela_l = 
     #numerics 
-    H_cut_l = 1.0e-6
 
     # dimensionally dependent parameters 
     lx, ly           = lx_l * lsc, ly_l * lsc  # 250000, 200000
@@ -137,6 +137,9 @@ function adjoint_2D()
     asρgn0           = s_f * aρgn0 * lsc^2 #5.0e-18*(ρg)^n = 3.54627498316e-6
     b_max            = b_max_nd * lsc / tsc  #2.0 m/a = 6.341958396752917e-8 m/s
     β0, β1           = β1tsc / tsc, β2tsc / tsc  # 3.1709791983764586e-10, 4.756468797564688e-10
+    γ0               = γ_nd * lsc^(2 - 2npow) * tsc^(-2) #1.0e-2
+
+    
     
     ## numerics
     nx, ny     = 128, 128
@@ -269,6 +272,7 @@ function adjoint_2D()
     As .= As_ini
     @show maximum(As)
     logAs .= log10.(As)
+    γ = γ0
     J0 = J(logAs)
 
     push!(cost_evo, 1.0)
