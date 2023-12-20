@@ -56,8 +56,8 @@ function adjoint_2D()
     bt_niter   = 5
     Δγ         = 0.2
 
-    w_H = 0.0
-    w_q = 1.0
+    w_H = 0.5
+    w_q = 0.5
 
     ## pre-processing
     dx, dy = lx / nx, ly / ny
@@ -65,6 +65,9 @@ function adjoint_2D()
     yc = LinRange(-ly / 2 + dy / 2, ly / 2 - dy / 2, ny)
     xc_1 = xc[1:(end-1)]
     yc_1 = yc[1:(end-1)]
+
+    xv = LinRange(-lx/2 + dx, lx/2 - dx, nx-1)
+    yv = LinRange(-ly/2 + dy, ly/2 - dy, ny-1)
 
     ## init arrays
     # ice thickness
@@ -85,7 +88,10 @@ function adjoint_2D()
     qHy       = CUDA.zeros(Float64, nx - 2, ny - 1)
     qHx_obs   = CUDA.zeros(Float64, nx - 1, ny - 2)
     qHy_obs   = CUDA.zeros(Float64, nx - 2, ny - 1)
-    As_syn    = CUDA.fill(asρgn0_syn, nx - 1, ny - 1)
+    # As_syn    = CUDA.fill(asρgn0_syn, nx - 1, ny - 1)
+
+    As_syn    = asρgn0_syn .* (0.5 .* cos.(5π .* xv ./ lx) .* sin.(5π .* yv' ./ ly) .+ 1.0) |> CuArray
+
     As        = CUDA.fill(asρgn0, nx - 1, ny - 1)
     RH        = CUDA.zeros(Float64, nx, ny)
     Err_rel   = CUDA.zeros(Float64, nx, ny)
@@ -94,6 +100,7 @@ function adjoint_2D()
     logAs     = copy(As)
     logAs_syn = copy(As)
     logAs_ini = copy(As)
+    Lap_As    = copy(As)
     #init adjoint storage
     q̄Hx = CUDA.zeros(Float64, nx - 1, ny - 2)
     q̄Hy = CUDA.zeros(Float64, nx - 2, ny - 1)
@@ -175,11 +182,11 @@ function adjoint_2D()
     adj_params = (fields=(; q̄Hx, q̄Hy, D̄, R̄H, Ās, ψ_H, H̄),
                   numerical_params=(; ϵtol_adj, ncheck_adj, H_cut))
 
-    loss_params = (fields=(; H_obs, qHx_obs, qHy_obs, qobs_mag, ∂J_∂H, ∂J_∂qx, ∂J_∂qy),
+    loss_params = (fields=(; H_obs, qHx_obs, qHy_obs, qobs_mag, ∂J_∂H, ∂J_∂qx, ∂J_∂qy, Lap_As),
                    scalars=(; w_H, w_q))
 
     #this is to switch on/off the smooth of the sensitivity 
-    reg = (; nsm=20, Tmp)
+    reg = (; nsm=10, α=1e-4, Tmp)
 
     #Define loss functions 
     J(_logAs) = loss(logAs, fwd_params, loss_params)
@@ -204,14 +211,8 @@ function adjoint_2D()
         println("GD iteration $igd \n")
         ∇J!(logĀs, logAs)
         γ = Δγ / maximum(abs.(logĀs))
+        γ = min(γ, 1 / reg.α)
         @. logAs -= γ * logĀs
-        As .= exp10.(logAs)
-
-        if !isnothing(reg)
-            (; nsm, Tmp) = reg
-            Tmp .= As
-            smooth!(As, Tmp, nsm, nthreads, nblocks)
-        end
 
         push!(iter_evo, igd)
         push!(cost_evo, J(logAs))

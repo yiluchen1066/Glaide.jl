@@ -1,5 +1,6 @@
 using CairoMakie
 using Optim
+using LinearAlgebra
 
 include("sia_forward_flux_2D.jl")
 include("sia_adjoint_flux_2D.jl")
@@ -64,6 +65,9 @@ function adjoint_2D()
     xc_1 = xc[1:(end-1)]
     yc_1 = yc[1:(end-1)]
 
+    xv = LinRange(-lx/2 + dx, lx/2 - dx, nx-1)
+    yv = LinRange(-ly/2 + dy, ly/2 - dy, ny-1)
+
     ## init arrays
     # ice thickness
     H     = CUDA.zeros(Float64, nx, ny)
@@ -84,6 +88,9 @@ function adjoint_2D()
     qHx_obs   = CUDA.zeros(Float64, nx - 1, ny - 2)
     qHy_obs   = CUDA.zeros(Float64, nx - 2, ny - 1)
     As_syn    = CUDA.fill(asρgn0_syn, nx - 1, ny - 1)
+
+    As_syn    = asρgn0_syn .* (0.5 .* cos.(5π .* xv ./ lx) .* sin.(5π .* yv' ./ ly) .+ 1.0) |> CuArray
+
     As        = CUDA.fill(asρgn0, nx - 1, ny - 1)
     RH        = CUDA.zeros(Float64, nx, ny)
     Err_rel   = CUDA.zeros(Float64, nx, ny)
@@ -92,6 +99,7 @@ function adjoint_2D()
     logAs     = copy(As)
     logAs_syn = copy(As)
     logAs_ini = copy(As)
+    Lap_As    = copy(As)
     #init adjoint storage
     q̄Hx = CUDA.zeros(Float64, nx - 1, ny - 2)
     q̄Hy = CUDA.zeros(Float64, nx - 2, ny - 1)
@@ -114,7 +122,7 @@ function adjoint_2D()
     # setup visualisation
     begin
         #init visualization 
-        fig = Figure(; resolution=(1600, 1200), fontsize=32)
+        fig = Figure(; size=(800, 600))
         #opts    = (xaxisposition=:top,) # save for later 
 
         axs = (H    = Axis(fig[1, 1][1, 1]; aspect=DataAspect(), xlabel=L"x", ylabel=L"y", title=L"H"),
@@ -173,11 +181,11 @@ function adjoint_2D()
     adj_params = (fields=(; q̄Hx, q̄Hy, D̄, R̄H, Ās, ψ_H, H̄),
                   numerical_params=(; ϵtol_adj, ncheck_adj, H_cut))
 
-    loss_params = (fields=(; H_obs, qHx_obs, qHy_obs, qobs_mag, ∂J_∂H, ∂J_∂qx, ∂J_∂qy),
-                    scalars=(;w_H = 0.5, w_q=0.5))
+    loss_params = (fields=(; H_obs, qHx_obs, qHy_obs, qobs_mag, ∂J_∂H, ∂J_∂qx, ∂J_∂qy, Lap_As),
+                    scalars=(;w_H = 1.0, w_q=1.0))
 
     #this is to switch on/off the smooth of the sensitivity 
-    reg = (; nsm=20, Tmp)
+    reg = (; nsm=10, Tmp, α=1e-4)
 
     #Define loss functions 
     J(_logAs) = loss(logAs, fwd_params, loss_params)
@@ -187,12 +195,12 @@ function adjoint_2D()
     #initial guess
     As .= As_ini
     logAs .= log10.(As)
+
     #Optim 
-    opt = Optim.Options(; f_tol=1e-2,
-                        g_tol=1e-6,
-                        iterations=20,
-                        store_trace=true, show_trace=true)
-    result = optimize(J, ∇J!, logAs, LBFGS(), opt)
+    opt = Optim.Options(iterations=20,
+                        store_trace=true,
+                        show_trace=true)
+    result = optimize(J, ∇J!, logAs, GradientDescent(), opt)
     logAs .= Optim.minimizer(result)
     @show result
     cost_evo = Optim.f_trace(result)
@@ -201,11 +209,10 @@ function adjoint_2D()
 
     plts.H[3]       = Array(H)
     plts.H_s[2][1]  = Point2.(Array(H[nx÷2, :]), yc)
-    plts.As[3]      = Array(log10.(As))
-    plts.As_s[1][1] = Point2.(Array(log10.(As[nx÷2, :])), yc_1)
+    plts.As[3]      = Array(logAs)
+    plts.As_s[1][1] = Point2.(Array(logAs[nx÷2, :]), yc_1)
     plts.err[1]     = Point2.(iter_evo, cost_evo ./ 0.99cost_evo[1])
     display(fig)
-
 
     return
 end

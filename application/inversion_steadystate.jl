@@ -1,15 +1,15 @@
 using CairoMakie
 
-include("scripts_flux/sia_forward_flux_2D.jl")
-include("scripts_flux/sia_adjoint_flux_2D.jl")
-include("scripts_flux/sia_loss_flux_2D.jl")
+include("sia_forward_flux_2D.jl")
+include("sia_adjoint_flux_2D.jl")
+include("sia_loss_flux_2D.jl")
 
-
-function inversion_steadystate(geometry, observed, initial, physics, numerics, optim_params; do_vis=false)
+function inversion_steadystate(logAs, geometry, observed, initial, physics, weights, numerics, optim_params; do_vis=false)
     (; B, xc, yc) = geometry
     (; H_obs, qobs_mag) = observed
     (; H_ini, As_ini) = initial
-    (; npow, aρgn0, β, ELA, b_max, H_cut, γ0, w_H, w_q) = physics
+    (; npow, aρgn0, β, ELA, b_max, H_cut, γ0) = physics
+    (; w_H, w_q) = weights
     (; ϵtol, ϵtol_adj, maxiter) = numerics
     (; Δγ, ngd) = optim_params
 
@@ -18,6 +18,9 @@ function inversion_steadystate(geometry, observed, initial, physics, numerics, o
     ny = length(yc)
     dx = xc[2] - xc[1]
     dy = yc[2] - yc[1]
+
+    xv = LinRange(-lx / 2 + dx, lx / 2 - dx, nx - 1)
+    yv = LinRange(-ly / 2 + dy, ly / 2 - dy, ny - 1)
 
     ncheck     = ceil(Int, 0.25 * nx^2)
     ncheck_adj = ceil(Int, 0.25 * nx^2)
@@ -34,8 +37,7 @@ function inversion_steadystate(geometry, observed, initial, physics, numerics, o
     RH        = CUDA.zeros(Float64, nx, ny)
     Err_rel   = CUDA.zeros(Float64, nx, ny)
     Err_abs   = CUDA.zeros(Float64, nx, ny)
-    logAs     = copy(As)
-    logAs_ini = copy(As)
+    logAs_ini = copy(logAs)
     # init adjoint
     q̄x    = CUDA.zeros(Float64, nx - 1, ny - 2)
     q̄y    = CUDA.zeros(Float64, nx - 2, ny - 1)
@@ -44,9 +46,9 @@ function inversion_steadystate(geometry, observed, initial, physics, numerics, o
     R̄H    = CUDA.zeros(Float64, nx, ny)
     logĀs = CUDA.zeros(Float64, nx - 1, ny - 1)
     Tmp    = CUDA.zeros(Float64, nx - 1, ny - 1)
+    Lap_As = CUDA.zeros(Float64, nx - 1, ny - 1)
     ψ_H    = CUDA.zeros(Float64, nx, ny)
     ∂J_∂H  = CUDA.zeros(Float64, nx, ny)
-
 
     # init convergence history
     cost_evo = Float64[]
@@ -64,10 +66,6 @@ function inversion_steadystate(geometry, observed, initial, physics, numerics, o
                err  = Axis(fig[2, 3]; yscale=log10, title=L"convergence", xlabel="iter", ylabel=L"error"))
 
         nan_to_zero(x) = isnan(x) ? zero(x) : x
-
-        logAs     = log10.(As)
-        logAs_syn = log10.(As_syn)
-        logAs_ini = log10.(As_ini)
 
         xc_1 = xc[1:(end-1)]
         yc_1 = yc[1:(end-1)]
@@ -98,11 +96,10 @@ function inversion_steadystate(geometry, observed, initial, physics, numerics, o
     adj_params = (fields=(; q̄x, q̄y, D̄, R̄H, ψ_H, H̄),
                   numerical_params=(; ϵtol_adj, ncheck_adj, H_cut))
 
-    loss_params = (fields=(; H_obs, qobs_mag, ∂J_∂H),
+    loss_params = (fields=(; H_obs, qobs_mag, ∂J_∂H, Lap_As),
                    scalars=(; w_H, w_q))
 
-    #this is to switch on/off the smooth of the sensitivity 
-    reg = (; nsm=20, Tmp)
+    reg = (; nsm=10, α=1e-4, Tmp)
 
     #Define loss functions 
     J(_logAs) = loss(logAs, fwd_params, loss_params)
@@ -113,13 +110,13 @@ function inversion_steadystate(geometry, observed, initial, physics, numerics, o
     As .= As_ini
     logAs .= log10.(As)
     γ = γ0
-    J_old = 0.0
-    J_new = 0.0
     #solve for H with As and compute J_old
     H .= 0.0
     @show maximum(logAs)
-    J_old = J(logAs)
-    J_ini = J_old
+    J0 = J(logAs)
+
+    push!(cost_evo, 1.0)
+    push!(iter_evo, 0)
 
     @info "Gradient descent - inversion for As"
     for igd in 1:ngd
@@ -127,21 +124,15 @@ function inversion_steadystate(geometry, observed, initial, physics, numerics, o
         println("GD iteration $igd \n")
         ∇J!(logĀs, logAs)
         γ = Δγ / maximum(abs.(logĀs))
+        γ = min(γ, 1 / reg.α)
         @. logAs -= γ * logĀs
-        As .= exp10.(logAs)
-
-        if !isnothing(reg)
-            (; nsm, Tmp) = reg
-            Tmp .= As
-            smooth!(As, Tmp, nsm, nthreads, nblocks)
-        end
 
         push!(iter_evo, igd)
-        push!(cost_evo, J(logAs))
+        push!(cost_evo, J(logAs) / J0)
         #visualization 
 
         @printf " min(As) = %1.2e \n" minimum(exp10.(logAs))
-        @printf " --> Loss J = %1.2e (γ = %1.2e) \n" last(cost_evo) / first(cost_evo) γ
+        @printf " --> Loss J = %1.2e (γ = %1.2e) \n" last(cost_evo) γ
 
         plts.H[3]       = Array(H)
         plts.H_s[2][1]  = Point2.(Array(H[nx÷2, :]), yc)

@@ -4,7 +4,7 @@ include("sia_forward_2D.jl")
 function laplacian!(As, As2)
     @get_indices
     if ix >= 2 && ix <= size(As, 1) - 1 && iy >= 2 && iy <= size(As, 2) - 1
-        ΔAs = As[ix - 1, iy] + As[ix + 1, iy] + As[ix, iy - 1] + As[ix, iy + 1] - 4.0 * As[ix, iy]
+        ΔAs = As[ix-1, iy] + As[ix+1, iy] + As[ix, iy-1] + As[ix, iy+1] - 4.0 * As[ix, iy]
         As2[ix, iy] = As[ix, iy] + 1 / 8 * ΔAs
     end
     return
@@ -36,8 +36,8 @@ function ∇loss!(logĀs, logAs, fwd_params, adj_params, loss_params; reg=nothi
     (; dx, dy)                            = fwd_params.numerical_params
     (; aρgn0, b_max, npow)                = fwd_params.scalars
     (; nthreads, nblocks)                 = fwd_params.launch_config
-    (; R̄H, q̄Hx, q̄Hy, H̄, D̄, Ās, ψ_H)       = adj_params.fields
-    (; H_obs, ∂J_∂H)                      = loss_params.fields
+    (; R̄H, q̄Hx, q̄Hy, H̄, D̄, Ās, ψ_H) = adj_params.fields
+    (; H_obs, ∂J_∂H, Lap_As)              = loss_params.fields
 
     @info "Forward solve"
     solve_sia!(logAs, fwd_params...; kwags...)
@@ -45,12 +45,13 @@ function ∇loss!(logĀs, logAs, fwd_params, adj_params, loss_params; reg=nothi
     @info "Adjoint solve"
     solve_adjoint_sia!(fwd_params, adj_params, loss_params)
 
-    logĀs  .= 0.0
-    R̄H  .= .-ψ_H
+    logĀs .= 0.0
+    R̄H .= .-ψ_H
     q̄Hx .= 0.0
     q̄Hy .= 0.0
-    H̄   .= 0.0
-    D̄   .= 0.0
+    H̄ .= 0.0
+    D̄ .= 0.0
+    Lap_As .= 0.0
 
     #residual!(RH, qHx, qHy, β, H, B, ELA, b_max, dx, dy)
     @cuda threads = nthreads blocks = nblocks ∇(residual!,
@@ -76,16 +77,7 @@ function ∇loss!(logĀs, logAs, fwd_params, adj_params, loss_params; reg=nothi
     logĀs[[1, end], :] = logĀs[[2, end - 1], :]
     logĀs[:, [1, end]] = logĀs[:, [2, end - 1]]
 
-    #smoothing 
-    # so now we also change to smoothing the logĀs
-    if !isnothing(reg)
-        (; nsm, Tmp) = reg
-        Tmp .= logĀs
-        smooth!(logĀs, Tmp, nsm, nthreads, nblocks)
-    end
-
     # convert to dJ/dlogAs
-    logĀs .*= As 
-
+    logĀs .*= As
     return
 end
