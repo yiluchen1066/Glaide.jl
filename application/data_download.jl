@@ -16,3 +16,7 @@ function save_glacier_data(glacier_name)
 end
 
 save_glacier_data("Aletsch")
+
+
+# Download velocity  Rabatel et al, https://doi.org/10.3390/data8040066
+# at https://doi.org/10.57745/XHQ7TL
