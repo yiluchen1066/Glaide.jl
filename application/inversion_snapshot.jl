@@ -4,13 +4,7 @@ using Enzyme
 include("scripts_flux/macros.jl")
 include("snapshot_loss.jl")
 
-# here if I passed As and logAs here, 
-# I think I can just pass as zeros, they can be updated here 
-# so it is like: 
-# As = CUDA.zeros(Float64, nx-1, ny-1)
-# logAs = copy(As)
-
-function inversion_snapshot(logAs, As, geometry, observed, initial, physics, numerics, optim_params)
+function inversion_snapshot(logAs, geometry, observed, initial, physics, numerics, optim_params)
     (; B, xc, yc) = geometry
     (; H_obs, qx_obs, qy_obs, qobs_mag) = observed
     (; H_ini, As_ini) = initial
@@ -34,7 +28,6 @@ function inversion_snapshot(logAs, As, geometry, observed, initial, physics, num
     qy        = CUDA.zeros(Float64, nx - 2, ny - 1)
     qx_obs    = CUDA.zeros(Float64, nx - 1, ny - 2)
     qy_obs    = CUDA.zeros(Float64, nx - 2, ny - 1)
-    As        = CUDA.zeros(Float64, nx - 1, ny - 1)
     logAs_ini = copy(logAs)
     # init adjoint storage
     q̄x      = CUDA.zeros(Float64, nx - 1, ny - 2)
@@ -87,6 +80,7 @@ function inversion_snapshot(logAs, As, geometry, observed, initial, physics, num
         Colorbar(fig[2, 1][1, 2], plts.As)
     end
 
+    #here I wrapped As into fwd_params, with 
     #pack parameters
     fwd_params = (fields           = (; H, B, β, ELA, D, qx, qy, As, qmag),
                   scalars          = (; aρgn0, npow),

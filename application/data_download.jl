@@ -15,4 +15,4 @@ function save_glacier_data(glacier_name)
     return data
 end
 
-save_glacier_data("Rhone")
+save_glacier_data("Aletsch")

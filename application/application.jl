@@ -23,6 +23,8 @@ function rhone_application()
                                          "datasets/Rhone/alps/Rhone_SurfElev_cr.tif")
     # TODO load the vmag (nx-2,ny-2)
 
+    
+
 
 
 
@@ -101,8 +103,6 @@ function rhone_application()
     inversion_snapshot(logAs_q_snapshot, geometry, observed, initial, physics, numerics, optim_params)
 
     #visualization for As_H_steady As_flux_steady As_snapshot
-
-    # visualization 
 
     return
 end
