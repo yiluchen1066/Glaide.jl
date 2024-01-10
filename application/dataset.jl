@@ -3,7 +3,7 @@ using GlacioTools
 import NCDatasets
 using CairoMakie
 
-@views function load_data(Glacier::AbstractString, SGI_ID::AbstractString, datadir::AbstractString; visu=nothing)
+@views function load_data(Glacier::AbstractString, SGI_ID::AbstractString, datadir::AbstractString; visu_data=false)
     #load ice surface data using geom_select
     ice_thic, ice_surf, bed_surf = GlacioTools.geom_select(Glacier, SGI_ID, datadir; do_save=false)
     ice_thic = reverse(ice_thic[:, :, 1]; dims=2) # reads it into memory
@@ -27,12 +27,33 @@ using CairoMakie
     vmag[ice_thic.==0] .= NaN
     ice_thic[ice_thic .== 0] .= NaN
 
-    # visualization 
-    if !isnothing(visu)
+    #maybe it would be a good check the difference in the size between vmag and ice_thic
+    xy = DimPoints(dims(ice_thic, (X,Y)))
+    (x, y) = (first.(xy), last.(xy))
+    xc = x.data[:,1]
+    yc = y.data[1,:]
+
+    H_Alet = ice_thic.data
+    S_Alet = ice_surf.data 
+    B_Alet = bed_surf.data
+    vmag_Alet = vmag.data 
+
+    oz = minimum(B_Alet)
+    B_Alet .-= oz 
+    S_Alet .-= oz 
+
+    xc = xc .- xc[1]
+    yc = yc .- yc[1]
+
+    xc ./= 1e3
+    yc ./= 1e3
+
+    # visu
+    if visu_data
         fig = Figure(; size=(1000, 580), fontsize=22)
-        axs = (H=Axis(fig[1, 1]; aspect=DataAspect(), xlabel=L"x\text{ [m]}", ylabel=L"y\text{ [m]}", title=L"Ice thickness"),
-            vmag=Axis(fig[1, 2]; aspect=DataAspect(), xlabel=L"x\text{ [m]}", ylabel=L"y\text {[m]}", title=L"Vmag"))
-        plts = (H=plot!(axs.H, ice_thic; colormap=:turbo),
+        axs = (H=Axis(fig[1, 1]; aspect=DataAspect(), xlabel=L"x\text{ [km]}", ylabel=L"y\text{ [km]}", title=L"H [m]"),
+            vmag=Axis(fig[1, 2]; aspect=DataAspect(), xlabel=L"x\text{ [km]}", ylabel=L"y\text {[km]}", title=L"Vmag [m/s]"))
+        plts = (H=plot!(axs.H, H; colormap=:turbo),
                 vmag=plot!(axs.vmag, vmag; colormap=:turbo))
         axs.H.xticksize = 18
         axs.H.yticksize = 18
@@ -43,18 +64,7 @@ using CairoMakie
         colgap!(fig.layout, 7)
         display(fig)
     end 
-
-    #maybe it would be a good check the difference in the size between vmag and ice_thic
-    xy = DimPoints(dims(ice_thic, (X,Y)))
-    (x, y) = (first.(xy), last.(xy))
-    # xc, yc = x.data[:,1], y.data[1,:]
-
-    # @show nx_1, ny_1
-    # @show size(ice_thic.data)
-    # @show size(vmag.data)
-
-    # here I should return ice_thic, ice_surf, bed_surf, vmag, 
-    return ice_thic.data, ice_surf.data, bed_surf.data, vmag.data, x.data[:,1], y.data[1,:]
+    return H_Alet, S_Alet, B_Alet, vmag_Alet, xc, yc
 end 
 
 

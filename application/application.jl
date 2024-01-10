@@ -17,14 +17,13 @@ include("inversion_snapshot.jl")
 end
 
 function application()
-    #init visu
-    fig = Figure(; size=(1000, 580), fontsize=22)
-    data_visu = (; fig)
 
     # load the data 
-    H_Alet, S_Alet, B_Alet, vmag_Alet, xc_Alet, yc_Alet = load_data("Aletsch", "B36-26", "datasets/Aletsch"; visu=data_visu)
+    H_Alet, S_Alet, B_Alet, vmag_Alet, xc_Alet, yc_Alet = load_data("Aletsch", "B36-26", "datasets/Aletsch"; visu_data=false)
     nx = size(H_Alet)[1]
     ny = size(H_Alet)[2]
+
+    #here I can check the data before after the rescaling 
 
     #real scale
     lsc_data = mean(H_Alet)
@@ -38,8 +37,8 @@ function application()
     vsc_data = lsc_data / tsc_data
 
     #rescale
-    lsc   = 1.0
-    aρgn0 = 1.0
+    lsc   = 10.0
+    aρgn0 = 10.0
 
     tsc = 1 / aρgn0 / lsc^npow
     vsc = lsc / tsc
@@ -54,6 +53,36 @@ function application()
     yc = yc_Alet ./ lsc_data .* lsc
     # here vmag should still in the size of (nx, ny)
     qmag = vmag .* H
+
+    @show maximum(H)
+    @show maximum(H_Alet)
+    @show size(H)
+    @show size(H_Alet)
+    @show maximum(vmag)
+    @show maximum(vmag_Alet)
+    @show size(vmag)
+    @show size(vmag_Alet)
+
+    #here the point is we cannot put H_Alet and H on the same plot, which is a bit difficult to understand
+
+    check_scaling = true
+    if check_scaling
+        fig = Figure(; size=(1000, 580), fontsize=22)
+        axs = (H=Axis(fig[1, 1]; aspect=DataAspect(), xlabel=L"x\text{ [km]}", ylabel=L"y\text{ [km]}", title=L"H_after [m]"),
+            vmag=Axis(fig[1, 2]; aspect=DataAspect(), xlabel=L"x\text{ [km]}", ylabel=L"y\text {[km]}", title=L"vmag_after[m/s]"))
+        plts = (H=plot!(axs.H, H; colormap=:turbo),
+                vmag=plot!(axs.vmag, vmag; colormap=:turbo))
+        axs.H.xticksize = 18
+        axs.H.yticksize = 18
+        axs.vmag.xticksize = 18
+        axs.vmag.yticksize = 18
+        Colorbar(fig[1, 1][1, 2], plts.H)
+        Colorbar(fig[1, 2][1, 2], plts.vmag)
+        colgap!(fig.layout, 7)
+        display(fig)
+    end 
+
+    error("check")
 
     #non-dimensional numbers
     s_f      = 0.01 #as/a/lsc^2
