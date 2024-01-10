@@ -193,6 +193,11 @@ function adjoint_2D()
     ∇J!(_logĀs, _logAs) = ∇loss!(logĀs, logAs, fwd_params, adj_params, loss_params; reg)
     @info "inversion for As"
 
+    @show maximum(As_ini) 
+    @show maximum(As_syn) 
+
+    error("check")
+
     #initial guess
     As .= As_ini
     logAs .= log10.(As)

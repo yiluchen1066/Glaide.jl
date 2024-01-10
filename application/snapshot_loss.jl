@@ -24,65 +24,65 @@ function smooth!(As, As2, nsm, nthreads, nblocks)
         As, As2 = As2, As
     end
     return
-end 
+end
 
 function forward_model!(logAs, fwd_params)
-    (; D, H, B, As, qHx, qHy, qmag) = fwd_params.fields
+    (; D, H, B, As, qx, qy, qmag) = fwd_params.fields
     (; aρgn0, npow) = fwd_params.scalars
     (; dx, dy) = fwd_params.numerical_params
     (; nthreads, nblocks) = fwd_params.launch_config
 
     As .= exp10.(logAs)
     @cuda threads = nthreads blocks = nblocks compute_D!(D, H, B, As, aρgn0, npow, dx, dy)
-    @cuda threads = nthreads blocks = nblocks compute_q!(qHx, qHy, D, H, B, dx, dy)
-    @. qmag = sqrt($avx(qHx)^2 + $avy(qHy)^2)
+    @cuda threads = nthreads blocks = nblocks compute_q!(qx, qy, D, H, B, dx, dy)
+    @. qmag = sqrt($avx(qx)^2 + $avy(qy)^2)
     return
 end
 
-function ∂J_∂qx_vec!(q̄Hx, qmag, qobs_mag, qHx)
-    q̄Hx                .= 0
-    @. q̄Hx[1:end-1, :] += (qmag - qobs_mag) * $avx(qHx) / (2 * qmag + (qmag==0))
-    @. q̄Hx[2:end, :]   += (qmag - qobs_mag) * $avx(qHx) / (2 * qmag + (qmag==0))
+function ∂J_∂qx_vec!(q̄x, qmag, qobs_mag, qx)
+    q̄x                .= 0
+    @. q̄x[1:end-1, :] += (qmag - qobs_mag) * $avx(qx) / (2 * qmag + (qmag == 0))
+    @. q̄x[2:end, :]   += (qmag - qobs_mag) * $avx(qx) / (2 * qmag + (qmag == 0))
     return
 end
 
-function ∂J_∂qy_vec!(q̄Hy, qmag, qobs_mag, qHy)
-    q̄Hy                .= 0
-    @. q̄Hy[:, 1:end-1] += (qmag - qobs_mag) * $avy(qHy) / (2 * qmag + (qmag==0))
-    @. q̄Hy[:, 2:end]   += (qmag - qobs_mag) * $avy(qHy) / (2 * qmag + (qmag==0))
+function ∂J_∂qy_vec!(q̄y, qmag, qobs_mag, qy)
+    q̄y                .= 0
+    @. q̄y[:, 1:end-1] += (qmag - qobs_mag) * $avy(qy) / (2 * qmag + (qmag == 0))
+    @. q̄y[:, 2:end]   += (qmag - qobs_mag) * $avy(qy) / (2 * qmag + (qmag == 0))
     return
 end
 
-function loss(logAs, fwd_params, loss_params)
+function loss_snapshot(logAs, fwd_params, loss_params)
     (; qobs_mag) = loss_params.fields
     (; qmag)     = fwd_params.fields
     forward_model!(logAs, fwd_params)
-    return 0.5 * sum((qmag .- qobs_mag).^2)
+    return 0.5 * sum((qmag .- qobs_mag) .^ 2)
 end
 
-function ∇loss!(logĀs, logAs, fwd_params, adj_params, loss_params; reg=nothing)
+function ∇loss_snapshot!(logĀs, logAs, fwd_params, adj_params, loss_params; reg=nothing)
     #unpack forward parameters 
-    (; H, B, β, ELA, D, qHx, qHy, As, qmag) = fwd_params.fields
+    (; H, B, β, ELA, D, qx, qy, As, qmag) = fwd_params.fields
     (; aρgn0, npow) = fwd_params.scalars
     (; dx, dy) = fwd_params.numerical_params
     (; nthreads, nblocks) = fwd_params.launch_config
     #unpack adjoint parameters
-    (; q̄Hx, q̄Hy, D̄, H̄) = adj_params.fields
+    (; q̄x, q̄y, D̄, H̄) = adj_params.fields
     #unpack loss parameters
     (; qobs_mag) = loss_params.fields
 
     forward_model!(logAs, fwd_params)
 
-    ∂J_∂qx_vec!(q̄Hx, qmag, qobs_mag, qHx)
-    ∂J_∂qy_vec!(q̄Hy, qmag, qobs_mag, qHy)
+    ∂J_∂qx_vec!(q̄x, qmag, qobs_mag, qx)
+    ∂J_∂qy_vec!(q̄y, qmag, qobs_mag, qy)
 
     logĀs .= 0.0
     D̄ .= 0.0
     H̄ .= 0.0
 
     @cuda threads = nthreads blocks = nblocks ∇(compute_q!,
-                                                DupNN(qHx, q̄Hx),
-                                                DupNN(qHy, q̄Hy),
+                                                DupNN(qx, q̄x),
+                                                DupNN(qy, q̄y),
                                                 DupNN(D, D̄),
                                                 Const(H),
                                                 Const(B), Const(dx), Const(dy))
@@ -95,10 +95,9 @@ function ∇loss!(logĀs, logAs, fwd_params, adj_params, loss_params; reg=nothi
     logĀs[:, [1, end]] = logĀs[:, [2, end - 1]]
 
     #smoothing 
-    
+
     # convert to dJ/dlogAs
     logĀs .*= As
 
     return
 end
-

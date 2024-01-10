@@ -8,7 +8,7 @@ const DupNN = DuplicatedNoNeed
 
 function solve_adjoint_sia!(fwd_params, adj_params, loss_params)
     #unpack forward 
-    (; H, B, β, ELA, D, qHx, qHy, As, RH, qmag) = fwd_params.fields
+    (; H, B, β, ELA, D, qx, qy, As, RH, qmag) = fwd_params.fields
     (; aρgn0, b_max, npow)                = fwd_params.scalars
     (; nx, ny, dx, dy, maxiter)           = fwd_params.numerical_params
     (; nthreads, nblocks)                 = fwd_params.launch_config
@@ -20,18 +20,18 @@ function solve_adjoint_sia!(fwd_params, adj_params, loss_params)
     dt = 1.0 / (8.1 * maximum(D) / min(dx, dy)^2 + maximum(β))
     ∂J_∂H .= H .- H_obs
 
-    ∂J_∂qx_vec!(q̄Hx, qmag, qobs_mag, qHx)
-    ∂J_∂qy_vec!(q̄Hy, qmag, qobs_mag, qHy)
+    ∂J_∂qx_vec!(q̄Hx, qmag, qobs_mag, qx)
+    ∂J_∂qy_vec!(q̄Hy, qmag, qobs_mag, qy)
 
-    # ∂J_∂qx .= qHx .- qHx_obs
-    # ∂J_∂qy .= qHy .- qHy_obs
+    # ∂J_∂qx .= qx .- qx_obs
+    # ∂J_∂qy .= qy .- qy_obs
     # q̄Hx .= ∂J_∂qx
     # q̄Hy .= ∂J_∂qy
 
     D̄ .= 0.0
     @cuda threads = nthreads blocks = nblocks ∇(compute_q!,
-                                                         DupNN(qHx, q̄Hx),
-                                                         DupNN(qHy, q̄Hy),
+                                                         DupNN(qx, q̄Hx),
+                                                         DupNN(qy, q̄Hy),
                                                          DupNN(D, D̄),
                                                          DupNN(H, ∂J_∂H),
                                                          Const(B), Const(dx), Const(dy))
@@ -55,15 +55,15 @@ function solve_adjoint_sia!(fwd_params, adj_params, loss_params)
 
         @cuda threads = nthreads blocks = nblocks ∇(residual!,
                                                     DupNN(RH, R̄H),
-                                                    DupNN(qHx, q̄Hx),
-                                                    DupNN(qHy, q̄Hy),
+                                                    DupNN(qx, q̄Hx),
+                                                    DupNN(qy, q̄Hy),
                                                     Const(β),
                                                     DupNN(H, H̄), # dR_H
                                                     Const(B), Const(ELA), Const(b_max), Const(dx), Const(dy))
 
         @cuda threads = nthreads blocks = nblocks ∇(compute_q!,
-                                                    DupNN(qHx, q̄Hx),
-                                                    DupNN(qHy, q̄Hy),
+                                                    DupNN(qx, q̄Hx),
+                                                    DupNN(qy, q̄Hy),
                                                     DupNN(D, D̄),
                                                     DupNN(H, H̄), # dq_H
                                                     Const(B), Const(dx), Const(dy))
@@ -120,16 +120,16 @@ function update_ψ!(H, H̄, ψ_H, H_cut, dt)
     return
 end
 
-function ∂J_∂qx_vec!(q̄Hx, qmag, qobs_mag, qHx)
+function ∂J_∂qx_vec!(q̄Hx, qmag, qobs_mag, qx)
     q̄Hx                .= 0
-    @. q̄Hx[1:end-1, :] += (qmag - qobs_mag) * $avx(qHx) / (2 * qmag + (qmag == 0))
-    @. q̄Hx[2:end, :]   += (qmag - qobs_mag) * $avx(qHx) / (2 * qmag + (qmag == 0))
+    @. q̄Hx[1:end-1, :] += (qmag - qobs_mag) * $avx(qx) / (2 * qmag + (qmag == 0))
+    @. q̄Hx[2:end, :]   += (qmag - qobs_mag) * $avx(qx) / (2 * qmag + (qmag == 0))
     return
 end
 
-function ∂J_∂qy_vec!(q̄Hy, qmag, qobs_mag, qHy)
+function ∂J_∂qy_vec!(q̄Hy, qmag, qobs_mag, qy)
     q̄Hy                .= 0
-    @. q̄Hy[:, 1:end-1] += (qmag - qobs_mag) * $avy(qHy) / (2 * qmag + (qmag == 0))
-    @. q̄Hy[:, 2:end]   += (qmag - qobs_mag) * $avy(qHy) / (2 * qmag + (qmag == 0))
+    @. q̄Hy[:, 1:end-1] += (qmag - qobs_mag) * $avy(qy) / (2 * qmag + (qmag == 0))
+    @. q̄Hy[:, 2:end]   += (qmag - qobs_mag) * $avy(qy) / (2 * qmag + (qmag == 0))
     return
 end

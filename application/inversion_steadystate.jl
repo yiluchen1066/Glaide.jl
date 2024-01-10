@@ -4,23 +4,29 @@ include("sia_forward_flux_2D.jl")
 include("sia_adjoint_flux_2D.jl")
 include("sia_loss_flux_2D.jl")
 
-function inversion_steadystate(logAs, geometry, observed, initial, physics, weights, numerics, optim_params; do_vis=false)
+function inversion_steadystate(logAs, geometry, observed, initial, physics, weights_H, weights_q, numerics, optim_params; do_vis=true, do_thickness=true)
     (; B, xc, yc) = geometry
     (; H_obs, qobs_mag) = observed
     (; H_ini, As_ini) = initial
     (; npow, aρgn0, β, ELA, b_max, H_cut, γ0) = physics
-    (; w_H, w_q) = weights
+    (; w_H_1, w_q_1) = weights_H
+    (; w_H_2, w_q_2) = weights_q
     (; ϵtol, ϵtol_adj, maxiter) = numerics
     (; Δγ, ngd) = optim_params
+
+    if do_thickness
+        w_H = w_H_1
+        w_q = w_q_1
+    else 
+        w_H = w_H_2
+        w_q = w_q_2
+    end 
 
     # pre-processing
     nx = length(xc)
     ny = length(yc)
     dx = xc[2] - xc[1]
     dy = yc[2] - yc[1]
-
-    xv = LinRange(-lx / 2 + dx, lx / 2 - dx, nx - 1)
-    yv = LinRange(-ly / 2 + dy, ly / 2 - dy, ny - 1)
 
     ncheck     = ceil(Int, 0.25 * nx^2)
     ncheck_adj = ceil(Int, 0.25 * nx^2)
@@ -55,7 +61,7 @@ function inversion_steadystate(logAs, geometry, observed, initial, physics, weig
     iter_evo = Float64[]
 
     # setup visualisation
-    if do_vis
+    begin
         #init visualization 
         fig = Figure(; resolution=(1600, 1200), fontsize=32)
 
@@ -77,8 +83,8 @@ function inversion_steadystate(logAs, geometry, observed, initial, physics, weig
                 As   = heatmap!(axs.As, xc_1, yc_1, Array(logAs); colormap=:viridis),
                 As_v = vlines!(axs.As, xc_1[nx÷2]; linewidth=4, color=:magenta, linewtyle=:dash),
                 As_s = (lines!(axs.As_s, Point2.(Array(logAs[nx÷2, :]), yc_1); linewith=4, color=:blue, label="current"),
-                lines!(axs.As_s, Point2.(Array(logAs_ini[nx÷2, :]), yc_1); linewidth=4, color=:green, label="initial"),
-                lines!(axs.As_s, Point2.(Array(logAs_syn[nx÷2, :]), yc_1); linewidth=4, color=:red, label="synthetic")),
+                lines!(axs.As_s, Point2.(Array(logAs_ini[nx÷2, :]), yc_1); linewidth=4, color=:green, label="initial")),
+                #lines!(axs.As_s, Point2.(Array(logAs_syn[nx÷2, :]), yc_1); linewidth=4, color=:red, label="synthetic")),
                 err  = scatterlines!(axs.err, Point2.(iter_evo, cost_evo); linewidth=4))
 
         Colorbar(fig[1, 1][1, 2], plts.H)
@@ -102,6 +108,7 @@ function inversion_steadystate(logAs, geometry, observed, initial, physics, weig
     reg = (; nsm=10, α=1e-4, Tmp)
 
     #Define loss functions 
+    #call the loss functions and the gradient of the loss function 
     J(_logAs) = loss(logAs, fwd_params, loss_params)
     ∇J!(_logĀs, _logAs) = ∇loss!(logĀs, logAs, fwd_params, adj_params, loss_params; reg)
     @info "inversion for As"

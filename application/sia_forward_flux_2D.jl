@@ -7,7 +7,7 @@ include("macros.jl")
 # integrate SIA equations to steady state
 function solve_sia!(logAs, fields, scalars, numerical_params, launch_config; visu=nothing)
     # extract variables from tuples
-    (; H, B, β, ELA, D, qHx, qHy, As, RH, qmag, Err_rel, Err_abs) = fields
+    (; H, B, β, ELA, D, qx, qy, As, RH, qmag, Err_rel, Err_abs) = fields
     (; aρgn0, b_max, npow)                              = scalars
     (; nx, ny, dx, dy, maxiter, ncheck, ϵtol)           = numerical_params
     (; nthreads, nblocks)                               = launch_config
@@ -27,12 +27,12 @@ function solve_sia!(logAs, fields, scalars, numerical_params, launch_config; vis
             CUDA.@sync Err_rel .= H
         end
         @cuda threads = nthreads blocks = nblocks compute_D!(D, H, B, As, aρgn0, npow, dx, dy)
-        @cuda threads = nthreads blocks = nblocks compute_q!(qHx, qHy, D, H, B, dx, dy)
+        @cuda threads = nthreads blocks = nblocks compute_q!(qx, qy, D, H, B, dx, dy)
         CUDA.synchronize()
-        @. qmag = sqrt($avx(qHx)^2 + $avy(qHy)^2)
+        @. qmag = sqrt($avx(qx)^2 + $avy(qy)^2)
         # compute stable time step
         dτ = 1 / (12.1 * maximum(D) / dx^2 + maximum(β))
-        @cuda threads = nthreads blocks = nblocks residual!(RH, qHx, qHy, β, H, B, ELA, b_max, dx, dy)
+        @cuda threads = nthreads blocks = nblocks residual!(RH, qx, qy, β, H, B, ELA, b_max, dx, dy)
         @cuda threads = nthreads blocks = nblocks update_H!(H, RH, dτ)
         @cuda threads = nthreads blocks = nblocks set_BC!(H)
         if iter == 1 || iter % ncheck == 0
@@ -76,23 +76,23 @@ function compute_D!(D, H, B, As, aρgn0, npow, dx, dy)
 end
 
 # compute ice flux
-function compute_q!(qHx, qHy, D, H, B, dx, dy)
+function compute_q!(qx, qy, D, H, B, dx, dy)
     @get_indices
-    @inbounds if ix <= size(qHx, 1) && iy <= size(qHx, 2)
-        qHx[ix, iy] = -@av_ya(D) * (@d_xi(H) + @d_xi(B)) / dx
+    @inbounds if ix <= size(qx, 1) && iy <= size(qx, 2)
+        qx[ix, iy] = -@av_ya(D) * (@d_xi(H) + @d_xi(B)) / dx
     end
-    @inbounds if ix <= size(qHy, 1) && iy <= size(qHy, 2)
-        qHy[ix, iy] = -@av_xa(D) * (@d_yi(H) + @d_yi(B)) / dy
+    @inbounds if ix <= size(qy, 1) && iy <= size(qy, 2)
+        qy[ix, iy] = -@av_xa(D) * (@d_yi(H) + @d_yi(B)) / dy
     end
     return
 end
 
 # compute ice flow residual
-function residual!(RH, qHx, qHy, β, H, B, ELA, b_max, dx, dy)
+function residual!(RH, qx, qy, β, H, B, ELA, b_max, dx, dy)
     @get_indices
     if ix <= size(H, 1) - 2 && iy <= size(H, 2) - 2
         MB = min(β[ix + 1, iy + 1] * (H[ix + 1, iy + 1] + B[ix + 1, iy + 1] - ELA[ix + 1, iy + 1]), b_max)
-        @inbounds RH[ix + 1, iy + 1] = -(@d_xa(qHx) / dx + @d_ya(qHy) / dy) + MB
+        @inbounds RH[ix + 1, iy + 1] = -(@d_xa(qx) / dx + @d_ya(qy) / dy) + MB
     end
     return
 end

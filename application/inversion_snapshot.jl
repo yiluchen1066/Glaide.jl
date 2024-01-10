@@ -1,12 +1,12 @@
 using CairoMakie
 using Enzyme
 
-include("scripts_flux/macros.jl")
+include("macros.jl")
 include("snapshot_loss.jl")
 
 function inversion_snapshot(logAs, geometry, observed, initial, physics, numerics, optim_params)
     (; B, xc, yc) = geometry
-    (; H_obs, qx_obs, qy_obs, qobs_mag) = observed
+    (; H_obs, qobs_mag) = observed
     (; H_ini, As_ini) = initial
     (; npow, aρgn0, β, ELA, γ0) = physics
     (; ϵtol, maxiter) = numerics
@@ -24,10 +24,9 @@ function inversion_snapshot(logAs, geometry, observed, initial, physics, numeric
     # ice thickness
     H         = copy(H_ini)
     D         = CUDA.zeros(Float64, nx - 1, ny - 1)
+    As        = CUDA.zeros(Float64, nx-1, ny - 1)
     qx        = CUDA.zeros(Float64, nx - 1, ny - 2)
     qy        = CUDA.zeros(Float64, nx - 2, ny - 1)
-    qx_obs    = CUDA.zeros(Float64, nx - 1, ny - 2)
-    qy_obs    = CUDA.zeros(Float64, nx - 2, ny - 1)
     logAs_ini = copy(logAs)
     # init adjoint storage
     q̄x      = CUDA.zeros(Float64, nx - 1, ny - 2)
@@ -92,8 +91,8 @@ function inversion_snapshot(logAs, geometry, observed, initial, physics, numeric
     # define reg
     reg = (; nsm=100, Tmp)
 
-    J(_logAs) = loss(logAs, fwd_params, loss_params)
-    ∇J!(_logĀs, _logAs) = ∇loss!(logĀs, logAs, fwd_params, adj_params, loss_params; reg)
+    J(_logAs) = loss_snapshot(logAs, fwd_params, loss_params)
+    ∇J!(_logĀs, _logAs) = ∇loss_snapshot!(logĀs, logAs, fwd_params, adj_params, loss_params; reg)
 
     #initial guess 
     As .= As_ini
@@ -137,5 +136,3 @@ function inversion_snapshot(logAs, geometry, observed, initial, physics, numeric
     end
     return
 end
-
-adjoint_2D()

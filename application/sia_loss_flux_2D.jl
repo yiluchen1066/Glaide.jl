@@ -20,17 +20,17 @@ function smooth!(As, As2, nsm, nthreads, nblocks)
     return
 end
 
-function ∂J_∂qx_vec!(q̄Hx, qmag, qobs_mag, qHx)
+function ∂J_∂qx_vec!(q̄Hx, qmag, qobs_mag, qx)
     q̄Hx                .= 0
-    @. q̄Hx[1:end-1, :] += (qmag - qobs_mag) * $avx(qHx) / (2 * qmag + (qmag == 0))
-    @. q̄Hx[2:end, :]   += (qmag - qobs_mag) * $avx(qHx) / (2 * qmag + (qmag == 0))
+    @. q̄Hx[1:end-1, :] += (qmag - qobs_mag) * $avx(qx) / (2 * qmag + (qmag == 0))
+    @. q̄Hx[2:end, :]   += (qmag - qobs_mag) * $avx(qx) / (2 * qmag + (qmag == 0))
     return
 end
 
-function ∂J_∂qy_vec!(q̄Hy, qmag, qobs_mag, qHy)
+function ∂J_∂qy_vec!(q̄Hy, qmag, qobs_mag, qy)
     q̄Hy                .= 0
-    @. q̄Hy[:, 1:end-1] += (qmag - qobs_mag) * $avy(qHy) / (2 * qmag + (qmag == 0))
-    @. q̄Hy[:, 2:end]   += (qmag - qobs_mag) * $avy(qHy) / (2 * qmag + (qmag == 0))
+    @. q̄Hy[:, 1:end-1] += (qmag - qobs_mag) * $avy(qy) / (2 * qmag + (qmag == 0))
+    @. q̄Hy[:, 2:end]   += (qmag - qobs_mag) * $avy(qy) / (2 * qmag + (qmag == 0))
     return
 end
 
@@ -49,7 +49,7 @@ end
 #compute the sensitivity: hradient of the loss function
 function ∇loss!(logĀs, logAs, fwd_params, adj_params, loss_params; reg=nothing, kwags...)
     #unpack
-    (; RH, qHx, qHy, β, H, B, D, ELA, As, qmag) = fwd_params.fields
+    (; RH, qx, qy, β, H, B, D, ELA, As, qmag) = fwd_params.fields
     (; dx, dy) = fwd_params.numerical_params
     (; aρgn0, b_max, npow) = fwd_params.scalars
     (; nthreads, nblocks) = fwd_params.launch_config
@@ -62,26 +62,26 @@ function ∇loss!(logĀs, logAs, fwd_params, adj_params, loss_params; reg=nothi
     @info "Adjoint solve"
     solve_adjoint_sia!(fwd_params, adj_params, loss_params)
 
-    ∂J_∂qx_vec!(q̄Hx, qmag, qobs_mag, qHx)
-    ∂J_∂qy_vec!(q̄Hy, qmag, qobs_mag, qHy)
+    ∂J_∂qx_vec!(q̄Hx, qmag, qobs_mag, qx)
+    ∂J_∂qy_vec!(q̄Hy, qmag, qobs_mag, qy)
 
     logĀs .= 0.0
     R̄H .= .-ψ_H
     H̄ .= 0.0
     D̄ .= 0.0
 
-    #residual!(RH, qHx, qHy, β, H, B, ELA, b_max, dx, dy)
+    #residual!(RH, qx, qy, β, H, B, ELA, b_max, dx, dy)
     @cuda threads = nthreads blocks = nblocks ∇(residual!,
                                                 DupNN(RH, R̄H),
-                                                DupNN(qHx, q̄Hx),
-                                                DupNN(qHy, q̄Hy),
+                                                DupNN(qx, q̄x),
+                                                DupNN(qy, q̄y),
                                                 Const(β),
                                                 DupNN(H, H̄),
                                                 Const(B), Const(ELA), Const(b_max), Const(dx), Const(dy))
-    #compute_q!(qHx, qHy, D, H, B, dx, dy)
+    #compute_q!(qx, qy, D, H, B, dx, dy)
     @cuda threads = nthreads blocks = nblocks ∇(compute_q!,
-                                                DupNN(qHx, q̄Hx),
-                                                DupNN(qHy, q̄Hy),
+                                                DupNN(qx, q̄x),
+                                                DupNN(qy, q̄y),
                                                 DupNN(D, D̄),
                                                 DupNN(H, H̄),
                                                 Const(B), Const(dx), Const(dy))
