@@ -108,9 +108,9 @@ function application()
 
     # run 3 inversions 
     
-    #inversion_snapshot(logAs_q_snapshot, geometry, observed, initial, physics, numerics, optim_params)
+    inversion_snapshot(logAs_q_snapshot, geometry, observed, initial, physics, numerics, optim_params)
     
-    inversion_steadystate(logAs_H_steadystate, geometry, observed, initial, physics, weights_H, weights_q, numerics, optim_params; do_vis=false, do_thickness=true)
+    #inversion_steadystate(logAs_H_steadystate, geometry, observed, initial, physics, weights_H, weights_q, numerics, optim_params; do_vis=false, do_thickness=true)
 
     # error("check")
     # inversion_steadystate(logAs_q_steadystate, geometry, observed, initial, physics, weights_H, weights_q, numerics, optim_params; do_vis=false, do_thickness=false)
