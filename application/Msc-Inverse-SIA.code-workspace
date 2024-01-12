@@ -1,0 +1,13 @@
+{
+	"folders": [
+		{
+			"path": ".."
+		},
+		{
+			"path": "../../../../home/yilchen/.julia/dev/GlacioTools"
+		}
+	],
+	"settings": {
+		"julia.environmentPath": "/scratch-1/yilchen/Msc-Inverse-SIA"
+	}
+}

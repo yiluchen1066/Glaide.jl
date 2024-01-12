@@ -6,3 +6,5 @@ output/
 datasets/
 datasets_vel
 figs/
+scripts_flux/output_snapshot
+scripts_flux/output_steadystate

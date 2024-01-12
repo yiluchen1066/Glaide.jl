@@ -28,8 +28,8 @@ function inversion_steadystate(logAs, geometry, observed, initial, physics, weig
     dx = xc[2] - xc[1]
     dy = yc[2] - yc[1]
 
-    ncheck     = ceil(Int, 0.25 * nx^2)
-    ncheck_adj = ceil(Int, 0.25 * nx^2)
+    ncheck     = ceil(Int, 2 * nx)
+    ncheck_adj = ceil(Int, 2 * nx)
     nthreads   = (16, 16)
     nblocks    = ceil.(Int, (nx, ny) ./ nthreads)
 
@@ -63,7 +63,7 @@ function inversion_steadystate(logAs, geometry, observed, initial, physics, weig
     # setup visualisation
     begin
         #init visualization 
-        fig = Figure(; resolution=(1600, 1200), fontsize=32)
+        fig = Figure(; size=(1000, 800), fontsize=22)
 
         axs = (H    = Axis(fig[1, 1][1, 1]; aspect=DataAspect(), xlabel=L"x", ylabel=L"y", title=L"H"),
                H_s  = Axis(fig[1, 2]; aspect=1, xlabel=L"H"),
@@ -109,7 +109,7 @@ function inversion_steadystate(logAs, geometry, observed, initial, physics, weig
 
     #Define loss functions 
     #call the loss functions and the gradient of the loss function 
-    J(_logAs) = loss(logAs, fwd_params, loss_params)
+    J(_logAs) = loss(logAs, fwd_params, loss_params; visu=fwd_visu)
     ∇J!(_logĀs, _logAs) = ∇loss!(logĀs, logAs, fwd_params, adj_params, loss_params; reg)
     @info "inversion for As"
 
@@ -118,8 +118,7 @@ function inversion_steadystate(logAs, geometry, observed, initial, physics, weig
     logAs .= log10.(As)
     γ = γ0
     #solve for H with As and compute J_old
-    H .= 0.0
-    @show maximum(logAs)
+    H .= H_ini
     J0 = J(logAs)
 
     push!(cost_evo, 1.0)

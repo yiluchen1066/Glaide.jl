@@ -53,7 +53,7 @@ function ∇loss!(logĀs, logAs, fwd_params, adj_params, loss_params; reg=nothi
     (; dx, dy) = fwd_params.numerical_params
     (; aρgn0, b_max, npow) = fwd_params.scalars
     (; nthreads, nblocks) = fwd_params.launch_config
-    (; R̄H, q̄Hx, q̄Hy, H̄, D̄, Ās, ψ_H) = adj_params.fields
+    (; R̄H, q̄x, q̄y, H̄, D̄, Ās, ψ_H) = adj_params.fields
     (; H_obs, qobs_mag, Lap_As) = loss_params.fields
 
     @info "Forward solve"
@@ -62,8 +62,8 @@ function ∇loss!(logĀs, logAs, fwd_params, adj_params, loss_params; reg=nothi
     @info "Adjoint solve"
     solve_adjoint_sia!(fwd_params, adj_params, loss_params)
 
-    ∂J_∂qx_vec!(q̄Hx, qmag, qobs_mag, qx)
-    ∂J_∂qy_vec!(q̄Hy, qmag, qobs_mag, qy)
+    ∂J_∂qx_vec!(q̄x, qmag, qobs_mag, qx)
+    ∂J_∂qy_vec!(q̄y, qmag, qobs_mag, qy)
 
     logĀs .= 0.0
     R̄H .= .-ψ_H

@@ -116,7 +116,7 @@ function adjoint_2D()
     tsc = 1 / aρgn0 / lsc^npow
     # non-dimensional numbers 
     s_f_syn  = 1e-4                  # sliding to ice flow ratio: s_f   = asρgn0/aρgn0/lx^2
-    s_f      =  0.01 # sliding to ice flow ratio: s_f   = asρgn0/aρgn0/lx^2
+    s_f      =  0.08 # sliding to ice flow ratio: s_f   = asρgn0/aρgn0/lx^2
     b_max_nd = 4.706167536706325e-12 # m_max/lx*tsc m_max = 2.0 m/a lx = 1e3 tsc = 
     β1tsc    = 2.353083768353162e-10 # ratio between characteristic time scales of ice flow and accumulation/ablation βtsc = β0*tsc 
     β2tsc    = 3.5296256525297436e-10
@@ -149,9 +149,9 @@ function adjoint_2D()
     ncheck     = ceil(Int, 0.25 * nx^2)
     nthreads   = (16, 16)
     nblocks    = ceil.(Int, (nx, ny) ./ nthreads)
-    ngd        = 100
+    ngd        = 25
     bt_niter   = 5
-    Δγ         = 1e-1
+    Δγ         = 2e-1
 
     ## pre-processing
     dx, dy = lx / nx, ly / ny
@@ -207,46 +207,9 @@ function adjoint_2D()
     cost_evo = Float64[]
     iter_evo = Float64[]
 
-    # setup visualisation
-    begin
-        #init visualization 
-        fig = Figure(size=(1000, 800), fontsize=32)
-        #opts    = (xaxisposition=:top,) # save for later 
-
-        axs = (H    = Axis(fig[1, 1][1, 1]; aspect=DataAspect(), xlabel=L"x", ylabel=L"y", title=L"H"),
-               H_s  = Axis(fig[1, 2]; aspect=1, xlabel=L"H"),
-               As   = Axis(fig[2, 1][1, 1]; aspect=DataAspect(), xlabel=L"x", title=L"\log_{10}(A_s)"),
-               As_s = Axis(fig[2, 2]; aspect=1, xlabel=L"\log_{10}(A_s)"),
-               err  = Axis(fig[2, 3]; yscale=log10, title=L"convergence", xlabel="iter", ylabel=L"error"))
-
-        #xlims CairoMakie.xlims!()
-        #ylims 
-
-        nan_to_zero(x) = isnan(x) ? zero(x) : x
-
-        # As_ini .= CuArray(asρgn0.*(1.0 .+ 1e1.*CUDA.rand(Float64, size(As_ini))))
-
-        logAs     = log10.(As)
-        logAs_syn = log10.(As_syn)
-        logAs_ini = log10.(As_ini)
-
-        xc_1 = xc[1:(end-1)]
-        yc_1 = yc[1:(end-1)]
-
-        plts = (H    = heatmap!(axs.H, xc, yc, Array(H); colormap=:turbo),
-                H_v  = vlines!(axs.H, xc[nx÷2]; color=:magenta, linewidth=4, linestyle=:dash),
-                H_s  = (lines!(axs.H_s, Point2.(Array(H_obs[nx÷2, :]), yc); linewidth=4, color=:red, label="synthetic"),
-                lines!(axs.H_s, Point2.(Array(H[nx÷2, :]), yc); linewidth=4, color=:blue, label="current")),
-                As   = heatmap!(axs.As, xc_1, yc_1, Array(logAs); colormap=:viridis),
-                As_v = vlines!(axs.As, xc_1[nx÷2]; linewidth=4, color=:magenta, linewtyle=:dash),
-                As_s = (lines!(axs.As_s, Point2.(Array(logAs[nx÷2, :]), yc_1); linewith=4, color=:blue, label="current"),
-                lines!(axs.As_s, Point2.(Array(logAs_ini[nx÷2, :]), yc_1); linewidth=4, color=:green, label="initial"),
-                lines!(axs.As_s, Point2.(Array(logAs_syn[nx÷2, :]), yc_1); linewidth=4, color=:red, label="synthetic")),
-                err  = scatterlines!(axs.err, Point2.(iter_evo, cost_evo); linewidth=4))
-
-        Colorbar(fig[1, 1][1, 2], plts.H)
-        Colorbar(fig[2, 1][1, 2], plts.As)
-    end
+    logAs     = log10.(As)
+    logAs_syn = log10.(As_syn)
+    logAs_ini = log10.(As_ini)
 
     #pack parameters
     fwd_params = (fields           = (; H, B, β, ELA, D, qHx, qHy, As, RH, Err_rel, Err_abs, qmag),
@@ -255,8 +218,6 @@ function adjoint_2D()
                   launch_config    = (; nthreads, nblocks))
     adj_params = (fields=(; q̄Hx, q̄Hy, D̄, H̄),)
     loss_params = (fields=(; qHx_obs, qHy_obs, qobs_mag),)
-
-    fwd_visu = (; plts, fig)
 
     @info "synthetic solve"
     @show maximum(As_syn)
@@ -269,30 +230,87 @@ function adjoint_2D()
     @show size(qobs_mag)
     @info "synthetic solve done"
 
-    # define reg
-    reg = (; nsm=100, Tmp)
+     # define reg
+     reg = (; nsm=500, Tmp)
 
-    J(_logAs) = loss(logAs, fwd_params, loss_params)
-    ∇J!(_logĀs, _logAs) = ∇loss!(logĀs, logAs, fwd_params, adj_params, loss_params; reg)
+     J(_logAs) = loss(logAs, fwd_params, loss_params)
+     ∇J!(_logĀs, _logAs) = ∇loss!(logĀs, logAs, fwd_params, adj_params, loss_params; reg)
+ 
+     #initial guess 
+     As .= As_ini
+     @show maximum(As)
+     logAs .= log10.(As)
+     γ = γ0
+     J0 = J(logAs)
 
-    #initial guess 
-    As .= As_ini
-    @show maximum(As)
-    logAs .= log10.(As)
-    γ = γ0
-    J0 = J(logAs)
+    # setup visualisation
+    begin
+        #init visualization 
+        fig = Figure(; size=(800, 400), fontsize=18)
+        ax  = (As_s  = Axis(fig[1, 1]; aspect=DataAspect(), ylabel="y", title="observed log As"),
+        As_i  = Axis(fig[1, 2]; aspect=DataAspect(), title="modeled log As"),
+        q_s   = Axis(fig[2, 1]; aspect=DataAspect(), xlabel="x", ylabel="y", title="observed log |q|"),
+        q_i   = Axis(fig[2, 2]; aspect=DataAspect(), xlabel="x", title="modeled log |q|"),
+        slice = Axis(fig[1, 3]; xlabel="Aₛ"),
+        conv  = Axis(fig[2, 3]; xlabel="#iter", ylabel="J/J₀", yscale=log10, title="convergence"))
+        
+        # xlims!(ax.slice, -20, 80)
+        xlims!(ax.conv, 0, ngd + 1)
+        ylims!(ax.conv, 1e-8, 1e0)
+        #xlims CairoMakie.xlims!()
+        #ylims 
+
+        nan_to_zero(x) = isnan(x) ? zero(x) : x
+
+        xc_1 = xc[1:(end-1)]
+        yc_1 = yc[1:(end-1)]
+
+
+        linkyaxes!(ax.slice, ax.As_i, ax.As_s, ax.q_s, ax.q_i)
+
+        idc_inn = findall(H[2:end-1,2:end-1] .≈ 0.0) |> Array
+
+        H_vert = @. 0.25 * (H[1:end-1, 1:end-1] + H[2:end,1:end-1] + H[1:end-1,2:end] + H[2:end,2:end])
+        idv = findall(H_vert .≈ 0.0) |> Array
+
+        As_syn_v = Array(logAs_syn)
+        As_syn_v[idv] .= NaN
+
+        As_v = Array(logAs)
+        As_v[idv] .= NaN
+
+        qobs_mag_v = Array(log10.(qobs_mag))
+        qobs_mag_v[idc_inn] .= NaN
+
+        qmag_v = Array(log10.(qmag))
+        qmag_v[idc_inn] .= NaN
+
+        As_crange = filter(!isnan, As_syn_v) |> extrema
+        q_crange = filter(!isnan, qobs_mag_v) |> extrema
+
+        plts = (As_s  = (heatmap!(ax.As_s, xv, yv, As_syn_v; colormap=:turbo, colorrange=As_crange),
+                vlines!(ax.As_s, xc[nx÷2]; linestyle=:dash, color=:magenta)
+                ),
+                As_i  = heatmap!(ax.As_i, xv, yv, As_v; colormap=:turbo, colorrange=As_crange),
+                q_s   = heatmap!(ax.q_s, xc[2:end-1], yc[2:end-1], qobs_mag_v; colormap=:turbo, colorrange=q_crange),
+                q_i   = heatmap!(ax.q_i, xc[2:end-1], yc[2:end-1], qmag_v; colormap=:turbo, colorrange=q_crange),
+                slice = (lines!(ax.slice, As_syn_v[nx÷2, :], yv; label="observed"),
+                lines!(ax.slice, As_v[nx÷2, :], yv; label="modeled")),
+                conv  = scatterlines!(ax.conv, Point2.(iter_evo, cost_evo); linewidth=2))
+
+        lg = axislegend(ax.slice; labelsize=10, rowgap=-5, height=40)
+
+        Colorbar(fig[1, 1][1, 2], plts.As_s[1])
+        Colorbar(fig[1, 2][1, 2], plts.As_i)
+        Colorbar(fig[2,1][1,2], plts.q_s)
+        Colorbar(fig[2,2][1,2], plts.q_i)
+    end
 
     push!(cost_evo, 1.0)
     push!(iter_evo, 0)
 
-    ispath("output_snapshot") && rm("output_snapshot", recursive=true)
-    mkdir("output_snapshot")
-    jldsave("output_snapshot/static.jld2"; qobs_mag, As_ini, As_syn, xc, yc, xv, yv)
-
-    iframe = 1
-
     @info "Gradient descent - inversion for As"
-    for igd in 1:ngd
+    CairoMakie.record(fig, "snapshot.mp4", 1:ngd; framerate=1) do igd
         println("GD iteration $igd \n")
         ∇J!(logĀs, logAs)
         @show maximum(exp10.(logAs))
@@ -313,17 +331,16 @@ function adjoint_2D()
         @printf " min(As) = %1.2e \n" minimum(exp10.(logAs))
         @printf " --> Loss J = %1.2e (γ = %1.2e) \n" last(cost_evo) γ
 
-        if igd % 5 == 0
-            plts.H[3]       = Array(H)
-            plts.H_s[2][1]  = Point2.(Array(H[nx÷2, :]), yc)
-            plts.As[3]      = Array(log10.(As))
-            plts.As_s[1][1] = Point2.(Array(log10.(As[nx÷2, :])), yc_1)
-            plts.err[1]     = Point2.(iter_evo, cost_evo)
-            display(fig)
+        As_v = Array(logAs)
+        As_v[idv] .= NaN
 
-            jldsave("output_snapshot/step_$iframe.jld2"; As, qmag)
-            iframe += 1
-        end
+        qmag_v = Array(log10.(qmag))
+        qmag_v[idc_inn] .= NaN
+
+        plts.As_i[3] = As_v
+        plts.q_i[3] = qmag_v
+        plts.slice[2][1][] = Point2.(As_v[nx÷2, :],yv)
+        plts.conv[1] = Point2.(iter_evo, cost_evo)
     end
     return
 end

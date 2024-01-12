@@ -1,6 +1,7 @@
 using CairoMakie
 using Enzyme
 
+
 include("macros.jl")
 include("snapshot_loss.jl")
 
@@ -42,42 +43,42 @@ function inversion_snapshot(logAs, geometry, observed, initial, physics, numeric
     iter_evo = Float64[]
 
     # setup visualisation
-    # begin
-    #     #init visualization 
-    #     fig = Figure(; size=(1000, 800), fontsize=32)
-    #     #opts    = (xaxisposition=:top,) # save for later 
+    begin
+        #init visualization 
+        fig = Figure(; size=(1600, 1200), fontsize=32)
+        #opts    = (xaxisposition=:top,) # save for later 
 
-    #     axs = (H    = Axis(fig[1, 1][1, 1]; aspect=DataAspect(), xlabel=L"x", ylabel=L"y", title=L"H"),
-    #            H_s  = Axis(fig[1, 2]; aspect=1, xlabel=L"H"),
-    #            As   = Axis(fig[2, 1][1, 1]; aspect=DataAspect(), xlabel=L"x", title=L"\log_{10}(A_s)"),
-    #            As_s = Axis(fig[2, 2]; aspect=1, xlabel=L"\log_{10}(A_s)"),
-    #            err  = Axis(fig[2, 3]; yscale=log10, title=L"convergence", xlabel="iter", ylabel=L"error"))
+        axs = (H    = Axis(fig[1, 1][1, 1]; aspect=DataAspect(), xlabel=L"x", ylabel=L"y", title=L"H"),
+               H_s  = Axis(fig[1, 2]; aspect=1, xlabel=L"H"),
+               As   = Axis(fig[2, 1][1, 1]; aspect=DataAspect(), xlabel=L"x", title=L"\log_{10}(A_s)"),
+               As_s = Axis(fig[2, 2]; aspect=1, xlabel=L"\log_{10}(A_s)"),
+               err  = Axis(fig[2, 3]; yscale=log10, title=L"convergence", xlabel="iter", ylabel=L"error"))
 
-    #     nan_to_zero(x) = isnan(x) ? zero(x) : x
+        nan_to_zero(x) = isnan(x) ? zero(x) : x
 
-    #     # As_ini .= CuArray(asρgn0.*(1.0 .+ 1e1.*CUDA.rand(Float64, size(As_ini))))
+        # As_ini .= CuArray(asρgn0.*(1.0 .+ 1e1.*CUDA.rand(Float64, size(As_ini))))
 
-    #     logAs     = log10.(As)
-    #     #logAs_syn = log10.(As_syn)
-    #     logAs_ini = log10.(As_ini)
+        logAs     = log10.(As)
+        #logAs_syn = log10.(As_syn)
+        logAs_ini = log10.(As_ini)
 
-    #     xc_1 = xc[1:(end-1)]
-    #     yc_1 = yc[1:(end-1)]
+        xc_1 = xc[1:(end-1)]
+        yc_1 = yc[1:(end-1)]
 
-    #     plts = (H    = heatmap!(axs.H, xc, yc, Array(H); colormap=:turbo),
-    #             H_v  = vlines!(axs.H, xc[nx÷2]; color=:magenta, linewidth=4, linestyle=:dash),
-    #             H_s  = (lines!(axs.H_s, Point2.(Array(H_obs[nx÷2, :]), yc); linewidth=4, color=:red, label="synthetic"),
-    #             lines!(axs.H_s, Point2.(Array(H[nx÷2, :]), yc); linewidth=4, color=:blue, label="current")),
-    #             As   = heatmap!(axs.As, xc_1, yc_1, Array(logAs); colormap=:viridis),
-    #             As_v = vlines!(axs.As, xc_1[nx÷2]; linewidth=4, color=:magenta, linewtyle=:dash),
-    #             As_s = (lines!(axs.As_s, Point2.(Array(logAs[nx÷2, :]), yc_1); linewith=4, color=:blue, label="current"),
-    #             lines!(axs.As_s, Point2.(Array(logAs_ini[nx÷2, :]), yc_1); linewidth=4, color=:green, label="initial")),
-    #             #lines!(axs.As_s, Point2.(Array(logAs_syn[nx÷2, :]), yc_1); linewidth=4, color=:red, label="synthetic")),
-    #             err  = scatterlines!(axs.err, Point2.(iter_evo, cost_evo); linewidth=4))
+        plts = (H    = heatmap!(axs.H, xc, yc, Array(H); colormap=:turbo),
+                H_v  = vlines!(axs.H, xc[nx÷2]; color=:magenta, linewidth=4, linestyle=:dash),
+                H_s  = (lines!(axs.H_s, Point2.(Array(H_obs[nx÷2, :]), yc); linewidth=4, color=:red, label="synthetic"),
+                lines!(axs.H_s, Point2.(Array(H[nx÷2, :]), yc); linewidth=4, color=:blue, label="current")),
+                As   = heatmap!(axs.As, xc_1, yc_1, Array(logAs); colormap=:viridis),
+                As_v = vlines!(axs.As, xc_1[nx÷2]; linewidth=4, color=:magenta, linewtyle=:dash),
+                As_s = (lines!(axs.As_s, Point2.(Array(logAs[nx÷2, :]), yc_1); linewith=4, color=:blue, label="current"),
+                lines!(axs.As_s, Point2.(Array(logAs_ini[nx÷2, :]), yc_1); linewidth=4, color=:green, label="initial")),
+                #lines!(axs.As_s, Point2.(Array(logAs_syn[nx÷2, :]), yc_1); linewidth=4, color=:red, label="synthetic")),
+                err  = scatterlines!(axs.err, Point2.(iter_evo, cost_evo); linewidth=4))
 
-    #     Colorbar(fig[1, 1][1, 2], plts.H)
-    #     Colorbar(fig[2, 1][1, 2], plts.As)
-    # end
+        #Colorbar(fig[1, 1][1, 2], plts.H)
+        #Colorbar(fig[2, 1][1, 2], plts.As)
+    end
 
     #here I wrapped As into fwd_params, with 
     #pack parameters
@@ -103,6 +104,9 @@ function inversion_snapshot(logAs, geometry, observed, initial, physics, numeric
     push!(cost_evo, 1.0)
     push!(iter_evo, 0)
 
+    jldsave("output_snapshot/static.jld2"; qobs_mag, As_ini)
+
+
     @info "Gradient descent - inversion for As"
     for igd in 1:ngd
         println("GD iteration $igd \n")
@@ -120,12 +124,14 @@ function inversion_snapshot(logAs, geometry, observed, initial, physics, numeric
         end
 
         push!(iter_evo, igd)
-        push!(cost_evo, J(logAs) / J0)
+        J_new = J(logAs)
+        push!(cost_evo, J_new / J0)
 
         @printf " min(As) = %1.2e \n" minimum(exp10.(logAs))
-        @printf " --> Loss J = %1.2e (γ = %1.2e) \n" last(cost_evo) γ
+        @printf " --> Abs loss J = %1.2e Rel loss J = %1.2e (γ = %1.2e) \n" J_new last(cost_evo) γ
 
         if igd % 10 == 0
+            jldsave("/output_snapshot/step_$iframe.jld2"; As, qmag)
             plts.H[3]       = Array(H)
             plts.H_s[2][1]  = Point2.(Array(H[nx÷2, :]), yc)
             plts.As[3]      = Array(log10.(As))

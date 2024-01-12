@@ -18,10 +18,14 @@ function solve_sia!(logAs, fields, scalars, numerical_params, launch_config; vis
     Err_abs .= 0
     As      .= exp10.(logAs)
     CUDA.synchronize()
+
     # iterative loop 
     err_evo = (iters = Float64[],
                abs   = Float64[],
                rel   = Float64[])
+
+    isnothing(visu) || update_visualisation!(As, visu, fields, err_evo)
+
     for iter in 1:maxiter
         if iter == 1 || iter % ncheck == 0
             CUDA.@sync Err_rel .= H
@@ -29,9 +33,9 @@ function solve_sia!(logAs, fields, scalars, numerical_params, launch_config; vis
         @cuda threads = nthreads blocks = nblocks compute_D!(D, H, B, As, aρgn0, npow, dx, dy)
         @cuda threads = nthreads blocks = nblocks compute_q!(qx, qy, D, H, B, dx, dy)
         CUDA.synchronize()
-        @. qmag = sqrt($avx(qx)^2 + $avy(qy)^2)
         # compute stable time step
         dτ = 1 / (12.1 * maximum(D) / dx^2 + maximum(β))
+
         @cuda threads = nthreads blocks = nblocks residual!(RH, qx, qy, β, H, B, ELA, b_max, dx, dy)
         @cuda threads = nthreads blocks = nblocks update_H!(H, RH, dτ)
         @cuda threads = nthreads blocks = nblocks set_BC!(H)
@@ -44,12 +48,13 @@ function solve_sia!(logAs, fields, scalars, numerical_params, launch_config; vis
             push!(err_evo.iters, iter / nx)
             push!(err_evo.abs, err_abs)
             push!(err_evo.rel, err_rel)
-            @printf("  iter/nx^2=%.3e, err= [abs=%.3e, rel=%.3e] \n", iter / nx^2, err_abs, err_rel)
+            @printf("  iter/nx=%.3e, err= [abs=%.3e, rel=%.3e] \n", iter / nx, err_abs, err_rel)
             isnothing(visu) || update_visualisation!(As, visu, fields, err_evo)
             if err_rel < ϵtol.rel
                 break
             end
         end
+        @. qmag = sqrt($avx(qx)^2 + $avy(qy)^2)
     end
     return
 end

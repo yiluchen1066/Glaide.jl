@@ -1,9 +1,12 @@
 using Statistics
 using CUDA
+using JLD2
 
 include("dataset.jl")
 include("inversion_steadystate.jl")
 include("inversion_snapshot.jl")
+
+const ALETSCH_VELOCITY_FILE = "velocity_data/ALPES_wFLAG_wKT_ANNUALv2016-2021.nc"
 
 @views function smooth_2!(A, nsm)
     for _ in 1:nsm
@@ -16,17 +19,25 @@ include("inversion_snapshot.jl")
     return
 end
 
-function application()
+function preprocessing()
+    H_Alet, S_Alet, B_Alet, vmag_Alet, xc_Alet, yc_Alet = load_data("Aletsch", "B36-26", "application/datasets", ALETSCH_VELOCITY_FILE; visu_data=false)
+    jldsave("Aletsch.jld2"; H_Alet, S_Alet, B_Alet, vmag_Alet, xc_Alet, yc_Alet)
+    return
+end
 
+preprocessing()
+
+function application()
+    H_Alet, S_Alet, B_Alet, vmag_Alet, xc_Alet, yc_Alet = load("Aletsch.jld2", "H_Alet", "S_Alet", "B_Alet", "vmag_Alet", "xc_Alet", "yc_Alet")
     # load the data 
-    H_Alet, S_Alet, B_Alet, vmag_Alet, xc_Alet, yc_Alet = load_data("Aletsch", "B36-26", "datasets/Aletsch"; visu_data=false)
+    vmag_Alet ./= 365*24*3600
     nx = size(H_Alet)[1]
     ny = size(H_Alet)[2]
 
     #here I can check the data before after the rescaling 
 
     #real scale
-    lsc_data = mean(H_Alet)
+    lsc_data = filter(!isnan, H_Alet) |> mean
     ρ = 910
     g = 9.81
     A = 1.9e-24
@@ -37,39 +48,30 @@ function application()
     vsc_data = lsc_data / tsc_data
 
     #rescale
-    lsc   = 10.0
-    aρgn0 = 10.0
+    lsc   = 1.0
+    aρgn0 = 1.0
 
     tsc = 1 / aρgn0 / lsc^npow
     vsc = lsc / tsc
 
     #rescaling 
-    H = H_Alet ./ lsc_data .* lsc
+    H = (S_Alet .- B_Alet) ./ lsc_data .* lsc
     B = B_Alet ./ lsc_data .* lsc
     S = S_Alet ./ lsc_data .* lsc
     vmag = vmag_Alet ./ vsc_data .* vsc
 
+    @show maximum(S)
+
     xc = xc_Alet ./ lsc_data .* lsc
     yc = yc_Alet ./ lsc_data .* lsc
     # here vmag should still in the size of (nx, ny)
-    qmag = vmag .* H
-
-    @show maximum(H)
-    @show maximum(H_Alet)
-    @show size(H)
-    @show size(H_Alet)
-    @show maximum(vmag)
-    @show maximum(vmag_Alet)
-    @show size(vmag)
-    @show size(vmag_Alet)
-
-    #here the point is we cannot put H_Alet and H on the same plot, which is a bit difficult to understand
+    qmag = replace(vmag[2:end-1, 2:end-1], NaN => 0.0) .* H[2:end-1, 2:end-1]
 
     check_scaling = true
     if check_scaling
         fig = Figure(; size=(1000, 580), fontsize=22)
-        axs = (H=Axis(fig[1, 1]; aspect=DataAspect(), xlabel=L"x\text{ [km]}", ylabel=L"y\text{ [km]}", title=L"H_after [m]"),
-            vmag=Axis(fig[1, 2]; aspect=DataAspect(), xlabel=L"x\text{ [km]}", ylabel=L"y\text {[km]}", title=L"vmag_after[m/s]"))
+        axs = (H=Axis(fig[1, 1]; aspect=DataAspect(), xlabel=L"x\text{ [km]}", ylabel=L"y\text{ [km]}", title=L"H\text{ [m]}"),
+            vmag=Axis(fig[1, 2]; aspect=DataAspect(), xlabel=L"x\text{ [km]}", ylabel=L"y\text{ [km]}", title=L"vmag\text{ [m/s]}"))
         plts = (H=plot!(axs.H, H; colormap=:turbo),
                 vmag=plot!(axs.vmag, vmag; colormap=:turbo))
         axs.H.xticksize = 18
@@ -79,16 +81,17 @@ function application()
         Colorbar(fig[1, 1][1, 2], plts.H)
         Colorbar(fig[1, 2][1, 2], plts.vmag)
         colgap!(fig.layout, 7)
-        display(fig)
+        save("Atletch_data.png", fig)
     end 
 
     error("check")
 
+
     #non-dimensional numbers
     s_f      = 0.01 #as/a/lsc^2
-    β_nd     = 1.12e-7
-    b_max_nd = 2.70e-8
-    z_ela_l  = 2.93
+    β_nd     = 1e16 * 1.12e-7
+    b_max_nd = 1e16 * 2.70e-8
+    z_ela_l  = 14.0
 
     H_cut_l = 1.0e-6
     γ_nd = 1e2
@@ -101,7 +104,7 @@ function application()
     #numerics
     H_cut = H_cut_l * lsc
     γ0 = γ_nd * lsc^(2 - 2npow) * tsc^(-2)
-    ϵtol = (abs=1e-8, rel=1e-8)
+    ϵtol = (abs=1e-6, rel=1e-6)
     ϵtol_adj = 1e-8
     maxiter = 5 * nx^2
     Δγ = 0.2
@@ -139,7 +142,7 @@ function application()
     
     inversion_snapshot(logAs_q_snapshot, geometry, observed, initial, physics, numerics, optim_params)
     
-    #inversion_steadystate(logAs_H_steadystate, geometry, observed, initial, physics, weights_H, weights_q, numerics, optim_params; do_vis=false, do_thickness=true)
+    inversion_steadystate(logAs_H_steadystate, geometry, observed, initial, physics, weights_H, weights_q, numerics, optim_params; do_vis=true, do_thickness=true)
 
     # error("check")
     # inversion_steadystate(logAs_q_steadystate, geometry, observed, initial, physics, weights_H, weights_q, numerics, optim_params; do_vis=false, do_thickness=false)
@@ -150,3 +153,4 @@ function application()
 end
 
 application()
+

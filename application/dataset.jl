@@ -3,16 +3,17 @@ using GlacioTools
 import NCDatasets
 using CairoMakie
 
-@views function load_data(Glacier::AbstractString, SGI_ID::AbstractString, datadir::AbstractString; visu_data=false)
+@views function load_data(Glacier::AbstractString, SGI_ID::AbstractString, datadir::AbstractString, velocity_file; visu_data=false)
     #load ice surface data using geom_select
-    ice_thic, ice_surf, bed_surf = GlacioTools.geom_select(Glacier, SGI_ID, datadir; do_save=false)
+    ice_thic, ice_surf, bed_surf = GlacioTools.geom_select(Glacier, SGI_ID, joinpath(datadir, Glacier); do_save=false)
     ice_thic = reverse(ice_thic[:, :, 1]; dims=2) # reads it into memory
     ice_surf = reverse(ice_surf[:, :, 1]; dims=2) # reads it into memory
     bed_surf = reverse(bed_surf[:, :, 1]; dims=2) # reads it into memory
 
+    velocity_path = joinpath(datadir, Glacier, ALETSCH_VELOCITY_FILE)
+
     #load vmag data 
-    dataset = RasterStack("datasets_vel/ALPES_wFLAG_wKT_ANNUALv2016-2021.nc";
-                      crs=EPSG(32632), mappedcrs=EPSG(32632))
+    dataset = RasterStack(velocity_path; crs=EPSG(32632), mappedcrs=EPSG(32632))
     vmag_epsg = dataset.v2016_2017[:, :]
     vmag_epsg = replace_missing(vmag_epsg, NaN)
     vmag_epsg = Raster(vmag_epsg; dims=GlacioTools.coords_as_ranges(vmag_epsg),
