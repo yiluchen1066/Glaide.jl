@@ -10,7 +10,7 @@ using CairoMakie
     ice_surf = reverse(ice_surf[:, :, 1]; dims=2) # reads it into memory
     bed_surf = reverse(bed_surf[:, :, 1]; dims=2) # reads it into memory
 
-    velocity_path = joinpath(datadir, Glacier, ALETSCH_VELOCITY_FILE)
+    velocity_path = joinpath(datadir, Glacier, velocity_file)
 
     #load vmag data 
     dataset = RasterStack(velocity_path; crs=EPSG(32632), mappedcrs=EPSG(32632))
@@ -46,25 +46,22 @@ using CairoMakie
     xc = xc .- xc[1]
     yc = yc .- yc[1]
 
-    xc ./= 1e3
-    yc ./= 1e3
-
     # visu
-    if visu_data
-        fig = Figure(; size=(1000, 580), fontsize=22)
-        axs = (H=Axis(fig[1, 1]; aspect=DataAspect(), xlabel=L"x\text{ [km]}", ylabel=L"y\text{ [km]}", title=L"H [m]"),
-            vmag=Axis(fig[1, 2]; aspect=DataAspect(), xlabel=L"x\text{ [km]}", ylabel=L"y\text {[km]}", title=L"Vmag [m/s]"))
-        plts = (H=plot!(axs.H, H; colormap=:turbo),
-                vmag=plot!(axs.vmag, vmag; colormap=:turbo))
-        axs.H.xticksize = 18
-        axs.H.yticksize = 18
-        axs.vmag.xticksize = 18
-        axs.vmag.yticksize = 18
-        Colorbar(fig[1, 1][1, 2], plts.H)
-        Colorbar(fig[1, 2][1, 2], plts.vmag)
-        colgap!(fig.layout, 7)
-        display(fig)
-    end 
+    # if visu_data
+    #     fig = Figure(; size=(1000, 580), fontsize=22)
+    #     axs = (H=Axis(fig[1, 1]; aspect=DataAspect(), xlabel=L"x\text{ [km]}", ylabel=L"y\text{ [km]}", title=L"H [m]"),
+    #         vmag=Axis(fig[1, 2]; aspect=DataAspect(), xlabel=L"x\text{ [km]}", ylabel=L"y\text {[km]}", title=L"Vmag [m/s]"))
+    #     plts = (H=plot!(axs.H, xc, yc, H; colormap=:turbo),
+    #             vmag=plot!(axs.vmag, xc, yc, vmag; colormap=:turbo))
+    #     axs.H.xticksize = 18
+    #     axs.H.yticksize = 18
+    #     axs.vmag.xticksize = 18
+    #     axs.vmag.yticksize = 18
+    #     Colorbar(fig[1, 1][1, 2], plts.H)
+    #     Colorbar(fig[1, 2][1, 2], plts.vmag)
+    #     colgap!(fig.layout, 7)
+    #     display(fig)
+    # end 
     return H_Alet, S_Alet, B_Alet, vmag_Alet, xc, yc
 end 
 

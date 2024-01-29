@@ -62,7 +62,7 @@ end
 
 function ∇loss_snapshot!(logĀs, logAs, fwd_params, adj_params, loss_params; reg=nothing)
     #unpack forward parameters 
-    (; H, B, β, ELA, D, qx, qy, As, qmag) = fwd_params.fields
+    (; H, B, D, qx, qy, As, qmag) = fwd_params.fields
     (; aρgn0, npow) = fwd_params.scalars
     (; dx, dy) = fwd_params.numerical_params
     (; nthreads, nblocks) = fwd_params.launch_config

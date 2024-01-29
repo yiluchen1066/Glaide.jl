@@ -5,11 +5,6 @@ using CairoMakie
 (qobs_mag, H_obs, As_ini, As_syn, xc, yc, xv, yv) = load("output_steadystate/static.jld2", "qobs_mag", "H_obs", "As_ini", "As_syn","xc", "yc", "xv", "yv")
 
 
-@show typeof(Array(qobs_mag))
-
-error("check")
-
-
 gd_niter = 25
 
 fig = Figure(; size=(800, 400), fontsize=18)

@@ -242,6 +242,7 @@ function adjoint_2D()
         display(fig)
     end
 
+
     @info "Gradient descent - inversion for As"
     CairoMakie.record(fig, "steady_state.mp4", 1:ngd; framerate=1) do igd
         #As_ini .= As
