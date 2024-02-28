@@ -39,6 +39,7 @@ function forward_model!(logAs, fwd_params)
     return
 end
 
+
 function ∂J_∂qx_vec!(q̄x, qmag, qobs_mag, qx)
     q̄x                .= 0
     @. q̄x[1:end-1, :] += (qmag - qobs_mag) * $avx(qx) / (2 * qmag + (qmag == 0))

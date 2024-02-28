@@ -36,6 +36,7 @@ function inversion_snapshot(logAs, geometry, observed, initial, physics, numeric
     H̄       = CUDA.zeros(Float64, nx, ny)
     logĀs   = CUDA.zeros(Float64, nx - 1, ny - 1)
     Tmp      = CUDA.zeros(Float64, nx - 1, ny - 1)
+    surf_grad = CUDA.zeros(Float64, nx - 2, ny - 2)
 
     cost_evo = Float64[]
     iter_evo = Float64[]
@@ -51,7 +52,6 @@ function inversion_snapshot(logAs, geometry, observed, initial, physics, numeric
 
         axs = (qobs_mag    = Axis(fig[1, 1][1, 1]; aspect=DataAspect(), xlabel=L"x", ylabel=L"y", title=L"|q^\mathrm{obs}|"),
                qmag  = Axis(fig[1, 2][1,1]; aspect=DataAspect(), title=L"|q|"),
-            #    diff_qmag  = Axis(fig[1, 3][1,1]; aspect=DataAspect(), xlabel=L"diff in qmag"),
                D  = Axis(fig[1, 3][1,1]; aspect=DataAspect(), title=L"D"),
                As   = Axis(fig[2, 1][1, 1]; aspect=DataAspect(), xlabel=L"x", title=L"\log_{10}(A_s)"),
                As_s = Axis(fig[2, 2]; aspect=1, xlabel=L"\log_{10}(A_s)"),
@@ -71,7 +71,6 @@ function inversion_snapshot(logAs, geometry, observed, initial, physics, numeric
 
         plts = (qobs_mag    = heatmap!(axs.qobs_mag, xc[2:end-1], yc[2:end-1], Array(qobs_mag); colormap=:turbo, colorrange=qrng),
                 qmag    = heatmap!(axs.qmag, xc[2:end-1], yc[2:end-1], Array(qmag); colormap=:turbo, colorrange=qrng),
-                #diff_qmag    = heatmap!(axs.diff_qmag, xc[2:end-1], yc[2:end-1], Array(qmag .- qobs_mag); colormap=:turbo),
                 # D    = heatmap!(axs.D, xc[1:end-1], yc[1:end-1], Array(D); colormap=:turbo),
                 As   = heatmap!(axs.As, xc_1, yc_1, Array(logAs); colormap=:turbo),
                 # As_v = vlines!(axs.As, xc_1[nx÷2]; linewidth=4, color=:magenta, linewtyle=:dash),
@@ -89,7 +88,7 @@ function inversion_snapshot(logAs, geometry, observed, initial, physics, numeric
     loss_params = (fields=(; qobs_mag),)
 
     # define reg
-    reg = (; nsm=15, Tmp)
+    reg = (; nsm=5, Tmp)
 
     J(_logAs) = loss_snapshot(logAs, fwd_params, loss_params)
     ∇J!(_logĀs, _logAs) = ∇loss_snapshot!(logĀs, logAs, fwd_params, adj_params, loss_params; reg)
@@ -137,7 +136,16 @@ function inversion_snapshot(logAs, geometry, observed, initial, physics, numeric
 
         if igd % 100 == 0
             #jldsave("/output_snapshot/step_$iframe.jld2"; As, qmag)
-            plts.qmag[3]    = Array(qmag)
+            q_vis = Array(qmag)
+            H_vis = Array(H[2:end-1,2:end-1])
+
+            qobs_vis = Array(qobs_mag)
+
+            q_vis[H_vis .< 0.1] .= NaN
+            qobs_vis[H_vis .< 0.1] .= NaN
+            
+            plts.qmag[3]    = q_vis
+            plts.qobs_mag[3]    = qobs_vis
             # plts.D[3]       = Array(D)
             plts.As[3]      = Array(logAs)
             plts.As_s[1][1] = Point2.(Array(logAs[nx÷2, :]), yc_1)

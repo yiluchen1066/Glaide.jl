@@ -14,7 +14,7 @@ using CairoMakie
 
     #load vmag data 
     dataset = RasterStack(velocity_path; crs=EPSG(32632), mappedcrs=EPSG(32632))
-    vmag_epsg = dataset.v2016_2017[:, :]
+    vmag_epsg = dataset.v2019_2020[:, :]
     vmag_epsg = replace_missing(vmag_epsg, NaN)
     vmag_epsg = Raster(vmag_epsg; dims=GlacioTools.coords_as_ranges(vmag_epsg),
                    crs=crs(vmag_epsg),

@@ -2,17 +2,29 @@ using Statistics
 using CUDA
 using JLD2
 
+CUDA.device!(1)
+
 include("dataset.jl")
 include("inversion_steadystate.jl")
 include("inversion_snapshot.jl")
-
-
+include("macros.jl")
 
 @views function smooth_2!(A, nsm)
     for _ in 1:nsm
         @inbounds A[2:end-1, 2:end-1] .= A[2:end-1, 2:end-1] .+
                                          1.0 / 4.1 .*
                                          (diff(diff(A[:, 2:end-1]; dims=1); dims=1) .+ diff(diff(A[2:end-1, :]; dims=2); dims=2))
+        @inbounds A[[1, end], :] .= A[[2, end - 1], :]
+        @inbounds A[:, [1, end]] .= A[:, [2, end - 1]]
+    end
+    return
+end
+
+@views function smooth_masked_2!(A, D, nsm)
+    for _ in 1:nsm
+        @inbounds A[2:end-1, 2:end-1] .= A[2:end-1, 2:end-1] .+
+                                         1.0 / 4.1 .*
+                                         D .* (diff(diff(A[:, 2:end-1]; dims=1); dims=1) .+ diff(diff(A[2:end-1, :]; dims=2); dims=2))
         @inbounds A[[1, end], :] .= A[[2, end - 1], :]
         @inbounds A[:, [1, end]] .= A[:, [2, end - 1]]
     end
@@ -26,6 +38,32 @@ function preprocessing(Glacier::AbstractString, SGI_ID::AbstractString, datadir:
     return
 end 
 
+#preprocessing("Aletsch", "B36-26", "/scratch-1/yilchen/Msc-Inverse-SIA/application/datasets/")
+
+function compute_∇S!(∇S, H, B, dx, dy)
+    @get_indices
+    @inbounds if ix <= size(∇S, 1) && iy <= size(∇S, 2)
+        ∇Sx = 0.5 *
+              ((B[ix + 1, iy + 1] - B[ix, iy + 1]) / dx +
+               (H[ix + 1, iy + 1] - H[ix, iy + 1]) / dx +
+               (B[ix + 1, iy] - B[ix, iy]) / dx +
+               (H[ix + 1, iy] - H[ix, iy]) / dx)
+        ∇Sy = 0.5 *
+              ((B[ix + 1, iy + 1] - B[ix + 1, iy]) / dy +
+               (H[ix + 1, iy + 1] - H[ix + 1, iy]) / dy +
+               (B[ix, iy + 1] - B[ix, iy]) / dy +
+               (H[ix, iy + 1] - H[ix, iy]) / dy)
+        
+        if H[ix, iy  ] == 0.0 && H[ix+1, iy  ] == 0.0 &&
+           H[ix, iy+1] == 0.0 && H[ix+1, iy+1] == 0.0
+            ∇S[ix, iy] = NaN
+        else
+            ∇S[ix, iy] = sqrt(∇Sx^2 + ∇Sy^2)
+        end
+    end
+    return
+end
+
 
 function application()
     H_Alet, S_Alet, B_Alet, vmag_Alet, xc_Alet, yc_Alet = load("Aletsch.jld2", "H_Alet", "S_Alet", "B_Alet", "vmag_Alet", "xc_Alet", "yc_Alet")
@@ -34,19 +72,39 @@ function application()
     nx = size(H_Alet)[1]
     ny = size(H_Alet)[2]
 
-    nsm_bedorck = 10
-    #bedrock smooth 
-    smooth_2!(S_Alet, nsm_bedorck)
-    smooth_2!(B_Alet, nsm_bedorck)
-    
+    replace!(H_Alet, NaN => 0)
+    nsm_topo = 100
+    #bedrock smooth
 
-    check_beforescaling = true
+    D_reg = H_Alet[2:end-1, 2:end-1] ./ maximum(H_Alet)
 
-    if check_beforescaling == true
+    smooth_masked_2!(H_Alet, D_reg, nsm_topo)
+    @info "Smoothed the ice thickness"
+    smooth_masked_2!(B_Alet, D_reg, nsm_topo)
+    @info "Smoothed the bedrock"
+
+
+    S_Alet .= B_Alet .+ H_Alet
+
+    # H_Alet = CuArray(H_Alet)
+    # B_Alet = CuArray(B_Alet)
+    # S_Alet = CuArray(S_Alet)
+    # ∇S_Alet = CUDA.zeros(Float64, nx-1, ny-1)
+    # dx_Alet = xc_Alet[2] - xc_Alet[1]
+    # dy_Alet = yc_Alet[2] - yc_Alet[1]
+
+    # nthreads = (16, 16)
+    # nblocks  = ceil.(Int, (nx, ny) ./ nthreads)
+
+    # @cuda threads = nthreads blocks = nblocks compute_∇S!(∇S_Alet, H_Alet, B_Alet, dx_Alet, dy_Alet)
+
+    check_1_beforescaling = false
+
+    if check_1_beforescaling == true
         fig = Figure(; size=(1000, 580), fontsize=22)
         axs = (H=Axis(fig[1, 1]; aspect=DataAspect(), xlabel=L"x\text{ [km]}", ylabel=L"y\text{ [km]}", title=L"H_{Alet} before scaling [m]"),
             vmag=Axis(fig[1, 2]; aspect=DataAspect(), xlabel=L"x\text{ [km]}", ylabel=L"y\text {[km]}", title=L"vmag_{Alet} before scaling [m/s]"))
-        plts = (H=heatmap!(axs.H, xc_Alet, yc_Alet, S_Alet .- B_Alet; colormap=:turbo),
+        plts = (H=heatmap!(axs.H, xc_Alet, yc_Alet, Array(S_Alet .- B_Alet); colormap=:turbo),
                 vmag=heatmap!(axs.vmag, xc_Alet, yc_Alet, vmag_Alet; colormap=:turbo))
         axs.H.xticksize = 18
         axs.H.yticksize = 18
@@ -58,11 +116,29 @@ function application()
         display(fig)
     end
 
+    #here I should visualize S_Alet, B_Alet, surf_grad
+    check_2_beforescaling = false
+
+    if check_2_beforescaling == true
+        fig = Figure(; size=(1500, 580), fontsize=22)
+        axs = (H_Alet=Axis(fig[1, 1]; aspect=DataAspect(), xlabel=L"x\text{ [km]}", ylabel=L"y\text{ [km]}", title=L"H_{Alet}"),
+            B_Alet=Axis(fig[1, 2]; aspect=DataAspect(), xlabel=L"x\text{ [km]}", ylabel=L"y\text{ [km]}", title=L"B_{Alet}"),
+            ∇S_Alet=Axis(fig[1, 3]; aspect=DataAspect(), xlabel=L"x\text{ [km]}", ylabel=L"y\text{ [km]}", title=L"∇S_{Alet}"),)
+        plts = (H_Alet=heatmap!(axs.H_Alet, xc_Alet, yc_Alet, Array(H_Alet); colormap=:turbo),
+                B_Alet=heatmap!(axs.B_Alet, xc_Alet, yc_Alet, Array(B_Alet); colormap=:turbo),
+                ∇S_Alet=heatmap!(axs.∇S_Alet, xc_Alet, yc_Alet, Array(∇S_Alet); colormap=:turbo))
+        Colorbar(fig[1, 1][1, 2], plts.H_Alet)
+        Colorbar(fig[1, 2][1, 2], plts.B_Alet)
+        Colorbar(fig[1, 3][1, 2], plts.∇S_Alet)
+        colgap!(fig.layout, 7)
+        display(fig)
+    end
+
     #real scale
     lsc_data = filter(!isnan, H_Alet) |> mean
     ρ = 910 #kg/m^3
     g = 9.81 #m/s^2
-    A = 1e-25 #here I need to check the units of A 
+    A = 5e-26
     npow = 3
     aρgn0_data = A * (ρ * g)^npow
 
@@ -77,21 +153,17 @@ function application()
     vsc = lsc / tsc
 
     #rescaling 
-    # here we do not use H_Alet is because yeah H_Alect has many NaN
+    # here we do not use H_Alet is because yeah H_Alet has many NaN
     H = max.(0.0, (S_Alet .- B_Alet)) ./ lsc_data .* lsc
     B = B_Alet ./ lsc_data .* lsc
     S = S_Alet ./ lsc_data .* lsc
     vmag = vmag_Alet ./ vsc_data .* vsc
-
-
 
     @show extrema(S) extrema(B) extrema(H)
 
     xc = xc_Alet ./ lsc_data .* lsc
     yc = yc_Alet ./ lsc_data .* lsc
     qmag = replace(vmag[2:end-1, 2:end-1], NaN => 0.0) .* H[2:end-1, 2:end-1]
-
-
 
     check_scaling = false
     if check_scaling
@@ -111,7 +183,7 @@ function application()
     end 
 
     #non-dimensional numbers
-    s_f      = 1e-1 #as/a/lsc^2
+    s_f      = 1e3#1e-5 #as/a/lsc^2
     # β_nd     = 1e16 * 1.12e-7
     # b_max_nd = 1e16 * 2.70e-8
     # z_ela_l  = 14.0
@@ -130,8 +202,8 @@ function application()
     ϵtol = (abs=1e-6, rel=1e-6)
     ϵtol_adj = 1e-8
     maxiter = 5 * nx^2
-    Δγ = 0.5 #0.25
-    ngd = 10000
+    Δγ = 0.25 #0.5 #0.25
+    ngd = 500
     w_H_1, w_q_1 = 1.0, 0.0
     w_H_2, w_q_2 = 0.0, 1.0
 
