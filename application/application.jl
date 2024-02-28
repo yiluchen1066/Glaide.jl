@@ -8,6 +8,7 @@ include("dataset.jl")
 include("inversion_steadystate.jl")
 include("inversion_snapshot.jl")
 include("macros.jl")
+include("load_massbalance.jl")
 
 @views function smooth_2!(A, nsm)
     for _ in 1:nsm
@@ -86,17 +87,9 @@ function application()
 
     S_Alet .= B_Alet .+ H_Alet
 
-    # H_Alet = CuArray(H_Alet)
-    # B_Alet = CuArray(B_Alet)
-    # S_Alet = CuArray(S_Alet)
-    # ∇S_Alet = CUDA.zeros(Float64, nx-1, ny-1)
-    # dx_Alet = xc_Alet[2] - xc_Alet[1]
-    # dy_Alet = yc_Alet[2] - yc_Alet[1]
-
-    # nthreads = (16, 16)
-    # nblocks  = ceil.(Int, (nx, ny) ./ nthreads)
-
-    # @cuda threads = nthreads blocks = nblocks compute_∇S!(∇S_Alet, H_Alet, B_Alet, dx_Alet, dy_Alet)
+    #load the mass balance data
+    b_max_Alet, ELA_Alet, β_Alet = load_massbalance()
+    # m/s, m, m/s
 
     check_1_beforescaling = false
 
@@ -116,7 +109,6 @@ function application()
         display(fig)
     end
 
-    #here I should visualize S_Alet, B_Alet, surf_grad
     check_2_beforescaling = false
 
     if check_2_beforescaling == true
