@@ -7,7 +7,7 @@ include("sia_loss_flux_2D.jl")
 function inversion_steadystate(logAs, geometry, observed, initial, physics, weights_H, weights_q, numerics, optim_params; do_vis=true, do_thickness=true)
     (; B, xc, yc) = geometry
     (; H_obs, qobs_mag, mask) = observed
-    (; H_ini, As_ini) = initial
+    (; H_ini, S_ini, As_ini) = initial
     (; npow, aρgn0, β, ELA, b_max, H_cut, γ0) = physics
     (; w_H_1, w_q_1) = weights_H
     (; w_H_2, w_q_2) = weights_q
@@ -33,8 +33,12 @@ function inversion_steadystate(logAs, geometry, observed, initial, physics, weig
     nthreads   = (16, 16)
     nblocks    = ceil.(Int, (nx, ny) ./ nthreads)
 
+    @show typeof(S_ini)
+
     # init forward
     H         = copy(H_ini)
+    S         = copy(S_ini)
+    @show typeof(S)
     D         = CUDA.zeros(Float64, nx - 1, ny - 1)
     As        = CUDA.zeros(Float64, nx - 1, ny - 1)
     qx        = CUDA.zeros(Float64, nx - 1, ny - 2)
@@ -76,9 +80,9 @@ function inversion_steadystate(logAs, geometry, observed, initial, physics, weig
         xc_1 = xc[1:(end-1)]
         yc_1 = yc[1:(end-1)]
 
-        plts = (H    = heatmap!(axs.H, xc, yc, Array(H); colormap=:turbo),
-                H_v  = vlines!(axs.H, xc[nx÷2]; color=:magenta, linewidth=4, linestyle=:dash),
-                mb_contour = contour!(ax.H, xc, yc, Array(S); levels=ELA:ELA, color=white, linewdith=2)
+        plts = (H          = heatmap!(axs.H, xc, yc, Array(H); colormap=:turbo),
+                H_v        = vlines!(axs.H, xc[nx÷2]; color=:magenta, linewidth=4, linestyle=:dash),
+                mb_contour = contour!(axs.H, xc, yc, Array(S); levels=ELA:ELA, color=white, linewdith=2),
                 H_s  = (lines!(axs.H_s, Point2.(Array(H_obs[nx÷2, :]), yc); linewidth=4, color=:red, label="synthetic"),
                 lines!(axs.H_s, Point2.(Array(H[nx÷2, :]), yc); linewidth=4, color=:blue, label="current")),
                 As   = heatmap!(axs.As, xc_1, yc_1, Array(logAs); colormap=:viridis),
@@ -93,7 +97,7 @@ function inversion_steadystate(logAs, geometry, observed, initial, physics, weig
     end
 
     #pack parameters
-    fwd_params = (fields           = (; H, B, β, ELA, D, qx, qy, As, RH, qmag, mask, Err_rel, Err_abs),
+    fwd_params = (fields           = (; H, B, S, β, ELA, D, qx, qy, As, RH, qmag, mask, Err_rel, Err_abs),
                   scalars          = (; aρgn0, b_max, npow),
                   numerical_params = (; vsc, nx, ny, dx, dy, maxiter, ncheck, ϵtol),
                   launch_config    = (; nthreads, nblocks))
