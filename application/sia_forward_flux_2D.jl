@@ -180,6 +180,7 @@ function update_visualisation!(As, visu, fields, err_evo)
     (; fig, plts)    = visu
     (; H)            = fields
     plts.H[3]        = Array(H)
+    plts.mb_contour[3] = Array(S)
     plts.As[3]       = Array(log10.(As))
     # plts.err[1][1][] = Point2.(err_evo.iters, err_evo.abs)
     # plts.err[2][1][] = Point2.(err_evo.iters, err_evo.rel)
