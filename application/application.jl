@@ -34,8 +34,9 @@ end
 
 function preprocessing(Glacier::AbstractString, SGI_ID::AbstractString, datadir::AbstractString)
     ALETSCH_VELOCITY_FILE = "velocity_data/ALPES_wFLAG_wKT_ANNUALv2016-2021.nc"
-    H_Alet, S_Alet, B_Alet, vmag_Alet, xc_Alet, yc_Alet = load_data(Glacier, SGI_ID,  datadir, ALETSCH_VELOCITY_FILE)
-    jldsave("Aletsch.jld2"; H_Alet, S_Alet, B_Alet, vmag_Alet, xc_Alet, yc_Alet)
+    H_Alet, S_Alet, B_Alet, vmag_Alet, oz_Alet, xc_Alet, yc_Alet = load_data(Glacier, SGI_ID,  datadir, ALETSCH_VELOCITY_FILE)
+    @show oz_Alet
+    jldsave("Aletsch.jld2"; H_Alet, S_Alet, B_Alet, vmag_Alet, oz_Alet, xc_Alet, yc_Alet)
     return
 end 
 
@@ -67,7 +68,7 @@ end
 
 
 function application()
-    H_Alet, S_Alet, B_Alet, vmag_Alet, xc_Alet, yc_Alet = load("Aletsch.jld2", "H_Alet", "S_Alet", "B_Alet", "vmag_Alet", "xc_Alet", "yc_Alet")
+    H_Alet, S_Alet, B_Alet, vmag_Alet, oz_Alet, xc_Alet, yc_Alet = load("Aletsch.jld2", "H_Alet", "S_Alet", "B_Alet", "vmag_Alet", "oz_Alet", "xc_Alet", "yc_Alet")
     # load the data 
     vmag_Alet ./= 365*24*3600 #m/s
     nx = size(H_Alet)[1]
@@ -87,11 +88,15 @@ function application()
 
     S_Alet .= B_Alet .+ H_Alet
 
-    #load the mass balance data
+    #load the mass balance data: m/s, m, 1/s
     b_max_Alet, ELA_Alet, β_Alet = load_massbalance()
-    # m/s, m, m/s
+    ELA_Alet -= oz_Alet
 
-    check_1_beforescaling = false
+    M           = min.(β_Alet.*(H_Alet .+ B_Alet .- ELA_Alet), b_max_Alet)
+    Mask        = ones(Float64, size(H_Alet))
+    Mask[M.>0.0 .&& H_Alet.<=0.0] .= 0.0
+
+    check_1_beforescaling = true
 
     if check_1_beforescaling == true
         fig = Figure(; size=(1000, 580), fontsize=22)
@@ -109,22 +114,6 @@ function application()
         display(fig)
     end
 
-    check_2_beforescaling = false
-
-    if check_2_beforescaling == true
-        fig = Figure(; size=(1500, 580), fontsize=22)
-        axs = (H_Alet=Axis(fig[1, 1]; aspect=DataAspect(), xlabel=L"x\text{ [km]}", ylabel=L"y\text{ [km]}", title=L"H_{Alet}"),
-            B_Alet=Axis(fig[1, 2]; aspect=DataAspect(), xlabel=L"x\text{ [km]}", ylabel=L"y\text{ [km]}", title=L"B_{Alet}"),
-            ∇S_Alet=Axis(fig[1, 3]; aspect=DataAspect(), xlabel=L"x\text{ [km]}", ylabel=L"y\text{ [km]}", title=L"∇S_{Alet}"),)
-        plts = (H_Alet=heatmap!(axs.H_Alet, xc_Alet, yc_Alet, Array(H_Alet); colormap=:turbo),
-                B_Alet=heatmap!(axs.B_Alet, xc_Alet, yc_Alet, Array(B_Alet); colormap=:turbo),
-                ∇S_Alet=heatmap!(axs.∇S_Alet, xc_Alet, yc_Alet, Array(∇S_Alet); colormap=:turbo))
-        Colorbar(fig[1, 1][1, 2], plts.H_Alet)
-        Colorbar(fig[1, 2][1, 2], plts.B_Alet)
-        Colorbar(fig[1, 3][1, 2], plts.∇S_Alet)
-        colgap!(fig.layout, 7)
-        display(fig)
-    end
 
     #real scale
     lsc_data = filter(!isnan, H_Alet) |> mean
@@ -132,6 +121,7 @@ function application()
     g = 9.81 #m/s^2
     A = 5e-26
     npow = 3
+    #TODO 
     aρgn0_data = A * (ρ * g)^npow
 
     tsc_data = 1 / aρgn0_data / lsc_data^npow
@@ -150,14 +140,15 @@ function application()
     B = B_Alet ./ lsc_data .* lsc
     S = S_Alet ./ lsc_data .* lsc
     vmag = vmag_Alet ./ vsc_data .* vsc
-
-    @show extrema(S) extrema(B) extrema(H)
+    b_max = b_max_Alet ./ vsc_data .* vsc
+    ELA   = ELA_Alet ./ lsc_data .* lsc
+    β     = β_Alet .* tsc_data ./ tsc
 
     xc = xc_Alet ./ lsc_data .* lsc
     yc = yc_Alet ./ lsc_data .* lsc
     qmag = replace(vmag[2:end-1, 2:end-1], NaN => 0.0) .* H[2:end-1, 2:end-1]
 
-    check_scaling = false
+    check_scaling = true
     if check_scaling
         fig = Figure(; size=(1000, 580), fontsize=22)
         axs = (H=Axis(fig[1, 1]; aspect=DataAspect(), xlabel=L"x", ylabel=L"y", title=L"H"),
@@ -176,21 +167,22 @@ function application()
 
     #non-dimensional numbers
     s_f      = 1e3#1e-5 #as/a/lsc^2
-    # β_nd     = 1e16 * 1.12e-7
-    # b_max_nd = 1e16 * 2.70e-8
-    # z_ela_l  = 14.0
-
-    # H_cut_l = 1.0e-6
-    # γ_nd = 1e2
+    β_nd     = 0.12887130806152247 # β*tsc 
+    b_max_nd = 0.4737783229663921 # b_max /lsc * tsc
+    z_ela_l  = 50.244062744240225 # ELA / lsc 
+    #non-dimensional nuemrics numbers 
+    H_cut_l = 1.0e-2 #H_cut / lsc
+    γ_nd = 1.0e-2 # γ0 / lsc^(2-2npow) * tsc^2
 
     asρgn0 = s_f * aρgn0 * lsc^2
-    # β = β_nd / tsc
-    # ELA = z_ela_l * lsc
-    # b_max = b_max_nd * lsc / tsc
+    β = β_nd / tsc #0.12887130806152247
+    ELA = z_ela_l * lsc #50.244062744240225
+    b_max = b_max_nd * lsc / tsc #0.4737783229663921
 
     #numerics
-    # H_cut = H_cut_l * lsc
-    # γ0 = γ_nd * lsc^(2 - 2npow) * tsc^(-2)
+    H_cut = H_cut_l * lsc #1.0e-2
+    γ0 = γ_nd * lsc^(2 - 2npow) * tsc^(-2) # 1.0e-2
+
     ϵtol = (abs=1e-6, rel=1e-6)
     ϵtol_adj = 1e-8
     maxiter = 5 * nx^2
@@ -198,9 +190,6 @@ function application()
     ngd = 500
     w_H_1, w_q_1 = 1.0, 0.0
     w_H_2, w_q_2 = 0.0, 1.0
-
-    @show asρgn0
-
 
     H_ini               = copy(H)
     As_ini              = asρgn0 * CUDA.ones(nx - 1, ny - 1)
@@ -215,11 +204,9 @@ function application()
     H_obs = copy(H_ini)
     qmag = CuArray(qmag)
     qobs_mag = CuArray(qmag)
-    # β = CUDA.fill(β, nx, ny)
-    # ELA = CUDA.fill(ELA, nx, ny)
-
-    @show extrema(qobs_mag)
-    @show extrema(qmag)
+    β = CUDA.fill(β, nx, ny)
+    ELA = CUDA.fill(ELA, nx, ny)
+    mask = CuArray(Mask)
 
     check_qobs_mag = false
 
@@ -237,21 +224,20 @@ function application()
 
     # pack 
     geometry = (; B, xc, yc)
-    observed = (; H_obs, qobs_mag)
+    observed = (; H_obs, qobs_mag, mask)
     initial = (; H_ini, As_ini, qmag)
-    physics = (; npow, aρgn0)
+    physics = (; npow, aρgn0, β, ELA, b_max, H_cut, γ0)
     weights_H = (; w_H_1, w_q_1)
     weights_q = (; w_H_2, w_q_2)
-    numerics = (; ϵtol, ϵtol_adj, maxiter)
+    numerics = (; vsc, ϵtol, ϵtol_adj, maxiter)
     optim_params = (; Δγ, ngd)
 
     # run 3 inversions 
     
-    inversion_snapshot(logAs_q_snapshot, geometry, observed, initial, physics, numerics, optim_params)
+    #inversion_snapshot(logAs_q_snapshot, geometry, observed, initial, physics, numerics, optim_params)
     
-    #inversion_steadystate(logAs_H_steadystate, geometry, observed, initial, physics, weights_H, weights_q, numerics, optim_params; do_vis=true, do_thickness=true)
+    inversion_steadystate(logAs_H_steadystate, geometry, observed, initial, physics, weights_H, weights_q, numerics, optim_params; do_vis=true, do_thickness=true)
 
-    # error("check")
     # inversion_steadystate(logAs_q_steadystate, geometry, observed, initial, physics, weights_H, weights_q, numerics, optim_params; do_vis=false, do_thickness=false)
 
     # inversion_snapshot(logAs_q_snapshot, geometry, observed, initial, physics, numerics, optim_params)

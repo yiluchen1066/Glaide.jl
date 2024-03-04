@@ -8,7 +8,7 @@ const DupNN = DuplicatedNoNeed
 
 function solve_adjoint_sia!(fwd_params, adj_params, loss_params)
     #unpack forward 
-    (; H, B, β, ELA, D, qx, qy, As, RH, qmag) = fwd_params.fields
+    (; H, B, β, ELA, D, qx, qy, As, RH, qmag, mask) = fwd_params.fields
     (; aρgn0, b_max, npow)                = fwd_params.scalars
     (; nx, ny, dx, dy, maxiter)           = fwd_params.numerical_params
     (; nthreads, nblocks)                 = fwd_params.launch_config
@@ -59,7 +59,7 @@ function solve_adjoint_sia!(fwd_params, adj_params, loss_params)
                                                     DupNN(qy, q̄Hy),
                                                     Const(β),
                                                     DupNN(H, H̄), # dR_H
-                                                    Const(B), Const(ELA), Const(b_max), Const(dx), Const(dy))
+                                                    Const(B), Const(ELA), Const(b_max), Const(mask), Const(dx), Const(dy))
 
         @cuda threads = nthreads blocks = nblocks ∇(compute_q!,
                                                     DupNN(qx, q̄Hx),

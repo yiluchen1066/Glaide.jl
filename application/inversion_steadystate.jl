@@ -6,12 +6,12 @@ include("sia_loss_flux_2D.jl")
 
 function inversion_steadystate(logAs, geometry, observed, initial, physics, weights_H, weights_q, numerics, optim_params; do_vis=true, do_thickness=true)
     (; B, xc, yc) = geometry
-    (; H_obs, qobs_mag) = observed
+    (; H_obs, qobs_mag, mask) = observed
     (; H_ini, As_ini) = initial
     (; npow, aρgn0, β, ELA, b_max, H_cut, γ0) = physics
     (; w_H_1, w_q_1) = weights_H
     (; w_H_2, w_q_2) = weights_q
-    (; ϵtol, ϵtol_adj, maxiter) = numerics
+    (; vsc, ϵtol, ϵtol_adj, maxiter) = numerics
     (; Δγ, ngd) = optim_params
 
     if do_thickness
@@ -78,6 +78,7 @@ function inversion_steadystate(logAs, geometry, observed, initial, physics, weig
 
         plts = (H    = heatmap!(axs.H, xc, yc, Array(H); colormap=:turbo),
                 H_v  = vlines!(axs.H, xc[nx÷2]; color=:magenta, linewidth=4, linestyle=:dash),
+                mb_contour = contour!(ax.H, xc, yc, Array(S); levels=ELA:ELA, color=white, linewdith=2)
                 H_s  = (lines!(axs.H_s, Point2.(Array(H_obs[nx÷2, :]), yc); linewidth=4, color=:red, label="synthetic"),
                 lines!(axs.H_s, Point2.(Array(H[nx÷2, :]), yc); linewidth=4, color=:blue, label="current")),
                 As   = heatmap!(axs.As, xc_1, yc_1, Array(logAs); colormap=:viridis),
@@ -92,9 +93,9 @@ function inversion_steadystate(logAs, geometry, observed, initial, physics, weig
     end
 
     #pack parameters
-    fwd_params = (fields           = (; H, B, β, ELA, D, qx, qy, As, RH, qmag, Err_rel, Err_abs),
+    fwd_params = (fields           = (; H, B, β, ELA, D, qx, qy, As, RH, qmag, mask, Err_rel, Err_abs),
                   scalars          = (; aρgn0, b_max, npow),
-                  numerical_params = (; nx, ny, dx, dy, maxiter, ncheck, ϵtol),
+                  numerical_params = (; vsc, nx, ny, dx, dy, maxiter, ncheck, ϵtol),
                   launch_config    = (; nthreads, nblocks))
 
     fwd_visu = (; plts, fig)
@@ -110,7 +111,7 @@ function inversion_steadystate(logAs, geometry, observed, initial, physics, weig
     #Define loss functions 
     #call the loss functions and the gradient of the loss function 
     J(_logAs) = loss(logAs, fwd_params, loss_params; visu=fwd_visu)
-    ∇J!(_logĀs, _logAs) = ∇loss!(logĀs, logAs, fwd_params, adj_params, loss_params; reg)
+    ∇J!(_logĀs, _logAs) = ∇loss!(logĀs, logAs, fwd_params, adj_params, loss_params; reg, visu=fwd_visu)
     @info "inversion for As"
 
     #initial guess

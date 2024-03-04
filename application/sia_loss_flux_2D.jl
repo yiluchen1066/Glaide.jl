@@ -47,9 +47,9 @@ function loss(logAs, fwd_params, loss_params; kwags...)
 end
 
 #compute the sensitivity: hradient of the loss function
-function ∇loss!(logĀs, logAs, fwd_params, adj_params, loss_params; reg=nothing, kwags...)
+function ∇loss!(logĀs, logAs, fwd_params, adj_params, loss_params; reg=nothing, visu=nothing)
     #unpack
-    (; RH, qx, qy, β, H, B, D, ELA, As, qmag) = fwd_params.fields
+    (; RH, qx, qy, β, H, B, D, ELA, As, qmag, mask) = fwd_params.fields
     (; dx, dy) = fwd_params.numerical_params
     (; aρgn0, b_max, npow) = fwd_params.scalars
     (; nthreads, nblocks) = fwd_params.launch_config
@@ -57,7 +57,7 @@ function ∇loss!(logĀs, logAs, fwd_params, adj_params, loss_params; reg=nothi
     (; H_obs, qobs_mag, Lap_As) = loss_params.fields
 
     @info "Forward solve"
-    solve_sia!(logAs, fwd_params...; kwags...)
+    solve_sia!(logAs, fwd_params...; visu=visu)
 
     @info "Adjoint solve"
     solve_adjoint_sia!(fwd_params, adj_params, loss_params)
@@ -77,7 +77,7 @@ function ∇loss!(logĀs, logAs, fwd_params, adj_params, loss_params; reg=nothi
                                                 DupNN(qy, q̄y),
                                                 Const(β),
                                                 DupNN(H, H̄),
-                                                Const(B), Const(ELA), Const(b_max), Const(dx), Const(dy))
+                                                Const(B), Const(ELA), Const(b_max), Const(mask), Const(dx), Const(dy))
     #compute_q!(qx, qy, D, H, B, dx, dy)
     @cuda threads = nthreads blocks = nblocks ∇(compute_q!,
                                                 DupNN(qx, q̄x),

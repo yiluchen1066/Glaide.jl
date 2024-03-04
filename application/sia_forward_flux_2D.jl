@@ -7,9 +7,9 @@ include("macros.jl")
 # integrate SIA equations to steady state
 function solve_sia!(logAs, fields, scalars, numerical_params, launch_config; visu=nothing)
     # extract variables from tuples
-    (; H, B, β, ELA, D, qx, qy, As, RH, qmag, Err_rel, Err_abs) = fields
+    (; H, B, β, ELA, D, qx, qy, As, RH, qmag, mask, Err_rel, Err_abs) = fields
     (; aρgn0, b_max, npow)                              = scalars
-    (; nx, ny, dx, dy, maxiter, ncheck, ϵtol)           = numerical_params
+    (; vsc, nx, ny, dx, dy, maxiter, ncheck, ϵtol)      = numerical_params
     (; nthreads, nblocks)                               = launch_config
     # initialize 
     err_abs0 = Inf
@@ -17,6 +17,11 @@ function solve_sia!(logAs, fields, scalars, numerical_params, launch_config; vis
     Err_rel .= 0
     Err_abs .= 0
     As      .= exp10.(logAs)
+
+    nthreads_x = 256
+    nthreads_y = 256 
+    nblocks_x = cld(size(H,2), nthreads_x)
+    nblocks_y = cld(size(H,1), nthreads_y)
     CUDA.synchronize()
 
     # iterative loop 
@@ -34,16 +39,18 @@ function solve_sia!(logAs, fields, scalars, numerical_params, launch_config; vis
         @cuda threads = nthreads blocks = nblocks compute_q!(qx, qy, D, H, B, dx, dy)
         CUDA.synchronize()
         # compute stable time step
-        dτ = 1 / (12.1 * maximum(D) / dx^2 + maximum(β))
+        dτ = 1 / ( 4.1* maximum(D) / dx^2 + maximum(β))
 
-        @cuda threads = nthreads blocks = nblocks residual!(RH, qx, qy, β, H, B, ELA, b_max, dx, dy)
-        @cuda threads = nthreads blocks = nblocks update_H!(H, RH, dτ)
-        @cuda threads = nthreads blocks = nblocks set_BC!(H)
+        @cuda threads = nthreads   blocks = nblocks residual!(RH, qx, qy, β, H, B, ELA, b_max, mask, dx, dy)
+        @cuda threads = nthreads   blocks = nblocks update_H!(H, RH, dτ)
+        @cuda threads = nthreads_x blocks = nblocks_x bc_x!(H)
+        @cuda threads = nthreads_y blocks = nblocks_y bc_y!(H)
+        @cuda threads = nthreads   blocks = nblocks update_S!(S, H, B)
         if iter == 1 || iter % ncheck == 0
             @cuda threads = nthreads blocks = nblocks compute_abs_error!(Err_abs, RH, H)
             Err_rel .-= H
             CUDA.synchronize()
-            err_abs = maximum(abs.(Err_abs))
+            err_abs = sqrt(sum(Err_abs.^2) /length(Err_abs))/ vsc
             err_rel = maximum(abs.(Err_rel)) / maximum(H)
             push!(err_evo.iters, iter / nx)
             push!(err_evo.abs, err_abs)
@@ -93,11 +100,11 @@ function compute_q!(qx, qy, D, H, B, dx, dy)
 end
 
 # compute ice flow residual
-function residual!(RH, qx, qy, β, H, B, ELA, b_max, dx, dy)
+function residual!(RH, qx, qy, β, H, B, ELA, b_max, mask, dx, dy)
     @get_indices
     if ix <= size(H, 1) - 2 && iy <= size(H, 2) - 2
         MB = min(β[ix + 1, iy + 1] * (H[ix + 1, iy + 1] + B[ix + 1, iy + 1] - ELA[ix + 1, iy + 1]), b_max)
-        @inbounds RH[ix + 1, iy + 1] = -(@d_xa(qx) / dx + @d_ya(qy) / dy) + MB
+        @inbounds RH[ix + 1, iy + 1] = -(@d_xa(qx) / dx + @d_ya(qy) / dy) + mask[ix+1, iy+1]*MB
     end
     return
 end
@@ -110,6 +117,15 @@ function update_H!(H, RH, dτ)
     end
     return
 end
+
+function update_S!(S, H, B)
+    @get_indices
+    if ix <= size(H,1) && iy <= size(H, 2)
+        @inbounds S[ix,iy] = H[ix,iy] + B[ix, iy]
+    end 
+    return 
+end 
+
 
 # set boundary conditions
 function set_BC!(H)
@@ -125,6 +141,24 @@ function set_BC!(H)
     end
     if ix <= size(H, 1) && iy == size(H, 2)
         @inbounds H[ix, iy] = H[ix, iy - 1]
+    end
+    return
+end
+
+function bc_x!(H)
+    iy = (blockIdx().x - 1) * blockDim().x + threadIdx().x
+    if iy <= size(H, 2)
+        @inbounds H[1  , iy] = H[2    , iy]
+        @inbounds H[end, iy] = H[end-1, iy]
+    end
+    return
+end
+
+function bc_y!(H)
+    ix = (blockIdx().x - 1) * blockDim().x + threadIdx().x
+    if ix <= size(H, 1)
+        @inbounds H[ix,   1] = H[ix,     2]
+        @inbounds H[ix, end] = H[ix, end-1]
     end
     return
 end

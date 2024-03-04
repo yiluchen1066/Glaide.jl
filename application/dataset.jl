@@ -9,6 +9,7 @@ using CairoMakie
     ice_thic = reverse(ice_thic[:, :, 1]; dims=2) # reads it into memory
     ice_surf = reverse(ice_surf[:, :, 1]; dims=2) # reads it into memory
     bed_surf = reverse(bed_surf[:, :, 1]; dims=2) # reads it into memory
+    #bed_offset = reverse(bed_surf[:, :, 1]; dims=2)
 
     velocity_path = joinpath(datadir, Glacier, velocity_file)
 
@@ -38,10 +39,13 @@ using CairoMakie
     S_Alet = ice_surf.data 
     B_Alet = bed_surf.data
     vmag_Alet = vmag.data 
+    #Alet_offset = bed_offset.data
 
     oz = minimum(B_Alet)
     B_Alet .-= oz 
     S_Alet .-= oz 
+
+    @show oz
 
     xc = xc .- xc[1]
     yc = yc .- yc[1]
@@ -62,7 +66,7 @@ using CairoMakie
     #     colgap!(fig.layout, 7)
     #     display(fig)
     # end 
-    return H_Alet, S_Alet, B_Alet, vmag_Alet, xc, yc
+    return H_Alet, S_Alet, B_Alet, vmag_Alet, oz, xc, yc
 end 
 
 
