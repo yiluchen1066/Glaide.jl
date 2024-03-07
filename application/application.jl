@@ -40,7 +40,7 @@ function preprocessing(Glacier::AbstractString, SGI_ID::AbstractString, datadir:
     return
 end 
 
-#preprocessing("Aletsch", "B36-26", "/scratch-1/yilchen/Msc-Inverse-SIA/application/datasets/")
+preprocessing("Aletsch", "B36-26", "/scratch-1/yilchen/Msc-Inverse-SIA/application/datasets/")
 
 function compute_∇S!(∇S, H, B, dx, dy)
     @get_indices
@@ -206,7 +206,7 @@ function application()
     qmag = CuArray(qmag)
     qobs_mag = CuArray(qmag)
     β = CUDA.fill(β, nx, ny)
-    ELA = CUDA.fill(ELA, nx, ny)
+    #ELA = CUDA.fill(ELA, nx, ny)
     mask = CuArray(Mask)
 
     check_qobs_mag = false

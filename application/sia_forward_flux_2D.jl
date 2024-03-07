@@ -41,11 +41,11 @@ function solve_sia!(logAs, fields, scalars, numerical_params, launch_config; vis
         # compute stable time step
         dτ = 1 / ( 4.1* maximum(D) / dx^2 + maximum(β))
 
-        @cuda threads = nthreads   blocks = nblocks residual!(RH, qx, qy, β, H, B, ELA, b_max, mask, dx, dy)
+        @cuda threads = nthreads   blocks = nblocks residual!(RH, qx, qy, β, H, B, H_ini, ELA, b_max, mask, dx, dy)
         @cuda threads = nthreads   blocks = nblocks update_H!(H, RH, dτ)
         @cuda threads = nthreads_x blocks = nblocks_x bc_x!(H)
         @cuda threads = nthreads_y blocks = nblocks_y bc_y!(H)
-        @cuda threads = nthreads   blocks = nblocks update_S!(S, H, B)
+        
         if iter == 1 || iter % ncheck == 0
             @cuda threads = nthreads blocks = nblocks compute_abs_error!(Err_abs, RH, H)
             Err_rel .-= H
@@ -56,7 +56,12 @@ function solve_sia!(logAs, fields, scalars, numerical_params, launch_config; vis
             push!(err_evo.abs, err_abs)
             push!(err_evo.rel, err_rel)
             @printf("  iter/nx=%.3e, err= [abs=%.3e, rel=%.3e] \n", iter / nx, err_abs, err_rel)
-            isnothing(visu) || update_visualisation!(As, visu, fields, err_evo)
+        
+            if !isnothing(visu)
+                @cuda threads = nthreads  blocks = nblocks update_S!(S, H, B)
+                CUDA.synchronize()
+                update_visualisation!(As, visu, fields, err_evo)
+            end
             if err_rel < ϵtol.rel
                 break
             end
@@ -100,11 +105,12 @@ function compute_q!(qx, qy, D, H, B, dx, dy)
 end
 
 # compute ice flow residual
-function residual!(RH, qx, qy, β, H, B, ELA, b_max, mask, dx, dy)
+function residual!(RH, qx, qy, β, H, B, H_ini, ELA, b_max, mask, dx, dy)
     @get_indices
     if ix <= size(H, 1) - 2 && iy <= size(H, 2) - 2
-        MB = min(β[ix + 1, iy + 1] * (H[ix + 1, iy + 1] + B[ix + 1, iy + 1] - ELA[ix + 1, iy + 1]), b_max)
-        @inbounds RH[ix + 1, iy + 1] = -(@d_xa(qx) / dx + @d_ya(qy) / dy) + mask[ix+1, iy+1]*MB
+        MB = min(β[ix + 1, iy + 1] * (H[ix + 1, iy + 1] + B[ix + 1, iy + 1] - ELA), b_max)
+        H_diff = (H[ix+1, iy+1] - H_ini[ix+1, iy+1])/(365*24*3600)
+        @inbounds RH[ix + 1, iy + 1] = -(@d_xa(qx) / dx + @d_ya(qy) / dy) + mask[ix+1, iy+1]*MB + H_diff
     end
     return
 end
@@ -178,7 +184,7 @@ end
 
 function update_visualisation!(As, visu, fields, err_evo)
     (; fig, plts)    = visu
-    (; H)            = fields
+    (; H, S)        = fields
     plts.H[3]        = Array(H)
     plts.mb_contour[3] = Array(S)
     plts.As[3]       = Array(log10.(As))

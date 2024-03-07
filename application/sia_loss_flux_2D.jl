@@ -49,7 +49,7 @@ end
 #compute the sensitivity: hradient of the loss function
 function ∇loss!(logĀs, logAs, fwd_params, adj_params, loss_params; reg=nothing, visu=nothing)
     #unpack
-    (; RH, qx, qy, β, H, B, S, D, ELA, As, qmag, mask) = fwd_params.fields
+    (; RH, qx, qy, β, H, B, S, H_ini, D, ELA, As, qmag, mask) = fwd_params.fields
     (; dx, dy) = fwd_params.numerical_params
     (; aρgn0, b_max, npow) = fwd_params.scalars
     (; nthreads, nblocks) = fwd_params.launch_config

@@ -33,12 +33,9 @@ function inversion_steadystate(logAs, geometry, observed, initial, physics, weig
     nthreads   = (16, 16)
     nblocks    = ceil.(Int, (nx, ny) ./ nthreads)
 
-    @show typeof(S_ini)
-
     # init forward
     H         = copy(H_ini)
     S         = copy(S_ini)
-    @show typeof(S)
     D         = CUDA.zeros(Float64, nx - 1, ny - 1)
     As        = CUDA.zeros(Float64, nx - 1, ny - 1)
     qx        = CUDA.zeros(Float64, nx - 1, ny - 2)
@@ -82,7 +79,7 @@ function inversion_steadystate(logAs, geometry, observed, initial, physics, weig
 
         plts = (H          = heatmap!(axs.H, xc, yc, Array(H); colormap=:turbo),
                 H_v        = vlines!(axs.H, xc[nx÷2]; color=:magenta, linewidth=4, linestyle=:dash),
-                mb_contour = contour!(axs.H, xc, yc, Array(S); levels=ELA:ELA, color=white, linewdith=2),
+                mb_contour = contour!(axs.H, xc, yc, Array(S); levels=ELA:ELA, color=:white, linewdith=2),
                 H_s  = (lines!(axs.H_s, Point2.(Array(H_obs[nx÷2, :]), yc); linewidth=4, color=:red, label="synthetic"),
                 lines!(axs.H_s, Point2.(Array(H[nx÷2, :]), yc); linewidth=4, color=:blue, label="current")),
                 As   = heatmap!(axs.As, xc_1, yc_1, Array(logAs); colormap=:viridis),
@@ -97,7 +94,7 @@ function inversion_steadystate(logAs, geometry, observed, initial, physics, weig
     end
 
     #pack parameters
-    fwd_params = (fields           = (; H, B, S, β, ELA, D, qx, qy, As, RH, qmag, mask, Err_rel, Err_abs),
+    fwd_params = (fields           = (; H, H_ini, B, S, β, ELA, D, qx, qy, As, RH, qmag, mask, Err_rel, Err_abs),
                   scalars          = (; aρgn0, b_max, npow),
                   numerical_params = (; vsc, nx, ny, dx, dy, maxiter, ncheck, ϵtol),
                   launch_config    = (; nthreads, nblocks))
