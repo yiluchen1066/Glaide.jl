@@ -4,9 +4,12 @@ include("sia_forward_flux_2D.jl")
 include("sia_adjoint_flux_2D.jl")
 include("sia_loss_flux_2D.jl")
 
+
+# yeah why I do not need to import qmag 
+# where is qmag
 function inversion_steadystate(logAs, geometry, observed, initial, physics, weights_H, weights_q, numerics, optim_params; do_vis=true, do_thickness=true)
-    (; B, xc, yc) = geometry
-    (; H_obs, qobs_mag, mask) = observed
+    (; B, xc, yc, nx, ny) = geometry
+    (; H_obs, qmag_obs, mask) = observed
     (; H_ini, S_ini, As_ini) = initial
     (; npow, aρgn0, β, ELA, b_max, H_cut, γ0) = physics
     (; w_H_1, w_q_1) = weights_H
@@ -23,8 +26,6 @@ function inversion_steadystate(logAs, geometry, observed, initial, physics, weig
     end 
 
     # pre-processing
-    nx = length(xc)
-    ny = length(yc)
     dx = xc[2] - xc[1]
     dy = yc[2] - yc[1]
 
@@ -104,7 +105,7 @@ function inversion_steadystate(logAs, geometry, observed, initial, physics, weig
     adj_params = (fields=(; q̄x, q̄y, D̄, R̄H, ψ_H, H̄),
                   numerical_params=(; ϵtol_adj, ncheck_adj, H_cut))
 
-    loss_params = (fields=(; H_obs, qobs_mag, ∂J_∂H, Lap_As),
+    loss_params = (fields=(; H_obs, qmag_obs, ∂J_∂H, Lap_As),
                    scalars=(; w_H, w_q))
 
     reg = (; nsm=10, α=1e-4, Tmp)

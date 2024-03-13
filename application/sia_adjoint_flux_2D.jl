@@ -8,20 +8,20 @@ const DupNN = DuplicatedNoNeed
 
 function solve_adjoint_sia!(fwd_params, adj_params, loss_params)
     #unpack forward 
-    (; H, B, β, ELA, D, qx, qy, As, RH, qmag, mask) = fwd_params.fields
+    (; H, H_ini, B, β, ELA, D, qx, qy, As, RH, qmag, mask) = fwd_params.fields
     (; aρgn0, b_max, npow)                = fwd_params.scalars
     (; nx, ny, dx, dy, maxiter)           = fwd_params.numerical_params
     (; nthreads, nblocks)                 = fwd_params.launch_config
     #unpack adjoint 
     (; R̄H, H̄, ψ_H, q̄Hx, q̄Hy, D̄) = adj_params.fields
     (; ϵtol_adj, ncheck_adj, H_cut) = adj_params.numerical_params
-    (; H_obs,  ∂J_∂H, qobs_mag) = loss_params.fields
+    (; H_obs,  ∂J_∂H, qmag_obs) = loss_params.fields
 
     dt = 1.0 / (8.1 * maximum(D) / min(dx, dy)^2 + maximum(β))
     ∂J_∂H .= H .- H_obs
 
-    ∂J_∂qx_vec!(q̄Hx, qmag, qobs_mag, qx)
-    ∂J_∂qy_vec!(q̄Hy, qmag, qobs_mag, qy)
+    ∂J_∂qx_vec!(q̄Hx, qmag, qmag_obs, qx)
+    ∂J_∂qy_vec!(q̄Hy, qmag, qmag_obs, qy)
 
     # ∂J_∂qx .= qx .- qx_obs
     # ∂J_∂qy .= qy .- qy_obs
@@ -59,7 +59,7 @@ function solve_adjoint_sia!(fwd_params, adj_params, loss_params)
                                                     DupNN(qy, q̄Hy),
                                                     Const(β),
                                                     DupNN(H, H̄), # dR_H
-                                                    Const(B), Const(ELA), Const(b_max), Const(mask), Const(dx), Const(dy))
+                                                    Const(B), Const(H_ini), Const(ELA), Const(b_max), Const(mask), Const(dx), Const(dy))
 
         @cuda threads = nthreads blocks = nblocks ∇(compute_q!,
                                                     DupNN(qx, q̄Hx),
@@ -120,16 +120,16 @@ function update_ψ!(H, H̄, ψ_H, H_cut, dt)
     return
 end
 
-function ∂J_∂qx_vec!(q̄Hx, qmag, qobs_mag, qx)
+function ∂J_∂qx_vec!(q̄Hx, qmag, qmag_obs, qx)
     q̄Hx                .= 0
-    @. q̄Hx[1:end-1, :] += (qmag - qobs_mag) * $avx(qx) / (2 * qmag + (qmag == 0))
-    @. q̄Hx[2:end, :]   += (qmag - qobs_mag) * $avx(qx) / (2 * qmag + (qmag == 0))
+    @. q̄Hx[1:end-1, :] += (qmag - qmag_obs) * $avx(qx) / (2 * qmag + (qmag == 0))
+    @. q̄Hx[2:end, :]   += (qmag - qmag_obs) * $avx(qx) / (2 * qmag + (qmag == 0))
     return
 end
 
-function ∂J_∂qy_vec!(q̄Hy, qmag, qobs_mag, qy)
+function ∂J_∂qy_vec!(q̄Hy, qmag, qmag_obs, qy)
     q̄Hy                .= 0
-    @. q̄Hy[:, 1:end-1] += (qmag - qobs_mag) * $avy(qy) / (2 * qmag + (qmag == 0))
-    @. q̄Hy[:, 2:end]   += (qmag - qobs_mag) * $avy(qy) / (2 * qmag + (qmag == 0))
+    @. q̄Hy[:, 1:end-1] += (qmag - qmag_obs) * $avy(qy) / (2 * qmag + (qmag == 0))
+    @. q̄Hy[:, 2:end]   += (qmag - qmag_obs) * $avy(qy) / (2 * qmag + (qmag == 0))
     return
 end

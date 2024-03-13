@@ -40,25 +40,25 @@ function forward_model!(logAs, fwd_params)
 end
 
 
-function ∂J_∂qx_vec!(q̄x, qmag, qobs_mag, qx)
+function ∂J_∂qx_vec!(q̄x, qmag, qmag_obs, qx)
     q̄x                .= 0
-    @. q̄x[1:end-1, :] += (qmag - qobs_mag) * $avx(qx) / (2 * qmag + (qmag == 0))
-    @. q̄x[2:end, :]   += (qmag - qobs_mag) * $avx(qx) / (2 * qmag + (qmag == 0))
+    @. q̄x[1:end-1, :] += (qmag - qmag_obs) * $avx(qx) / (2 * qmag + (qmag == 0))
+    @. q̄x[2:end, :]   += (qmag - qmag_obs) * $avx(qx) / (2 * qmag + (qmag == 0))
     return
 end
 
-function ∂J_∂qy_vec!(q̄y, qmag, qobs_mag, qy)
+function ∂J_∂qy_vec!(q̄y, qmag, qmag_obs, qy)
     q̄y                .= 0
-    @. q̄y[:, 1:end-1] += (qmag - qobs_mag) * $avy(qy) / (2 * qmag + (qmag == 0))
-    @. q̄y[:, 2:end]   += (qmag - qobs_mag) * $avy(qy) / (2 * qmag + (qmag == 0))
+    @. q̄y[:, 1:end-1] += (qmag - qmag_obs) * $avy(qy) / (2 * qmag + (qmag == 0))
+    @. q̄y[:, 2:end]   += (qmag - qmag_obs) * $avy(qy) / (2 * qmag + (qmag == 0))
     return
 end
 
 function loss_snapshot(logAs, fwd_params, loss_params)
-    (; qobs_mag) = loss_params.fields
+    (; qmag_obs) = loss_params.fields
     (; qmag)     = fwd_params.fields
     forward_model!(logAs, fwd_params)
-    return 0.5 * sum((qmag .- qobs_mag) .^ 2)
+    return 0.5 * sum((qmag .- qmag_obs) .^ 2)
 end
 
 function ∇loss_snapshot!(logĀs, logAs, fwd_params, adj_params, loss_params; reg=nothing)
@@ -70,12 +70,12 @@ function ∇loss_snapshot!(logĀs, logAs, fwd_params, adj_params, loss_params; 
     #unpack adjoint parameters
     (; q̄x, q̄y, D̄, H̄) = adj_params.fields
     #unpack loss parameters
-    (; qobs_mag) = loss_params.fields
+    (; qmag_obs) = loss_params.fields
 
     forward_model!(logAs, fwd_params)
 
-    ∂J_∂qx_vec!(q̄x, qmag, qobs_mag, qx)
-    ∂J_∂qy_vec!(q̄y, qmag, qobs_mag, qy)
+    ∂J_∂qx_vec!(q̄x, qmag, qmag_obs, qx)
+    ∂J_∂qy_vec!(q̄y, qmag, qmag_obs, qy)
 
     logĀs .= 0.0
     D̄ .= 0.0

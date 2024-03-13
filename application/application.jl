@@ -1,10 +1,11 @@
 using Statistics
 using CUDA
 using JLD2
+using Rasters
+using ArchGDAL
+using NCDatasets
 
 CUDA.device!(1)
-
-include("dataset.jl")
 include("inversion_steadystate.jl")
 include("inversion_snapshot.jl")
 include("macros.jl")
@@ -32,16 +33,6 @@ end
     return
 end
 
-function preprocessing(Glacier::AbstractString, SGI_ID::AbstractString, datadir::AbstractString)
-    ALETSCH_VELOCITY_FILE = "velocity_data/ALPES_wFLAG_wKT_ANNUALv2016-2021.nc"
-    H_Alet, S_Alet, B_Alet, vmag_Alet, oz_Alet, xc_Alet, yc_Alet = load_data(Glacier, SGI_ID,  datadir, ALETSCH_VELOCITY_FILE)
-    @show oz_Alet
-    jldsave("Aletsch.jld2"; H_Alet, S_Alet, B_Alet, vmag_Alet, oz_Alet, xc_Alet, yc_Alet)
-    return
-end 
-
-preprocessing("Aletsch", "B36-26", "/scratch-1/yilchen/Msc-Inverse-SIA/application/datasets/")
-
 function compute_∇S!(∇S, H, B, dx, dy)
     @get_indices
     @inbounds if ix <= size(∇S, 1) && iy <= size(∇S, 2)
@@ -68,60 +59,88 @@ end
 
 
 function application()
-    H_Alet, S_Alet, B_Alet, vmag_Alet, oz_Alet, xc_Alet, yc_Alet = load("Aletsch.jld2", "H_Alet", "S_Alet", "B_Alet", "vmag_Alet", "oz_Alet", "xc_Alet", "yc_Alet")
-    # load the data 
-    vmag_Alet ./= 365*24*3600 #m/s
-    nx = size(H_Alet)[1]
-    ny = size(H_Alet)[2]
+    stack = RasterStack("aletsch_data_2016_2017.nc")
+    stack = replace_missing(stack, NaN)
 
-    replace!(H_Alet, NaN => 0)
+    xr, yr = extrema.(dims(stack))
+    lx, ly = xr[2] - xr[1], yr[2] - yr[1]  
+
+    aspect_ratio = ly/lx 
+
+    nx = 128
+    ny = ceil(Int, nx*aspect_ratio)
+    stack = resample(stack; size=(nx, ny))
+
+    # you can grab xc yc when they still are Rasters
+    xy = DimPoints(dims(stack.bedrock, (X, Y)))
+    (x, y) = (first.(xy), last.(xy))
+    xc = x.data[:, 1]
+    yc = y.data[1, :]
+
+    vmag_obs   = stack.velocity_2016_2017.data
+    B          = stack.bedrock.data
+    S_old      = stack.surface_2016.data
+    S_obs      = stack.surface_2017.data
+    vmag_obs ./= 365*24*3600
+    H_obs       = S_obs .- B
+    H_old       = S_old .- B
+
+    oz          = minimum(B)
+    B         .-= oz
+
+    vmag_obs    = reverse(vmag_obs; dims=2)
+    B           = reverse(B; dims=2)
+    S_old       = reverse(S_old; dims=2)
+    S_obs       = reverse(S_obs; dims=2)
+    H_obs       = reverse(H_obs; dims=2)
+    H_old       = reverse(H_old; dims=2)
+
     nsm_topo = 100
     #bedrock smooth
+    D_reg = H_old[2:end-1, 2:end-1] ./ maximum(H_old)
 
-    D_reg = H_Alet[2:end-1, 2:end-1] ./ maximum(H_Alet)
-
-    smooth_masked_2!(H_Alet, D_reg, nsm_topo)
+    smooth_masked_2!(H_old, D_reg, nsm_topo)
+    smooth_masked_2!(H_obs, D_reg, nsm_topo)
     @info "Smoothed the ice thickness"
-    smooth_masked_2!(B_Alet, D_reg, nsm_topo)
+    smooth_masked_2!(B, D_reg, nsm_topo)
     @info "Smoothed the bedrock"
 
+    check_data = true 
+    if check_data 
+        fig = Figure(size=(800, 800))
+        ax1 = Axis(fig[1, 1][1, 1]; aspect=DataAspect(), title="Bed elevation [m.a.s.l.]")
+        ax2 = Axis(fig[1, 2][1, 1]; aspect=DataAspect(), title="Surface velocity (2016-2017) [m/y]")
+        ax3 = Axis(fig[2, 1][1, 1]; aspect=DataAspect(), title="Ice thickness (2016) [m.a.s.l.]")
+        ax4 = Axis(fig[2, 2][1, 1]; aspect=DataAspect(), title="Ice thickness (2017) [m.a.s.l.]")
 
-    S_Alet .= B_Alet .+ H_Alet
+        hm1 = heatmap!(ax1, B; colormap=:terrain)
+        hm2 = heatmap!(ax2, vmag_obs; colormap=:turbo)
+        hm3 = heatmap!(ax3, H_old; colormap=:magma)
+        hm4 = heatmap!(ax4, H_obs; colormap=:magma)
 
-    #load the mass balance data: m/s, m, 1/s
-    b_max_Alet, ELA_Alet, β_Alet = load_massbalance()
-    ELA_Alet -= oz_Alet
+        Colorbar(fig[1, 1][1, 2], hm1)
+        Colorbar(fig[1, 2][1, 2], hm2)
+        Colorbar(fig[2, 1][1, 2], hm3)
+        Colorbar(fig[2, 2][1, 2], hm4)
 
-    M           = min.(β_Alet.*(H_Alet .+ B_Alet .- ELA_Alet), b_max_Alet)
-    Mask        = ones(Float64, size(H_Alet))
-    Mask[M.>0.0 .&& H_Alet.<=0.0] .= 0.0
-
-    check_1_beforescaling = true
-
-    if check_1_beforescaling == true
-        fig = Figure(; size=(1000, 580), fontsize=22)
-        axs = (H=Axis(fig[1, 1]; aspect=DataAspect(), xlabel=L"x\text{ [km]}", ylabel=L"y\text{ [km]}", title=L"H_{Alet} before scaling [m]"),
-            vmag=Axis(fig[1, 2]; aspect=DataAspect(), xlabel=L"x\text{ [km]}", ylabel=L"y\text {[km]}", title=L"vmag_{Alet} before scaling [m/s]"))
-        plts = (H=heatmap!(axs.H, xc_Alet, yc_Alet, Array(S_Alet .- B_Alet); colormap=:turbo),
-                vmag=heatmap!(axs.vmag, xc_Alet, yc_Alet, vmag_Alet; colormap=:turbo))
-        axs.H.xticksize = 18
-        axs.H.yticksize = 18
-        axs.vmag.xticksize = 18
-        axs.vmag.yticksize = 18
-        Colorbar(fig[1, 1][1, 2], plts.H)
-        Colorbar(fig[1, 2][1, 2], plts.vmag)
-        colgap!(fig.layout, 7)
         display(fig)
     end
 
+    #load the mass balance data: m/s, m, 1/s
+    b_max_Alet, ELA_Alet, β_Alet = load_massbalance()
+    ELA_Alet -= oz
+
+    M           = min.(β_Alet.*(H_old .+ B .- ELA_Alet), b_max_Alet)
+    Mask        = ones(Float64, size(H_old))
+    Mask[M.>0.0 .&& H_old.<=0.0] .= 0.0
 
     #real scale
-    lsc_data = filter(!isnan, H_Alet) |> mean
+    lsc_data = mean(H_old)
     ρ = 910 #kg/m^3
     g = 9.81 #m/s^2
     A = 5e-26
     npow = 3
-    #TODO 
+    # TODO
     aρgn0_data = A * (ρ * g)^npow
 
     tsc_data = 1 / aρgn0_data / lsc_data^npow
@@ -135,35 +154,40 @@ function application()
     vsc = lsc / tsc
 
     #rescaling 
-    # here we do not use H_Alet is because yeah H_Alet has many NaN
-    H = max.(0.0, (S_Alet .- B_Alet)) ./ lsc_data .* lsc
-    B = B_Alet ./ lsc_data .* lsc
-    S = S_Alet ./ lsc_data .* lsc
-    vmag = vmag_Alet ./ vsc_data .* vsc
+    H_old = H_old ./ lsc_data .* lsc
+    H_obs = H_obs ./ lsc_data .* lsc
+    B = B ./ lsc_data .* lsc
+    S_old = S_old ./ lsc_data .* lsc
+    S_obs = S_obs ./ lsc_data .* lsc
+    vmag_obs = vmag_obs ./ vsc_data .* vsc
     b_max = b_max_Alet ./ vsc_data .* vsc
     ELA   = ELA_Alet ./ lsc_data .* lsc
     β     = β_Alet .* tsc_data ./ tsc
+    xc       = xc ./ lsc_data .* lsc
+    yc       = yc ./ lsc_data .* lsc
+    qmag_obs = replace(vmag_obs[2:end-1, 2:end-1], NaN => 0.0) .* H_obs[2:end-1, 2:end-1]
+    @show size(qmag_obs)
+    check_data = true 
+    if check_data 
+        fig = Figure(size=(800, 800))
+        ax1 = Axis(fig[1, 1][1, 1]; aspect=DataAspect(), title="Bed elevation [m.a.s.l.] after rescaling")
+        ax2 = Axis(fig[1, 2][1, 1]; aspect=DataAspect(), title="Surface flux (2016-2017) after rescaling [m/y]")
+        ax3 = Axis(fig[2, 1][1, 1]; aspect=DataAspect(), title="Ice thickness (2016) after rescaling [m.a.s.l.]")
+        ax4 = Axis(fig[2, 2][1, 1]; aspect=DataAspect(), title="Ice thickness (2017) after rescaling [m.a.s.l.]")
 
-    xc = xc_Alet ./ lsc_data .* lsc
-    yc = yc_Alet ./ lsc_data .* lsc
-    qmag = replace(vmag[2:end-1, 2:end-1], NaN => 0.0) .* H[2:end-1, 2:end-1]
+        hm1 = heatmap!(ax1, B; colormap=:terrain)
+        hm2 = heatmap!(ax2, qmag_obs; colormap=:turbo)
+        hm3 = heatmap!(ax3, H_old; colormap=:magma)
+        hm4 = heatmap!(ax4, H_obs; colormap=:magma)
 
-    check_scaling = true
-    if check_scaling
-        fig = Figure(; size=(1000, 580), fontsize=22)
-        axs = (H=Axis(fig[1, 1]; aspect=DataAspect(), xlabel=L"x", ylabel=L"y", title=L"H"),
-            vmag=Axis(fig[1, 2]; aspect=DataAspect(), xlabel=L"x", ylabel=L"y", title=L"vmag"))
-        plts = (H=heatmap!(axs.H, xc, yc, H; colormap=:turbo),
-                vmag=heatmap!(axs.vmag, xc, yc, replace(vmag[2:end-1, 2:end-1], NaN => 0.0); colormap=:turbo))
-        axs.H.xticksize = 18
-        axs.H.yticksize = 18
-        axs.vmag.xticksize = 18
-        axs.vmag.yticksize = 18
-        Colorbar(fig[1, 1][1, 2], plts.H)
-        Colorbar(fig[1, 2][1, 2], plts.vmag)
-        colgap!(fig.layout, 7)
+        Colorbar(fig[1, 1][1, 2], hm1)
+        Colorbar(fig[1, 2][1, 2], hm2)
+        Colorbar(fig[2, 1][1, 2], hm3)
+        Colorbar(fig[2, 2][1, 2], hm4)
+
         display(fig)
-    end 
+    end
+
 
     #non-dimensional numbers
     s_f      = 1e3#1e-5 #as/a/lsc^2
@@ -188,44 +212,35 @@ function application()
     maxiter = 5 * nx^2
     Δγ = 0.25 #0.5 #0.25
     ngd = 500
-    w_H_1, w_q_1 = 1.0, 0.0
+    w_H_1, w_q_1 = 0.5, 0.5
     w_H_2, w_q_2 = 0.0, 1.0
 
-    H_ini               = copy(H)
-    As_ini              = asρgn0 * CUDA.ones(nx - 1, ny - 1)
-    logAs_H_steadystate = log10.(As_ini)
-    logAs_q_steadystate = log10.(As_ini)
-    logAs_q_snapshot    = log10.(As_ini)
+    #okay the next part is to check how we initiate these Arrays right?
+    # firstly we need this: 
 
-    H = CuArray(H)
-    S = CuArray(S)
-    B = CuArray(B)
-    H_ini = CuArray(H_ini)
-    H_obs = copy(H_ini)
-    S_ini = copy(S)
-    qmag = CuArray(qmag)
-    qobs_mag = CuArray(qmag)
-    β = CUDA.fill(β, nx, ny)
+    
+    B           = CuArray(B)
+    S_ini       = CuArray(S_old)
+    S_obs       = CuArray(S_obs)
+    H_obs       = CuArray(H_obs)
+    H_ini       = CuArray(H_old)
+    qmag_obs    = CuArray(qmag_obs)
+    qmag        = CUDA.zeros(Float64,size(qmag_obs))
+    As_ini      = asρgn0 * CUDA.ones(nx-1, ny-1)
+    logAs_steadystate = log10.(As_ini)
+    logAs_snapshot   = log10.(As_ini)
+
+    # okay now let's check where do I define qmag and the size of qmag
+
+    # so here H and qmag are what are passed into model to solve, 
+    # and for now I just want to have 0.5 0.5 weights
+    #β = CUDA.fill(β, nx, ny)
     #ELA = CUDA.fill(ELA, nx, ny)
     mask = CuArray(Mask)
 
-    check_qobs_mag = false
-
-    if check_qobs_mag
-        fig = Figure(; size=(1000, 580), fontsize=22)
-        axs = (qobs_mag    = Axis(fig[1, 1][1, 1]; aspect=DataAspect(), xlabel=L"x", ylabel=L"y", title=L"qobs_mag"),
-               qmag  = Axis(fig[1, 2][1,1]; aspect=DataAspect(), xlabel=L"qmag"))
-        plts = (qobs_mag=heatmap!(axs.qobs_mag, xc[2:end-1], yc[2:end-1], Array(qobs_mag); colormap=:turbo),
-                qmag=heatmap!(axs.qmag, xc[2:end-1], yc[2:end-1], Array(qmag); colormap=:turbo))
-        Colorbar(fig[1, 1][1, 2], plts.qobs_mag)
-        Colorbar(fig[1, 2][1, 2], plts.qmag)
-        colgap!(fig.layout, 7)
-        display(fig)
-    end 
-
     # pack 
-    geometry = (; B, xc, yc)
-    observed = (; H_obs, qobs_mag, mask)
+    geometry = (; B, xc, yc, nx, ny)
+    observed = (; H_obs, qmag_obs, mask)
     initial = (; H_ini, S_ini, As_ini, qmag)
     physics = (; npow, aρgn0, β, ELA, b_max, H_cut, γ0)
     weights_H = (; w_H_1, w_q_1)
@@ -235,9 +250,9 @@ function application()
 
     # run 3 inversions 
     
-    #inversion_snapshot(logAs_q_snapshot, geometry, observed, initial, physics, numerics, optim_params)
+    #inversion_snapshot(logAs_snapshot, geometry, observed, initial, physics, numerics, optim_params)
     
-    inversion_steadystate(logAs_H_steadystate, geometry, observed, initial, physics, weights_H, weights_q, numerics, optim_params; do_vis=true, do_thickness=true)
+    inversion_steadystate(logAs_steadystate, geometry, observed, initial, physics, weights_H, weights_q, numerics, optim_params; do_vis=true, do_thickness=true)
 
     # inversion_steadystate(logAs_q_steadystate, geometry, observed, initial, physics, weights_H, weights_q, numerics, optim_params; do_vis=false, do_thickness=false)
 

@@ -20,30 +20,30 @@ function smooth!(As, As2, nsm, nthreads, nblocks)
     return
 end
 
-function ∂J_∂qx_vec!(q̄Hx, qmag, qobs_mag, qx)
+function ∂J_∂qx_vec!(q̄Hx, qmag, qmag_obs, qx)
     q̄Hx                .= 0
-    @. q̄Hx[1:end-1, :] += (qmag - qobs_mag) * $avx(qx) / (2 * qmag + (qmag == 0))
-    @. q̄Hx[2:end, :]   += (qmag - qobs_mag) * $avx(qx) / (2 * qmag + (qmag == 0))
+    @. q̄Hx[1:end-1, :] += (qmag - qmag_obs) * $avx(qx) / (2 * qmag + (qmag == 0))
+    @. q̄Hx[2:end, :]   += (qmag - qmag_obs) * $avx(qx) / (2 * qmag + (qmag == 0))
     return
 end
 
-function ∂J_∂qy_vec!(q̄Hy, qmag, qobs_mag, qy)
+function ∂J_∂qy_vec!(q̄Hy, qmag, qmag_obs, qy)
     q̄Hy                .= 0
-    @. q̄Hy[:, 1:end-1] += (qmag - qobs_mag) * $avy(qy) / (2 * qmag + (qmag == 0))
-    @. q̄Hy[:, 2:end]   += (qmag - qobs_mag) * $avy(qy) / (2 * qmag + (qmag == 0))
+    @. q̄Hy[:, 1:end-1] += (qmag - qmag_obs) * $avy(qy) / (2 * qmag + (qmag == 0))
+    @. q̄Hy[:, 2:end]   += (qmag - qmag_obs) * $avy(qy) / (2 * qmag + (qmag == 0))
     return
 end
 
 #compute the cost function 
 
 function loss(logAs, fwd_params, loss_params; kwags...)
-    (; H_obs, qobs_mag) = loss_params.fields
+    (; H_obs, qmag_obs) = loss_params.fields
     (; w_H, w_q) = loss_params.scalars
     @info "Forward solve"
     solve_sia!(logAs, fwd_params...; kwags...)
     H = fwd_params.fields.H
     qmag = fwd_params.fields.qmag
-    return 0.5 * (w_H * sum((H .- H_obs) .^ 2) + w_q * sum((qmag .- qobs_mag) .^ 2))
+    return 0.5 * (w_H * sum((H .- H_obs) .^ 2) + w_q * sum((qmag .- qmag_obs) .^ 2))
 end
 
 #compute the sensitivity: hradient of the loss function
@@ -54,7 +54,7 @@ function ∇loss!(logĀs, logAs, fwd_params, adj_params, loss_params; reg=nothi
     (; aρgn0, b_max, npow) = fwd_params.scalars
     (; nthreads, nblocks) = fwd_params.launch_config
     (; R̄H, q̄x, q̄y, H̄, D̄, Ās, ψ_H) = adj_params.fields
-    (; H_obs, qobs_mag, Lap_As) = loss_params.fields
+    (; H_obs, qmag_obs, Lap_As) = loss_params.fields
 
     @info "Forward solve"
     solve_sia!(logAs, fwd_params...; visu=visu)
@@ -62,22 +62,22 @@ function ∇loss!(logĀs, logAs, fwd_params, adj_params, loss_params; reg=nothi
     @info "Adjoint solve"
     solve_adjoint_sia!(fwd_params, adj_params, loss_params)
 
-    ∂J_∂qx_vec!(q̄x, qmag, qobs_mag, qx)
-    ∂J_∂qy_vec!(q̄y, qmag, qobs_mag, qy)
+    ∂J_∂qx_vec!(q̄x, qmag, qmag_obs, qx)
+    ∂J_∂qy_vec!(q̄y, qmag, qmag_obs, qy)
 
     logĀs .= 0.0
     R̄H .= .-ψ_H
     H̄ .= 0.0
     D̄ .= 0.0
 
-    #residual!(RH, qx, qy, β, H, B, ELA, b_max, dx, dy)
+    #residual!(RH, qx, qy, β, H, B, H_ini, ELA, b_max, mask, dx, dy)
     @cuda threads = nthreads blocks = nblocks ∇(residual!,
                                                 DupNN(RH, R̄H),
                                                 DupNN(qx, q̄x),
                                                 DupNN(qy, q̄y),
                                                 Const(β),
                                                 DupNN(H, H̄),
-                                                Const(B), Const(ELA), Const(b_max), Const(mask), Const(dx), Const(dy))
+                                                Const(B), Const(H_ini), Const(ELA), Const(b_max), Const(mask), Const(dx), Const(dy))
     #compute_q!(qx, qy, D, H, B, dx, dy)
     @cuda threads = nthreads blocks = nblocks ∇(compute_q!,
                                                 DupNN(qx, q̄x),

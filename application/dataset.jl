@@ -2,6 +2,9 @@ using Rasters
 using GlacioTools
 import NCDatasets
 using CairoMakie
+using ArchGDAL
+
+@views 
 
 @views function load_data(Glacier::AbstractString, SGI_ID::AbstractString, datadir::AbstractString, velocity_file; visu_data=false)
     #load ice surface data using geom_select
@@ -10,6 +13,10 @@ using CairoMakie
     ice_surf = reverse(ice_surf[:, :, 1]; dims=2) # reads it into memory
     bed_surf = reverse(bed_surf[:, :, 1]; dims=2) # reads it into memory
     #bed_offset = reverse(bed_surf[:, :, 1]; dims=2)
+
+    write("Aletsch_bedrock.tif", bed_surf)
+
+    error("check")
 
     xy = DimPoints(dims(ice_thic, (X,Y)))
     (x, y) = (first.(xy), last.(xy))
@@ -20,8 +27,8 @@ using CairoMakie
     yc = yc .- yc[1]
     
 
-    S_2009 = Raster("application/datasets/Aletsch/aletsch2009.asc")
-    S_2017 = Raster("application/datasets/Aletsch/aletsch2017.asc")
+    S_2009 = Raster("application/datasets/Aletsch/aletsch2009.asc"; crs=EPSG(2056), mappedcrs=EPSG(2056))
+    S_2017 = Raster("application/datasets/Aletsch/aletsch2017.asc"; crs=EPSG(2056), mappedcrs=EPSG(2056))
 
     # create missing masks:
     mask_2009 = missingmask(S_2009)
@@ -31,6 +38,12 @@ using CairoMakie
 
     replace_missing!(S_2009, NaN)
     replace_missing!(S_2017, NaN)
+
+    S_2009 = Raster(S_2009; dims=GlacioTools.coords_as_ranges(S_2009), crs=crs(S_2009), metadata=S_2009.metadata, missingval=S_2009.missingval, name=S_2009.name,
+    refdims=S_2009.refdims)
+    S_2017 = Raster(S_2017; dims=GlacioTools.coords_as_ranges(S_2017), crs=crs(S_2017), metadata=S_2017.metadata, missingval=S_2017.missingval, name=S_2017.name,
+    refdims=S_2017.refdims)
+
 
     @show size(S_2009)
     @show size(S_2017)
@@ -82,9 +95,9 @@ using CairoMakie
 
     #mask off
 
-    vmag[ice_thic.==0] .= NaN
+    # is this neccesary?
+    vmag[ice_thic.== 0] .= NaN
     ice_thic[ice_thic .== 0] .= NaN
-
 
     B_Alet = bed_surf.data
     S_Alet_2016 = S_2016.data
@@ -96,7 +109,7 @@ using CairoMakie
 
     oz = minimum(B_Alet)
     B_Alet .-= oz 
-    #S_Alet .-= oz 
+    S_Alet .-= oz 
 
     @show typeof(H_Alet_2016)
     @show typeof(vmag_Alet)
@@ -129,7 +142,7 @@ using CairoMakie
         colgap!(fig.layout, 7)
         display(fig)
     end 
-    return H_Alet, S_Alet, B_Alet, vmag_Alet, oz, xc, yc
+    return H_Alet_2016, H_Alet_2017, S_Alet_2016, S_Alet_2017, B_Alet, vmag_Alet, oz, xc, yc
 end 
 
 

@@ -4,10 +4,14 @@ using Printf
 
 include("macros.jl")
 
+# firstly, in the forward model, I only need to change the residual kernel
+# so then I need to pass H_ini into forward solver from where?
+# then that's it for the forward solver
+
 # integrate SIA equations to steady state
 function solve_sia!(logAs, fields, scalars, numerical_params, launch_config; visu=nothing)
     # extract variables from tuples
-    (; H, B, S, β, ELA, D, qx, qy, As, RH, qmag, mask, Err_rel, Err_abs) = fields
+    (; H, H_ini, B, S, β, ELA, D, qx, qy, As, RH, qmag, mask, Err_rel, Err_abs) = fields
     (; aρgn0, b_max, npow)                              = scalars
     (; vsc, nx, ny, dx, dy, maxiter, ncheck, ϵtol)      = numerical_params
     (; nthreads, nblocks)                               = launch_config

@@ -11,3 +11,5 @@ scripts_flux/output_steadystate
 *.jld2
 *.mp4
 *.png
+*.tif 
+*.nc

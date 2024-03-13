@@ -5,17 +5,17 @@ using Enzyme
 include("macros.jl")
 include("snapshot_loss.jl")
 
+# TODO then pass nx and ny instead of xc yc
+
 function inversion_snapshot(logAs, geometry, observed, initial, physics, numerics, optim_params)
-    (; B, xc, yc) = geometry
-    (; qobs_mag) = observed
+    (; B, xc, yc, nx, ny) = geometry
+    (; qmag_obs) = observed
     (; H_ini, As_ini, qmag) = initial
     (; npow, aρgn0) = physics
     (; ϵtol, maxiter) = numerics
     (; Δγ, ngd) = optim_params
 
     #pre-processing 
-    nx       = length(xc)
-    ny       = length(yc)
     dx       = xc[2] - xc[1]
     dy       = yc[2] - yc[1]
     nthreads = (16, 16)
@@ -50,7 +50,7 @@ function inversion_snapshot(logAs, geometry, observed, initial, physics, numeric
         fig = Figure(; size=(800, 600))
         #opts    = (xaxisposition=:top,) # save for later 
 
-        axs = (qobs_mag    = Axis(fig[1, 1][1, 1]; aspect=DataAspect(), xlabel=L"x", ylabel=L"y", title=L"|q^\mathrm{obs}|"),
+        axs = (qmag_obs    = Axis(fig[1, 1][1, 1]; aspect=DataAspect(), xlabel=L"x", ylabel=L"y", title=L"|q^\mathrm{obs}|"),
                qmag  = Axis(fig[1, 2][1,1]; aspect=DataAspect(), title=L"|q|"),
                D  = Axis(fig[1, 3][1,1]; aspect=DataAspect(), title=L"D"),
                As   = Axis(fig[2, 1][1, 1]; aspect=DataAspect(), xlabel=L"x", title=L"\log_{10}(A_s)"),
@@ -67,9 +67,9 @@ function inversion_snapshot(logAs, geometry, observed, initial, physics, numeric
         logAs     = log10.(As)
         logAs_ini = log10.(As_ini)
 
-        qrng = extrema(qobs_mag)
+        qrng = extrema(qmag_obs)
 
-        plts = (qobs_mag    = heatmap!(axs.qobs_mag, xc[2:end-1], yc[2:end-1], Array(qobs_mag); colormap=:turbo, colorrange=qrng),
+        plts = (qmag_obs    = heatmap!(axs.qmag_obs, xc[2:end-1], yc[2:end-1], Array(qmag_obs); colormap=:turbo, colorrange=qrng),
                 qmag    = heatmap!(axs.qmag, xc[2:end-1], yc[2:end-1], Array(qmag); colormap=:turbo, colorrange=qrng),
                 # D    = heatmap!(axs.D, xc[1:end-1], yc[1:end-1], Array(D); colormap=:turbo),
                 As   = heatmap!(axs.As, xc_1, yc_1, Array(logAs); colormap=:turbo),
@@ -85,7 +85,7 @@ function inversion_snapshot(logAs, geometry, observed, initial, physics, numeric
                   numerical_params = (; nx, ny, dx, dy, maxiter, ϵtol),
                   launch_config    = (; nthreads, nblocks))
     adj_params = (fields=(; q̄x, q̄y, D̄, H̄),)
-    loss_params = (fields=(; qobs_mag),)
+    loss_params = (fields=(; qmag_obs),)
 
     # define reg
     reg = (; nsm=5, Tmp)
@@ -107,7 +107,7 @@ function inversion_snapshot(logAs, geometry, observed, initial, physics, numeric
     @show typeof(Mask)
     @show typeof(logAs)
 
-    #jldsave("output_snapshot/static.jld2"; qobs_mag, As_ini)
+    #jldsave("output_snapshot/static.jld2"; qmag_obs, As_ini)
 
     @info "Gradient descent - inversion for As"
     for igd in 1:ngd
@@ -139,20 +139,20 @@ function inversion_snapshot(logAs, geometry, observed, initial, physics, numeric
             q_vis = Array(qmag)
             H_vis = Array(H[2:end-1,2:end-1])
 
-            qobs_vis = Array(qobs_mag)
+            qobs_vis = Array(qmag_obs)
 
             q_vis[H_vis .< 0.1] .= NaN
             qobs_vis[H_vis .< 0.1] .= NaN
             
             plts.qmag[3]    = q_vis
-            plts.qobs_mag[3]    = qobs_vis
+            plts.qmag_obs[3]    = qobs_vis
             # plts.D[3]       = Array(D)
             plts.As[3]      = Array(logAs)
             plts.As_s[1][1] = Point2.(Array(logAs[nx÷2, :]), yc_1)
             plts.err[1]     = Point2.(iter_evo, cost_evo)
 
             if igd == 100
-                Colorbar(fig[1, 1][1, 2], plts.qobs_mag)
+                Colorbar(fig[1, 1][1, 2], plts.qmag_obs)
                 Colorbar(fig[1, 2][1, 2], plts.qmag)
                 # Colorbar(fig[1, 3][1, 2], plts.D)
                 Colorbar(fig[2, 1][1, 2], plts.As)
