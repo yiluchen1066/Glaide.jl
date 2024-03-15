@@ -5,7 +5,7 @@ using Rasters
 using ArchGDAL
 using NCDatasets
 
-CUDA.device!(1)
+CUDA.device!(5)
 include("inversion_steadystate.jl")
 include("inversion_snapshot.jl")
 include("macros.jl")
@@ -67,15 +67,15 @@ function application()
 
     aspect_ratio = ly/lx 
 
-    nx = 128
+    nx = 128*2
     ny = ceil(Int, nx*aspect_ratio)
     stack = resample(stack; size=(nx, ny))
 
-    # you can grab xc yc when they still are Rasters
     xy = DimPoints(dims(stack.bedrock, (X, Y)))
     (x, y) = (first.(xy), last.(xy))
     xc = x.data[:, 1]
     yc = y.data[1, :]
+    yc = reverse(yc; dims=1)
 
     vmag_obs   = stack.velocity_2016_2017.data
     B          = stack.bedrock.data
@@ -94,6 +94,8 @@ function application()
     S_obs       = reverse(S_obs; dims=2)
     H_obs       = reverse(H_obs; dims=2)
     H_old       = reverse(H_old; dims=2)
+
+    #dt             # 1 year in seconds
 
     nsm_topo = 100
     #bedrock smooth
@@ -165,6 +167,9 @@ function application()
     β     = β_Alet .* tsc_data ./ tsc
     xc       = xc ./ lsc_data .* lsc
     yc       = yc ./ lsc_data .* lsc
+
+    
+    #dt       = dt /tsc_data*tsc
     qmag_obs = replace(vmag_obs[2:end-1, 2:end-1], NaN => 0.0) .* H_obs[2:end-1, 2:end-1]
     @show size(qmag_obs)
     check_data = true 
@@ -210,13 +215,10 @@ function application()
     ϵtol = (abs=1e-6, rel=1e-6)
     ϵtol_adj = 1e-8
     maxiter = 5 * nx^2
-    Δγ = 0.25 #0.5 #0.25
+    Δγ = 0.1#0.25 #0.5 #0.25
     ngd = 500
     w_H_1, w_q_1 = 0.5, 0.5
     w_H_2, w_q_2 = 0.0, 1.0
-
-    #okay the next part is to check how we initiate these Arrays right?
-    # firstly we need this: 
 
     
     B           = CuArray(B)
@@ -250,9 +252,9 @@ function application()
 
     # run 3 inversions 
     
-    #inversion_snapshot(logAs_snapshot, geometry, observed, initial, physics, numerics, optim_params)
+    inversion_snapshot(logAs_snapshot, geometry, observed, initial, physics, numerics, optim_params)
     
-    inversion_steadystate(logAs_steadystate, geometry, observed, initial, physics, weights_H, weights_q, numerics, optim_params; do_vis=true, do_thickness=true)
+    #inversion_steadystate(logAs_steadystate, geometry, observed, initial, physics, weights_H, weights_q, numerics, optim_params; do_vis=true, do_thickness=true)
 
     # inversion_steadystate(logAs_q_steadystate, geometry, observed, initial, physics, weights_H, weights_q, numerics, optim_params; do_vis=false, do_thickness=false)
 

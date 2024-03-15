@@ -114,7 +114,7 @@ function residual!(RH, qx, qy, β, H, B, H_ini, ELA, b_max, mask, dx, dy)
     if ix <= size(H, 1) - 2 && iy <= size(H, 2) - 2
         MB = min(β[ix + 1, iy + 1] * (H[ix + 1, iy + 1] + B[ix + 1, iy + 1] - ELA), b_max)
         H_diff = (H[ix+1, iy+1] - H_ini[ix+1, iy+1])/(365*24*3600)
-        @inbounds RH[ix + 1, iy + 1] = -(@d_xa(qx) / dx + @d_ya(qy) / dy) + mask[ix+1, iy+1]*MB + H_diff
+        @inbounds RH[ix + 1, iy + 1] = -(@d_xa(qx) / dx + @d_ya(qy) / dy) + mask[ix+1, iy+1]*MB - H_diff
     end
     return
 end
