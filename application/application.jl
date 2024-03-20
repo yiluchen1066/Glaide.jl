@@ -142,6 +142,7 @@ function application()
     g = 9.81 #m/s^2
     A = 5e-26
     npow = 3
+    dt   = 365*24*3600
     # TODO
     aρgn0_data = A * (ρ * g)^npow
 
@@ -167,7 +168,7 @@ function application()
     β     = β_Alet .* tsc_data ./ tsc
     xc       = xc ./ lsc_data .* lsc
     yc       = yc ./ lsc_data .* lsc
-
+    dt       = dt  /tsc_data * tsc
     
     #dt       = dt /tsc_data*tsc
     qmag_obs = replace(vmag_obs[2:end-1, 2:end-1], NaN => 0.0) .* H_obs[2:end-1, 2:end-1]
@@ -228,6 +229,8 @@ function application()
     H_ini       = CuArray(H_old)
     qmag_obs    = CuArray(qmag_obs)
     qmag        = CUDA.zeros(Float64,size(qmag_obs))
+    vmag_obs    = CuArray(vmag_obs)
+    vmag        = CUDA.zeros(Float64, size(vmag_obs))
     As_ini      = asρgn0 * CUDA.ones(nx-1, ny-1)
     logAs_steadystate = log10.(As_ini)
     logAs_snapshot   = log10.(As_ini)
@@ -242,9 +245,9 @@ function application()
 
     # pack 
     geometry = (; B, xc, yc, nx, ny)
-    observed = (; H_obs, qmag_obs, mask)
-    initial = (; H_ini, S_ini, As_ini, qmag)
-    physics = (; npow, aρgn0, β, ELA, b_max, H_cut, γ0)
+    observed = (; H_obs, qmag_obs, vmag_obs, mask)
+    initial = (; H_ini, S_ini, As_ini, qmag, vmag)
+    physics = (; npow, dt, aρgn0, β, ELA, b_max, H_cut, γ0)
     weights_H = (; w_H_1, w_q_1)
     weights_q = (; w_H_2, w_q_2)
     numerics = (; vsc, ϵtol, ϵtol_adj, maxiter)

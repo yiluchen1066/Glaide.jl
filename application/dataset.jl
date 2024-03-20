@@ -4,10 +4,12 @@ import NCDatasets
 using CairoMakie
 using ArchGDAL
 
-@views 
 
 @views function load_data(Glacier::AbstractString, SGI_ID::AbstractString, datadir::AbstractString, velocity_file; visu_data=false)
     #load ice surface data using geom_select
+    Glacier = "Aletsch"
+    SGI_ID  = "B36-26"
+    datadir = "/scratch-1/yilchen/Msc-Inverse-SIA/application/datasets/"
     ice_thic, ice_surf, bed_surf = GlacioTools.geom_select(Glacier, SGI_ID, joinpath(datadir, Glacier); do_save=false)
     ice_thic = reverse(ice_thic[:, :, 1]; dims=2) # reads it into memory
     ice_surf = reverse(ice_surf[:, :, 1]; dims=2) # reads it into memory
@@ -15,8 +17,6 @@ using ArchGDAL
     #bed_offset = reverse(bed_surf[:, :, 1]; dims=2)
 
     write("Aletsch_bedrock.tif", bed_surf)
-
-    error("check")
 
     xy = DimPoints(dims(ice_thic, (X,Y)))
     (x, y) = (first.(xy), last.(xy))

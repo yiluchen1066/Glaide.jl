@@ -12,9 +12,9 @@ include("macros.jl")
 function solve_sia!(logAs, fields, scalars, numerical_params, launch_config; visu=nothing)
     # extract variables from tuples
     (; H, H_ini, B, S, β, ELA, D, qx, qy, As, RH, qmag, mask, Err_rel, Err_abs) = fields
-    (; aρgn0, b_max, npow)                              = scalars
-    (; vsc, nx, ny, dx, dy, maxiter, ncheck, ϵtol)      = numerical_params
-    (; nthreads, nblocks)                               = launch_config
+    (; aρgn0, b_max, npow)                                                      = scalars
+    (; vsc, nx, ny, dx, dy, dt, maxiter, ncheck, ϵtol)                          = numerical_params
+    (; nthreads, nblocks)                                                       = launch_config
     # initialize 
     err_abs0 = Inf
     RH .= 0
@@ -45,7 +45,7 @@ function solve_sia!(logAs, fields, scalars, numerical_params, launch_config; vis
         # compute stable time step
         dτ = 1 / ( 4.1* maximum(D) / dx^2 + maximum(β))
 
-        @cuda threads = nthreads   blocks = nblocks residual!(RH, qx, qy, β, H, B, H_ini, ELA, b_max, mask, dx, dy)
+        @cuda threads = nthreads   blocks = nblocks residual!(RH, qx, qy, β, H, B, H_ini, ELA, b_max, mask, dx, dy, dt)
         @cuda threads = nthreads   blocks = nblocks update_H!(H, RH, dτ)
         @cuda threads = nthreads_x blocks = nblocks_x bc_x!(H)
         @cuda threads = nthreads_y blocks = nblocks_y bc_y!(H)
@@ -109,11 +109,11 @@ function compute_q!(qx, qy, D, H, B, dx, dy)
 end
 
 # compute ice flow residual
-function residual!(RH, qx, qy, β, H, B, H_ini, ELA, b_max, mask, dx, dy)
+function residual!(RH, qx, qy, β, H, B, H_ini, ELA, b_max, mask, dx, dy, dt)
     @get_indices
     if ix <= size(H, 1) - 2 && iy <= size(H, 2) - 2
         MB = min(β[ix + 1, iy + 1] * (H[ix + 1, iy + 1] + B[ix + 1, iy + 1] - ELA), b_max)
-        H_diff = (H[ix+1, iy+1] - H_ini[ix+1, iy+1])/(365*24*3600)
+        H_diff = (H[ix+1, iy+1] - H_ini[ix+1, iy+1])/dt
         @inbounds RH[ix + 1, iy + 1] = -(@d_xa(qx) / dx + @d_ya(qy) / dy) + mask[ix+1, iy+1]*MB - H_diff
     end
     return

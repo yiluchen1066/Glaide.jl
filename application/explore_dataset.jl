@@ -23,7 +23,7 @@ function coords_as_ranges(raster_like; sigdigits=0)
 end
 
 function create_raster_stack()
-    #load bedrock from GlacioTools
+    #load bedrock from GlacioTools    
     bedrock = Raster("Aletsch_bedrock.tif")
     bedrock = replace_missing(bedrock, NaN)
 

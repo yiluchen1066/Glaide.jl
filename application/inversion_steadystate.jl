@@ -11,7 +11,7 @@ function inversion_steadystate(logAs, geometry, observed, initial, physics, weig
     (; B, xc, yc, nx, ny) = geometry
     (; H_obs, qmag_obs, mask) = observed
     (; H_ini, S_ini, As_ini) = initial
-    (; npow, aρgn0, β, ELA, b_max, H_cut, γ0) = physics
+    (; npow, dt, aρgn0, β, ELA, b_max, H_cut, γ0) = physics
     (; w_H_1, w_q_1) = weights_H
     (; w_H_2, w_q_2) = weights_q
     (; vsc, ϵtol, ϵtol_adj, maxiter) = numerics
@@ -97,7 +97,7 @@ function inversion_steadystate(logAs, geometry, observed, initial, physics, weig
     #pack parameters
     fwd_params = (fields           = (; H, H_ini, B, S, β, ELA, D, qx, qy, As, RH, qmag, mask, Err_rel, Err_abs),
                   scalars          = (; aρgn0, b_max, npow),
-                  numerical_params = (; vsc, nx, ny, dx, dy, maxiter, ncheck, ϵtol),
+                  numerical_params = (; vsc, nx, ny, dx, dy, dt, maxiter, ncheck, ϵtol),
                   launch_config    = (; nthreads, nblocks))
 
     fwd_visu = (; plts, fig)
