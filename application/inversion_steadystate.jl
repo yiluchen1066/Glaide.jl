@@ -9,7 +9,7 @@ include("sia_loss_flux_2D.jl")
 # where is qmag
 function inversion_steadystate(logAs, geometry, observed, initial, physics, weights_H, weights_q, numerics, optim_params; do_vis=true, do_thickness=true)
     (; B, xc, yc, nx, ny) = geometry
-    (; H_obs, qmag_obs, mask) = observed
+    (; H_obs, qmag_obs, mask, mb) = observed
     (; H_ini, S_ini, As_ini) = initial
     (; npow, dt, aρgn0, β, ELA, b_max, H_cut, γ0) = physics
     (; w_H_1, w_q_1) = weights_H
@@ -68,10 +68,13 @@ function inversion_steadystate(logAs, geometry, observed, initial, physics, weig
         fig = Figure(; size=(1000, 800), fontsize=22)
 
         axs = (H    = Axis(fig[1, 1][1, 1]; aspect=DataAspect(), xlabel=L"x", ylabel=L"y", title=L"H"),
-               H_s  = Axis(fig[1, 2]; aspect=1, xlabel=L"H"),
+               mask  = Axis(fig[1, 2]; aspect=DataAspect(), title="Mask"),
+               mb    = Axis(fig[1, 3]; aspect=DataAspect(), title="MB"),
                As   = Axis(fig[2, 1][1, 1]; aspect=DataAspect(), xlabel=L"x", title=L"\log_{10}(A_s)"),
-               As_s = Axis(fig[2, 2]; aspect=1, xlabel=L"\log_{10}(A_s)"),
-               err  = Axis(fig[2, 3]; yscale=log10, title=L"convergence", xlabel="iter", ylabel=L"error"))
+               err_abs  = Axis(fig[2, 2]; aspect=DataAspect(), title="Err_abs"),
+               err_rel  = Axis(fig[2, 3]; aspect=DataAspect(), title="Err_abs"))
+               #As_s = Axis(fig[2, 2]; aspect=1, xlabel=L"\log_{10}(A_s)"),
+               #err  = Axis(fig[2, 3]; yscale=log10, title=L"convergence", xlabel="iter", ylabel=L"error"))
 
         nan_to_zero(x) = isnan(x) ? zero(x) : x
 
@@ -81,21 +84,31 @@ function inversion_steadystate(logAs, geometry, observed, initial, physics, weig
         plts = (H          = heatmap!(axs.H, xc, yc, Array(H); colormap=:turbo),
                 H_v        = vlines!(axs.H, xc[nx÷2]; color=:magenta, linewidth=4, linestyle=:dash),
                 mb_contour = contour!(axs.H, xc, yc, Array(S); levels=ELA:ELA, color=:white, linewdith=2),
-                H_s  = (lines!(axs.H_s, Point2.(Array(H_obs[nx÷2, :]), yc); linewidth=4, color=:red, label="synthetic"),
-                lines!(axs.H_s, Point2.(Array(H[nx÷2, :]), yc); linewidth=4, color=:blue, label="current")),
+                mask       = heatmap!(axs.mask, xc, yc, Array(mask); colormap=:turbo), 
+                mask_contour = contour!(axs.mask, xc, yc, Array(S); levels=ELA:ELA, color=:white, linewidth=2),
+                mb           = heatmap!(axs.mb, xc,yc, Array(mb); colormap=:turbo),     
+                mb_contour_2 = contour!(axs.mb, xc, yc, Array(S); levels=ELA:ELA, color=:white, linewdith=2),
+                #H_s  = (lines!(axs.H_s, Point2.(Array(H_obs[nx÷2, :]), yc); linewidth=4, color=:red, label="synthetic"),
+                #lines!(axs.H_s, Point2.(Array(H[nx÷2, :]), yc); linewidth=4, color=:blue, label="current")),
                 As   = heatmap!(axs.As, xc_1, yc_1, Array(logAs); colormap=:viridis),
                 As_v = vlines!(axs.As, xc_1[nx÷2]; linewidth=4, color=:magenta, linewtyle=:dash),
-                As_s = (lines!(axs.As_s, Point2.(Array(logAs[nx÷2, :]), yc_1); linewith=4, color=:blue, label="current"),
-                lines!(axs.As_s, Point2.(Array(logAs_ini[nx÷2, :]), yc_1); linewidth=4, color=:green, label="initial")),
+                err_abs  = heatmap!(axs.err_abs, xc, yc, Array(Err_abs); colormap=:turbo),
+                err_rel  = heatmap!(axs.err_rel, xc, yc, Array(Err_rel); colormap=:turbo))
+                # As_s = (lines!(axs.As_s, Point2.(Array(logAs[nx÷2, :]), yc_1); linewith=4, color=:blue, label="current"),
+                # lines!(axs.As_s, Point2.(Array(logAs_ini[nx÷2, :]), yc_1); linewidth=4, color=:green, label="initial")),
                 #lines!(axs.As_s, Point2.(Array(logAs_syn[nx÷2, :]), yc_1); linewidth=4, color=:red, label="synthetic")),
-                err  = scatterlines!(axs.err, Point2.(iter_evo, cost_evo); linewidth=4))
+                #err  = scatterlines!(axs.err, Point2.(iter_evo, cost_evo); linewidth=4))
 
         Colorbar(fig[1, 1][1, 2], plts.H)
+        Colorbar(fig[1, 2][1, 2], plts.mask)
+        Colorbar(fig[1 ,3][1, 2], plts.mb)
         Colorbar(fig[2, 1][1, 2], plts.As)
+        Colorbar(fig[2, 2][1, 2], plts.err_abs)
+        Colorbar(fig[2, 3][1, 2], plts.err_rel)
     end
 
     #pack parameters
-    fwd_params = (fields           = (; H, H_ini, B, S, β, ELA, D, qx, qy, As, RH, qmag, mask, Err_rel, Err_abs),
+    fwd_params = (fields           = (; H, H_ini, B, S, β, ELA, D, qx, qy, As, RH, qmag, mask, mb, Err_rel, Err_abs),
                   scalars          = (; aρgn0, b_max, npow),
                   numerical_params = (; vsc, nx, ny, dx, dy, dt, maxiter, ncheck, ϵtol),
                   launch_config    = (; nthreads, nblocks))

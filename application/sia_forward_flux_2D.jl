@@ -3,15 +3,10 @@ using CairoMakie
 using Printf
 
 include("macros.jl")
-
-# firstly, in the forward model, I only need to change the residual kernel
-# so then I need to pass H_ini into forward solver from where?
-# then that's it for the forward solver
-
 # integrate SIA equations to steady state
 function solve_sia!(logAs, fields, scalars, numerical_params, launch_config; visu=nothing)
     # extract variables from tuples
-    (; H, H_ini, B, S, β, ELA, D, qx, qy, As, RH, qmag, mask, Err_rel, Err_abs) = fields
+    (; H, H_ini, B, S, β, ELA, D, qx, qy, As, RH, qmag, mask, mb, Err_rel, Err_abs) = fields
     (; aρgn0, b_max, npow)                                                      = scalars
     (; vsc, nx, ny, dx, dy, dt, maxiter, ncheck, ϵtol)                          = numerical_params
     (; nthreads, nblocks)                                                       = launch_config
@@ -44,7 +39,6 @@ function solve_sia!(logAs, fields, scalars, numerical_params, launch_config; vis
         CUDA.synchronize()
         # compute stable time step
         dτ = 1 / ( 4.1* maximum(D) / dx^2 + maximum(β))
-
         @cuda threads = nthreads   blocks = nblocks residual!(RH, qx, qy, β, H, B, H_ini, ELA, b_max, mask, dx, dy, dt)
         @cuda threads = nthreads   blocks = nblocks update_H!(H, RH, dτ)
         @cuda threads = nthreads_x blocks = nblocks_x bc_x!(H)
@@ -62,6 +56,8 @@ function solve_sia!(logAs, fields, scalars, numerical_params, launch_config; vis
             @printf("  iter/nx=%.3e, err= [abs=%.3e, rel=%.3e] \n", iter / nx, err_abs, err_rel)
         
             if !isnothing(visu)
+                # calculate the new mass balance
+                mb .= min.(β .* (H .+ B .- ELA), b_max)
                 @cuda threads = nthreads  blocks = nblocks update_S!(S, H, B)
                 CUDA.synchronize()
                 update_visualisation!(As, visu, fields, err_evo)
@@ -134,25 +130,6 @@ function update_S!(S, H, B)
         @inbounds S[ix,iy] = H[ix,iy] + B[ix, iy]
     end 
     return 
-end 
-
-
-# set boundary conditions
-function set_BC!(H)
-    @get_indices
-    if ix == 1 && iy <= size(H, 2)
-        @inbounds H[ix, iy] = H[ix + 1, iy]
-    end
-    if ix == size(H, 1) && iy <= size(H, 2)
-        @inbounds H[ix, iy] = H[ix - 1, iy]
-    end
-    if ix <= size(H, 1) && iy == 1
-        @inbounds H[ix, iy] = H[ix, iy + 1]
-    end
-    if ix <= size(H, 1) && iy == size(H, 2)
-        @inbounds H[ix, iy] = H[ix, iy - 1]
-    end
-    return
 end
 
 function bc_x!(H)
@@ -188,12 +165,15 @@ end
 
 function update_visualisation!(As, visu, fields, err_evo)
     (; fig, plts)    = visu
-    (; H, S)        = fields
+    (; H, S, mb, Err_abs, Err_rel)        = fields
     plts.H[3]        = Array(H)
     plts.mb_contour[3] = Array(S)
     plts.As[3]       = Array(log10.(As))
-    # plts.err[1][1][] = Point2.(err_evo.iters, err_evo.abs)
-    # plts.err[2][1][] = Point2.(err_evo.iters, err_evo.rel)
+    plts.mask_contour[3] = Array(S)
+    plts.mb[3]           = Array(H.>0)
+    plts.mb_contour_2[3] = Array(S)
+    plts.err_abs[3]      = Array(Err_abs)
+    plts.err_rel[3]      = Array(Err_rel)
     display(fig)
     return
 end
