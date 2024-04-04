@@ -1,5 +1,5 @@
 include("macros.jl")
-include("sia_forward_flux_2D.jl")
+include("sia_forward_flux_steadystate.jl")
 
 using Enzyme
 
@@ -8,9 +8,9 @@ const DupNN = DuplicatedNoNeed
 
 function solve_adjoint_sia!(fwd_params, adj_params, loss_params)
     #unpack forward 
-    (; H, B, β, ELA, D, qHx, qHy, As, RH, qmag) = fwd_params.fields
+    (; H, H_old, B, β, ELA, D, qHx, qHy, As, RH, qmag) = fwd_params.fields
     (; aρgn0, b_max, npow)                = fwd_params.scalars
-    (; nx, ny, dx, dy, maxiter)           = fwd_params.numerical_params
+    (; nx, ny, dx, dy, dt, maxiter)           = fwd_params.numerical_params
     (; nthreads, nblocks)                 = fwd_params.launch_config
     #unpack adjoint 
     (; R̄H, H̄, ψ_H, q̄Hx, q̄Hy, D̄) = adj_params.fields
@@ -52,14 +52,14 @@ function solve_adjoint_sia!(fwd_params, adj_params, loss_params)
         D̄   .= 0.0
         H̄   .= .-∂J_∂H
         #CUDA.synchronize()
-
+        #residual!(RH, qHx, qHy, β, H, B, ELA, b_max, H_old, dx, dy, dt)
         @cuda threads = nthreads blocks = nblocks ∇(residual!,
                                                     DupNN(RH, R̄H),
                                                     DupNN(qHx, q̄Hx),
                                                     DupNN(qHy, q̄Hy),
                                                     Const(β),
                                                     DupNN(H, H̄), # dR_H
-                                                    Const(B), Const(ELA), Const(b_max), Const(dx), Const(dy))
+                                                    Const(B), Const(ELA), Const(b_max), Const(H_old), Const(dx), Const(dy), Const(dt))
 
         @cuda threads = nthreads blocks = nblocks ∇(compute_q!,
                                                     DupNN(qHx, q̄Hx),

@@ -1,13 +1,16 @@
 using CairoMakie
 using JLD2
 
-include("sia_forward_flux_2D.jl")
+include("sia_forward_flux_new.jl")
 include("sia_adjoint_flux_2D.jl")
 include("sia_loss_flux_2D.jl")
 
 CUDA.allowscalar(false)
 
 function adjoint_2D()
+    #load the data H_old, H_obs, qmag_old, qmag_obs, B
+    (B, H_old, qmag_old, H_obs, qmag_obs) = load("synthetic_data_generated.jld2"; B, H_old, qmag_old, H_obs, qmag_obs)
+    #TODO mass balance data: which mass balance do I use?
     ## physics
     # power law exponent
     npow = 3
@@ -21,30 +24,30 @@ function adjoint_2D()
     # non-dimensional numbers 
     s_f_syn  = 1e-4                 # sliding to ice flow ratio: s_f   = asρgn0/aρgn0/lx^2
     s_f      = 0.08#0.026315789473684213 # sliding to ice flow ratio: s_f   = asρgn0/aρgn0/lx^2
+    s_f_old  = 1e-3
     b_max_nd = 4.706167536706325e-12 # m_max/lx*tsc m_max = 2.0 m/a lx = 1e3 tsc = 
     β1tsc    = 2.353083768353162e-10 # ratio between characteristic time scales of ice flow and accumulation/ablation βtsc = β0*tsc 
     β2tsc    = 3.5296256525297436e-10
     γ_nd     = 1e2
+    dt_nd    = 4.262765154139606e7
 
     # geometry 
     lx_l, ly_l           = 25.0, 20.0  # horizontal length to characteristic length ratio
-    w1_l, w2_l           = 100.0, 10.0 # width to charactertistic length ratio 
-    B0_l                 = 0.35  # maximum bed rock elevation to characteristic length ratio
     z_ela_l_1, z_ela_l_2 = 0.215, 0.09 # ela to domain length ratio z_ela_l = 
     #numerics 
     H_cut_l = 1.0e-6
 
     # dimensionally dependent parameters 
     lx, ly           = lx_l * lsc, ly_l * lsc  # 250000, 200000
-    w1, w2           = w1_l * lsc^2, w2_l * lsc^2 # 1e10, 1e9
     z_ELA_0, z_ELA_1 = z_ela_l_1 * lsc, z_ela_l_2 * lsc # 2150, 900
-    B0               = B0_l * lsc # 3500
     asρgn0_syn       = s_f_syn * aρgn0 * lsc^2 #5.7e-20*(ρg)^n = 5.7e-20*(910*9.81)^3 = 4.055141889402214e-8
+    asρgn0_old       = s_f_old * aρgn0 * lsc^2 #5.0e-19*(ρg)^n = 5.0e-19*(910*9.81)^3 = 3.557142008247556e-7
     asρgn0           = s_f * aρgn0 * lsc^2 #5.0e-18*(ρg)^n = 3.54627498316e-6
     b_max            = b_max_nd * lsc / tsc  #2.0 m/a = 6.341958396752917e-8 m/s
     β0, β1           = β1tsc / tsc, β2tsc / tsc  # 3.1709791983764586e-10, 4.756468797564688e-10
     H_cut            = H_cut_l * lsc # 1.0e-2
     γ0               = γ_nd * lsc^(2 - 2npow) * tsc^(-2) #1.0e-2
+    dt               = dt_nd * tsc # 365*24*3600
 
     ## numerics
     nx, ny     = 128, 128
@@ -76,11 +79,7 @@ function adjoint_2D()
     # ice thickness
     H     = CUDA.zeros(Float64, nx, ny)
     H_obs = CUDA.zeros(Float64, nx, ny)
-
-    # bedrock elevation
-    ω = 8 # TODO: check!
-    B = (@. B0 * (exp(-xc^2 / w1 - yc'^2 / w2) +
-                  exp(-xc^2 / w2 - (yc' - ly / ω)^2 / w1))) |> CuArray
+    H_old = CUDA.zeros(Float64, nx, ny)
 
     # other fields
     β   = CUDA.fill(β0, nx, ny) .+ β1 .* atan.(xc ./ lx)
@@ -94,7 +93,7 @@ function adjoint_2D()
     # As_syn    = CUDA.fill(asρgn0_syn, nx - 1, ny - 1)
 
     As_syn    = asρgn0_syn .* (0.5 .* cos.(5π .* xv ./ lx) .* sin.(5π .* yv' ./ ly) .+ 1.0) |> CuArray
-
+    As_old    = CUDA.fill(asρgn0_old, nx-1, ny-1)
     As        = CUDA.fill(asρgn0, nx - 1, ny - 1)
     RH        = CUDA.zeros(Float64, nx, ny)
     Err_rel   = CUDA.zeros(Float64, nx, ny)
@@ -103,6 +102,7 @@ function adjoint_2D()
     logAs     = copy(As)
     logAs_syn = copy(As)
     logAs_ini = copy(As)
+    logAs_old = copy(As)
     Lap_As    = copy(As)
     #init adjoint storage
     q̄Hx = CUDA.zeros(Float64, nx - 1, ny - 2)
@@ -124,9 +124,9 @@ function adjoint_2D()
     iter_evo = Float64[]
 
     #pack parameters
-    fwd_params = (fields           = (; H, B, β, ELA, D, qHx, qHy, As, RH, qmag, Err_rel, Err_abs),
+    fwd_params = (fields           = (; H, H_old, B, β, ELA, D, qHx, qHy, As, RH, qmag, Err_rel, Err_abs),
                   scalars          = (; aρgn0, b_max, npow),
-                  numerical_params = (; nx, ny, dx, dy, maxiter, ncheck, ϵtol),
+                  numerical_params = (; nx, ny, dx, dy, dt, maxiter, ncheck, ϵtol),
                   launch_config    = (; nthreads, nblocks))
 
     # fwd_visu = (; plts, fig)
@@ -137,46 +137,14 @@ function adjoint_2D()
     loss_params = (fields=(; H_obs, qHx_obs, qHy_obs, qobs_mag, ∂J_∂H, ∂J_∂qx, ∂J_∂qy, Lap_As),
                    scalars=(; w_H, w_q))
 
-    #this is to switch on/off the smooth of the sensitivity 
+    #this is to switch on/off regularization of the sensitivity 
     reg = (; nsm=10, α=1e-4, Tmp)
-
-    @info "synthetic solve"
+    
     logAs     = log10.(As)
     logAs_syn = log10.(As_syn)
     logAs_ini = log10.(As_ini)
-    #initial guess
-    #solve for H_obs
-    @show maximum(As_syn)
-    #solve_sia!(As_syn, fwd_params...; visu=fwd_visu)
-    H .= 0.0
-    solve_sia!(logAs_syn, fwd_params...)
-    H_obs .= H
-    qHx_obs .= qHx
-    qHy_obs .= qHy
-    qobs_mag .= qmag
-    # plts.q_s[3] = Array(qobs_mag)
-    # plts.As_i[3][3] = Array(H_obs)
-    @info "synthetic solve done"
-
-    As    .= As_ini
-    logAs .= log10.(As)
-
-    #Define loss functions 
-    J(_logAs) = loss(logAs, fwd_params, loss_params)
-    ∇J!(_logĀs, _logAs) = ∇loss!(logĀs, logAs, fwd_params, adj_params, loss_params; reg)
-    @info "inversion for As"
-
+    logAs_old = log10.(As_old)
     
-    γ = γ0
-    J_old = 0.0
-    J_new = 0.0
-    #solve for H with As and compute J_old
-    H .= 0.0
-
-    @show maximum(logAs)
-    J_old = J(logAs)
-    J_ini = J_old
-
     # setup visualisation
     begin
         #init visualization 
@@ -237,14 +205,33 @@ function adjoint_2D()
         Colorbar(fig[1, 2][1, 2], plts.As_i[1])
         Colorbar(fig[2,1][1,2], plts.q_s)
         Colorbar(fig[2,2][1,2], plts.q_i)
-
-
         display(fig)
     end
 
-    ispath("output_steadystate") && rm("output_steadystate", recursive=true)
-    mkdir("output_steadystate")
-    jldsave("output_steadystate/static.jld2"; qobs_mag, H_obs, As_ini, As_syn, xc, yc, xv, yv)
+    fwd_visu = (; plts, fig)
+
+    As    .= As_ini
+    logAs .= log10.(As)
+
+    #Define loss functions 
+    J(_logAs) = loss(logAs, fwd_params, loss_params; visu=fwd_visu)
+    ∇J!(_logĀs, _logAs) = ∇loss!(logĀs, logAs, fwd_params, adj_params, loss_params; reg, visu=fwd_visu)
+    @info "inversion for As"
+
+    
+    γ = γ0
+    J_old = 0.0
+    J_new = 0.0
+    #solve for H with As and compute J_old
+    H .= 0.0
+
+    @show maximum(logAs)
+    J_old = J(logAs)
+    J_ini = J_old
+
+    #ispath("output_steadystate") && rm("output_steadystate", recursive=true)
+    #mkdir("output_steadystate")
+    #jldsave("output_steadystate/static.jld2"; qobs_mag, H_obs, As_ini, As_syn, xc, yc, xv, yv)
 
     iframe = 1
     @info "Gradient descent - inversion for As"
@@ -283,9 +270,7 @@ function adjoint_2D()
         plts.slice[2][1][] = Point2.(As_v[nx÷2, :],yv)
         plts.conv[1] = Point2.(iter_evo, cost_evo)
 
-
-
-        jldsave("output_steadystate/step_$iframe.jld2"; As_v, H, qmag_v, iter_evo, cost_evo)
+        #jldsave("output_steadystate/step_$iframe.jld2"; As_v, H, qmag_v, iter_evo, cost_evo)
         iframe += 1
         display(fig)
     end

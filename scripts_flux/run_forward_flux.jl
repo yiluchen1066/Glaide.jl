@@ -43,32 +43,6 @@ function main()
     nthreads = (16, 16)
     nblocks  = ceil.(Int, (nx, ny) ./ nthreads)
 
-    #check 
-
-    #check 
-    @show(asρgn0_syn)
-    @show(asρgn0)
-    @show(lx)
-    @show(ly)
-    @show(w1)
-    @show(w2)
-    @show(B0)
-    @show(z_ELA_0)
-    @show(z_ELA_1)
-    @show(b_max)
-    @show(β0)
-    @show(β1)
-    #@show(H_cut)
-    @show(nx)
-    @show(ny)
-    @show(ϵtol)
-    @show(maxiter)
-    @show(ncheck)
-    @show(nthreads)
-    @show(nblocks)
-    #@show(ϵtol_adj)
-    #@show(ncheck_adj)
-
     ## pre-processing
     dx, dy = lx / nx, ly / ny
     xc = LinRange(-lx / 2 + dx / 2, lx / 2 - dx / 2, nx)
@@ -117,7 +91,7 @@ function main()
     ## pack parameters
     fwd_params = (fields           = (; H, B, β, ELA, D, qHx, qHy, RH, Err_rel, Err_abs),
                   scalars          = (; aρgn0, b_max, npow),
-                  numerical_params = (; nx, ny, dx, dy, maxiter, ncheck, ϵtol),
+                  numerical_params = (; nx, ny, dx, dy, dt, maxiter, ncheck, ϵtol),
                   launch_config    = (; nthreads, nblocks))
     fwd_visu = (; plt, fig)
 

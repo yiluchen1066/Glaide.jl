@@ -1,5 +1,5 @@
 include("macros.jl")
-include("sia_forward_flux_2D.jl")
+include("sia_forward_flux_steadystate.jl")
 
 function laplacian!(As, As2)
     @get_indices
@@ -40,7 +40,7 @@ function loss(logAs, fwd_params, loss_params; kwags...)
     (; H_obs, qobs_mag) = loss_params.fields
     (; w_H, w_q) = loss_params.scalars
     @info "Forward solve"
-    solve_sia!(logAs, fwd_params...; kwags...)
+    solve_sia_new!(logAs, fwd_params...; kwags...)
     H = fwd_params.fields.H
     qmag = fwd_params.fields.qmag
     return 0.5 * (w_H * sum((H .- H_obs) .^ 2) + w_q * sum((qmag .- qobs_mag) .^ 2))
@@ -57,7 +57,7 @@ function ∇loss!(logĀs, logAs, fwd_params, adj_params, loss_params; reg=nothi
     (; H_obs, qobs_mag, Lap_As) = loss_params.fields
 
     @info "Forward solve"
-    solve_sia!(logAs, fwd_params...; kwags...)
+    solve_sia_new!(logAs, fwd_params...; kwags...)
 
     @info "Adjoint solve"
     solve_adjoint_sia!(fwd_params, adj_params, loss_params)
@@ -70,14 +70,14 @@ function ∇loss!(logĀs, logAs, fwd_params, adj_params, loss_params; reg=nothi
     H̄ .= 0.0
     D̄ .= 0.0
 
-    #residual!(RH, qHx, qHy, β, H, B, ELA, b_max, dx, dy)
+    #residual!(RH, qHx, qHy, β, H, B, ELA, b_max, H_old, dx, dy, dt)
     @cuda threads = nthreads blocks = nblocks ∇(residual!,
                                                 DupNN(RH, R̄H),
                                                 DupNN(qHx, q̄Hx),
                                                 DupNN(qHy, q̄Hy),
                                                 Const(β),
                                                 DupNN(H, H̄),
-                                                Const(B), Const(ELA), Const(b_max), Const(dx), Const(dy))
+                                                Const(B), Const(ELA), Const(b_max), Const(H_old), Const(dx), Const(dy), Const(dt))
     #compute_q!(qHx, qHy, D, H, B, dx, dy)
     @cuda threads = nthreads blocks = nblocks ∇(compute_q!,
                                                 DupNN(qHx, q̄Hx),

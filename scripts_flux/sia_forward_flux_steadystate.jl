@@ -5,9 +5,9 @@ using Printf
 include("macros.jl")
 
 # integrate SIA equations to steady state
-function solve_sia!(logAs, fields, scalars, numerical_params, launch_config; visu=nothing)
+function solve_sia_steadystate!(logAs, fields, scalars, numerical_params, launch_config; visu=nothing)
     # extract variables from tuples
-    (; H, B, β, ELA, D, qHx, qHy, As, RH, qmag, Err_rel, Err_abs) = fields
+    (; H, B, β, ELA, ELA_1, D, qHx, qHy, As, RH, qmag, Err_rel, Err_abs) = fields
     (; aρgn0, b_max, npow)                              = scalars
     (; nx, ny, dx, dy, maxiter, ncheck, ϵtol)           = numerical_params
     (; nthreads, nblocks)                               = launch_config
@@ -17,6 +17,7 @@ function solve_sia!(logAs, fields, scalars, numerical_params, launch_config; vis
     Err_rel .= 0
     Err_abs .= 0
     As      .= exp10.(logAs)
+    ELA     .= ELA_1
     CUDA.synchronize()
     # iterative loop 
     err_evo = (iters = Float64[],
@@ -45,7 +46,7 @@ function solve_sia!(logAs, fields, scalars, numerical_params, launch_config; vis
             push!(err_evo.abs, err_abs)
             push!(err_evo.rel, err_rel)
             @printf("  iter/nx^2=%.3e, err= [abs=%.3e, rel=%.3e] \n", iter / nx^2, err_abs, err_rel)
-            isnothing(visu) || update_visualisation!(As, visu, fields, err_evo)
+            isnothing(visu) || update_visualisation_steadystate!(As, visu, fields, err_evo)
             if err_rel < ϵtol.rel
                 break
             end
@@ -92,7 +93,8 @@ function residual!(RH, qHx, qHy, β, H, B, ELA, b_max, dx, dy)
     @get_indices
     if ix <= size(H, 1) - 2 && iy <= size(H, 2) - 2
         MB = min(β[ix + 1, iy + 1] * (H[ix + 1, iy + 1] + B[ix + 1, iy + 1] - ELA[ix + 1, iy + 1]), b_max)
-        @inbounds RH[ix + 1, iy + 1] = -(@d_xa(qHx) / dx + @d_ya(qHy) / dy) + MB
+        #H_diff = (H[ix+1, iy+1] - H_ini[ix+1, iy+1])/dt
+        @inbounds RH[ix + 1, iy + 1] = -(@d_xa(qHx) / dx + @d_ya(qHy) / dy) + MB 
     end
     return
 end
@@ -137,7 +139,7 @@ function compute_abs_error!(Err_abs, RH, H)
     return
 end
 
-function update_visualisation!(As, visu, fields, err_evo)
+function update_visualisation_steadystate!(As, visu, fields, err_evo)
     (; fig, plts)    = visu
     (; H)            = fields
     plts.H[3]        = Array(H)

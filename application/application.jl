@@ -216,7 +216,6 @@ function application()
     w_H_1, w_q_1 = 0.5, 0.5
     w_H_2, w_q_2 = 0.0, 1.0
 
-    
     B           = CuArray(B)
     S_ini       = CuArray(S_old)
     S_obs       = CuArray(S_obs)
@@ -228,7 +227,7 @@ function application()
     vmag        = CUDA.zeros(Float64, size(vmag_obs))
     As_ini      = asρgn0 * CUDA.ones(nx-1, ny-1)
     logAs_steadystate = log10.(As_ini)
-    logAs_snapshot   = log10.(As_ini)
+    logAs_snapshot    = log10.(As_ini)
 
     β = CUDA.fill(β0, nx, ny)
     #ELA = CUDA.fill(ELA, nx, ny)
