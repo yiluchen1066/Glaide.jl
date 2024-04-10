@@ -1,6 +1,3 @@
-include("macros.jl")
-include("sia_forward_flux_steadystate.jl")
-
 using Enzyme
 
 @inline ∇(fun, args...) = (Enzyme.autodiff_deferred(Enzyme.Reverse, fun, Const, args...); return)
@@ -8,20 +5,21 @@ const DupNN = DuplicatedNoNeed
 
 function solve_adjoint_sia!(fwd_params, adj_params, loss_params)
     #unpack forward 
-    (; H, H_old, B, β, ELA, D, qHx, qHy, As, RH, qmag) = fwd_params.fields
+    (; H, H_old, B, β, ELA, ELA_2, D, qHx, qHy, As, RH, qmag) = fwd_params.fields
     (; aρgn0, b_max, npow)                = fwd_params.scalars
     (; nx, ny, dx, dy, dt, maxiter)           = fwd_params.numerical_params
     (; nthreads, nblocks)                 = fwd_params.launch_config
     #unpack adjoint 
     (; R̄H, H̄, ψ_H, q̄Hx, q̄Hy, D̄) = adj_params.fields
     (; ϵtol_adj, ncheck_adj, H_cut) = adj_params.numerical_params
-    (; H_obs,  ∂J_∂H, qobs_mag) = loss_params.fields
+    (; H_obs,  ∂J_∂H, qmag_obs) = loss_params.fields
 
-    dt = 1.0 / (8.1 * maximum(D) / min(dx, dy)^2 + maximum(β))
+    ELA .= ELA_2
+    dτ = 1.0 / (8.1 * maximum(D) / min(dx, dy)^2 + maximum(β)+ 1/dt)
     ∂J_∂H .= H .- H_obs
 
-    ∂J_∂qx_vec!(q̄Hx, qmag, qobs_mag, qHx)
-    ∂J_∂qy_vec!(q̄Hy, qmag, qobs_mag, qHy)
+    ∂J_∂qx_vec!(q̄Hx, qmag, qmag_obs, qHx)
+    ∂J_∂qy_vec!(q̄Hy, qmag, qmag_obs, qHy)
 
     # ∂J_∂qx .= qHx .- qHx_obs
     # ∂J_∂qy .= qHy .- qHy_obs
@@ -72,7 +70,7 @@ function solve_adjoint_sia!(fwd_params, adj_params, loss_params)
                                                     DupNN(H, H̄), # dD_H
                                                     Const(B), Const(As), Const(aρgn0), Const(npow), Const(dx),
                                                     Const(dy))
-        @cuda threads = nthreads blocks = nblocks update_ψ!(H, H̄, ψ_H, H_cut, dt)
+        @cuda threads = nthreads blocks = nblocks update_ψ!(H, H̄, ψ_H, H_cut, dτ)
 
         # in the new code formulation, H̄ equals to dR/R 
         if iter % ncheck_adj == 0
@@ -81,6 +79,7 @@ function solve_adjoint_sia!(fwd_params, adj_params, loss_params)
             @printf("error = %.1e\n", merr)
             # visualization for adjoint solver
             @printf("H̄ = %.1e\n", maximum(abs.(H̄)))
+
             (isfinite(merr) && merr > 0) || error("adjoint solve failed")
         end
 
@@ -120,16 +119,16 @@ function update_ψ!(H, H̄, ψ_H, H_cut, dt)
     return
 end
 
-function ∂J_∂qx_vec!(q̄Hx, qmag, qobs_mag, qHx)
+function ∂J_∂qx_vec!(q̄Hx, qmag, qmag_obs, qHx)
     q̄Hx                .= 0
-    @. q̄Hx[1:end-1, :] += (qmag - qobs_mag) * $avx(qHx) / (2 * qmag + (qmag == 0))
-    @. q̄Hx[2:end, :]   += (qmag - qobs_mag) * $avx(qHx) / (2 * qmag + (qmag == 0))
+    @. q̄Hx[1:end-1, :] += (qmag - qmag_obs) * $avx(qHx) / (2 * qmag + (qmag == 0))
+    @. q̄Hx[2:end, :]   += (qmag - qmag_obs) * $avx(qHx) / (2 * qmag + (qmag == 0))
     return
 end
 
-function ∂J_∂qy_vec!(q̄Hy, qmag, qobs_mag, qHy)
+function ∂J_∂qy_vec!(q̄Hy, qmag, qmag_obs, qHy)
     q̄Hy                .= 0
-    @. q̄Hy[:, 1:end-1] += (qmag - qobs_mag) * $avy(qHy) / (2 * qmag + (qmag == 0))
-    @. q̄Hy[:, 2:end]   += (qmag - qobs_mag) * $avy(qHy) / (2 * qmag + (qmag == 0))
+    @. q̄Hy[:, 1:end-1] += (qmag - qmag_obs) * $avy(qHy) / (2 * qmag + (qmag == 0))
+    @. q̄Hy[:, 2:end]   += (qmag - qmag_obs) * $avy(qHy) / (2 * qmag + (qmag == 0))
     return
 end

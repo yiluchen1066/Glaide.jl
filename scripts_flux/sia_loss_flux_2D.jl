@@ -1,5 +1,3 @@
-include("macros.jl")
-include("sia_forward_flux_steadystate.jl")
 
 function laplacian!(As, As2)
     @get_indices
@@ -20,50 +18,49 @@ function smooth!(As, As2, nsm, nthreads, nblocks)
     return
 end
 
-function ∂J_∂qx_vec!(q̄Hx, qmag, qobs_mag, qHx)
+function ∂J_∂qx_vec!(q̄Hx, qmag, qmag_obs, qHx)
     q̄Hx                .= 0
-    @. q̄Hx[1:end-1, :] += (qmag - qobs_mag) * $avx(qHx) / (2 * qmag + (qmag == 0))
-    @. q̄Hx[2:end, :]   += (qmag - qobs_mag) * $avx(qHx) / (2 * qmag + (qmag == 0))
+    @. q̄Hx[1:end-1, :] += (qmag - qmag_obs) * $avx(qHx) / (2 * qmag + (qmag == 0))
+    @. q̄Hx[2:end, :]   += (qmag - qmag_obs) * $avx(qHx) / (2 * qmag + (qmag == 0))
     return
 end
 
-function ∂J_∂qy_vec!(q̄Hy, qmag, qobs_mag, qHy)
+function ∂J_∂qy_vec!(q̄Hy, qmag, qmag_obs, qHy)
     q̄Hy                .= 0
-    @. q̄Hy[:, 1:end-1] += (qmag - qobs_mag) * $avy(qHy) / (2 * qmag + (qmag == 0))
-    @. q̄Hy[:, 2:end]   += (qmag - qobs_mag) * $avy(qHy) / (2 * qmag + (qmag == 0))
+    @. q̄Hy[:, 1:end-1] += (qmag - qmag_obs) * $avy(qHy) / (2 * qmag + (qmag == 0))
+    @. q̄Hy[:, 2:end]   += (qmag - qmag_obs) * $avy(qHy) / (2 * qmag + (qmag == 0))
     return
 end
 
 #compute the cost function 
-
 function loss(logAs, fwd_params, loss_params; kwags...)
-    (; H_obs, qobs_mag) = loss_params.fields
+    (; H_obs, qmag_obs) = loss_params.fields
     (; w_H, w_q) = loss_params.scalars
     @info "Forward solve"
-    solve_sia_new!(logAs, fwd_params...; kwags...)
+    solve_sia_implicit!(logAs, fwd_params...; kwags...)
     H = fwd_params.fields.H
     qmag = fwd_params.fields.qmag
-    return 0.5 * (w_H * sum((H .- H_obs) .^ 2) + w_q * sum((qmag .- qobs_mag) .^ 2))
+    return 0.5 * (w_H * sum((H .- H_obs) .^ 2) + w_q * sum((qmag .- qmag_obs) .^ 2))
 end
 
 #compute the sensitivity: hradient of the loss function
 function ∇loss!(logĀs, logAs, fwd_params, adj_params, loss_params; reg=nothing, kwags...)
     #unpack
-    (; RH, qHx, qHy, β, H, B, D, ELA, As, qmag) = fwd_params.fields
-    (; dx, dy) = fwd_params.numerical_params
+    (; RH, qHx, qHy, β, H, H_old, B, D, ELA, As, qmag) = fwd_params.fields
+    (; dx, dy, dt) = fwd_params.numerical_params
     (; aρgn0, b_max, npow) = fwd_params.scalars
     (; nthreads, nblocks) = fwd_params.launch_config
     (; R̄H, q̄Hx, q̄Hy, H̄, D̄, Ās, ψ_H) = adj_params.fields
-    (; H_obs, qobs_mag, Lap_As) = loss_params.fields
+    (; H_obs, qmag_obs, Lap_As) = loss_params.fields
 
     @info "Forward solve"
-    solve_sia_new!(logAs, fwd_params...; kwags...)
+    solve_sia_implicit!(logAs, fwd_params...; kwags...)
 
     @info "Adjoint solve"
     solve_adjoint_sia!(fwd_params, adj_params, loss_params)
 
-    ∂J_∂qx_vec!(q̄Hx, qmag, qobs_mag, qHx)
-    ∂J_∂qy_vec!(q̄Hy, qmag, qobs_mag, qHy)
+    ∂J_∂qx_vec!(q̄Hx, qmag, qmag_obs, qHx)
+    ∂J_∂qy_vec!(q̄Hy, qmag, qmag_obs, qHy)
 
     logĀs .= 0.0
     R̄H .= .-ψ_H
@@ -101,7 +98,7 @@ function ∇loss!(logĀs, logAs, fwd_params, adj_params, loss_params; reg=nothi
         (; nsm, Tmp, α) = reg
         Lap_As .= logAs
         smooth!(Lap_As, Tmp, nsm, nthreads, nblocks)
-        logĀs .-= α .* (Lap_As .- logAs)
+        logAs .-= α .* (Lap_As .- logAs)
     end 
 
     return

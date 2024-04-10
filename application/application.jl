@@ -246,9 +246,9 @@ function application()
 
     # run 3 inversions 
     
-    #inversion_snapshot(logAs_snapshot, geometry, observed, initial, physics, numerics, optim_params)
+    inversion_snapshot(logAs_snapshot, geometry, observed, initial, physics, numerics, optim_params)
     
-    inversion_steadystate(logAs_steadystate, geometry, observed, initial, physics, weights_H, weights_q, numerics, optim_params; do_vis=true, do_thickness=true)
+    #inversion_steadystate(logAs_steadystate, geometry, observed, initial, physics, weights_H, weights_q, numerics, optim_params; do_vis=true, do_thickness=true)
 
     # inversion_steadystate(logAs_q_steadystate, geometry, observed, initial, physics, weights_H, weights_q, numerics, optim_params; do_vis=false, do_thickness=false)
 

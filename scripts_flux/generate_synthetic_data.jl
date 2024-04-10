@@ -1,8 +1,9 @@
 using CairoMakie
 using JLD2
 
-include("sia_forward_flux_new.jl")
+include("sia_forward_flux_implicit.jl")
 include("sia_forward_flux_steadystate.jl")
+include("sia_forward_flux_explicit.jl")
 include("sia_adjoint_flux_2D.jl")
 include("sia_loss_flux_2D.jl")
 
@@ -14,27 +15,27 @@ function adjoint_2D()
     npow = 3
 
     # dimensionally independent physics 
-    lsc   = 1.0 #1e4 # length scale  
-    aρgn0 = 1.0 #1.3517139631340709e-12 # A*(ρg)^n = 1.9*10^(-24)*(910*9.81)^3
+    lsc   = 1.0#1e4 # length scale  
+    aρgn0 = 1.0#1.3517139631340709e-12 # A*(ρg)^n = 1.9*10^(-24)*(910*9.81)^3
 
     # time scale
     tsc = 1 / aρgn0 / lsc^npow
     # non-dimensional numbers 
     s_f_syn  = 1e-4                 # sliding to ice flow ratio: s_f   = asρgn0/aρgn0/lx^2
     s_f      = 0.08#0.026315789473684213 # sliding to ice flow ratio: s_f   = asρgn0/aρgn0/lx^2
-    s_f_old  = 1e-3
     b_max_nd = 4.706167536706325e-12 # m_max/lx*tsc m_max = 2.0 m/a lx = 1e3 tsc = 
     β1tsc    = 2.353083768353162e-10 # ratio between characteristic time scales of ice flow and accumulation/ablation βtsc = β0*tsc 
     β2tsc    = 3.5296256525297436e-10
     γ_nd     = 1e2
-    dt_nd    = 2.131382577069803e8
+    dt_nd    = 2.131382577069803e8   * 5e0
+    t_total_nd = 2.131382577069803e8 * 5e0
 
     # geometry 
     lx_l, ly_l           = 25.0, 20.0  # horizontal length to characteristic length ratio
     w1_l, w2_l           = 100.0, 10.0 # width to charactertistic length ratio 
     B0_l                 = 0.35  # maximum bed rock elevation to characteristic length ratio
     z_ela_l_1_1, z_ela_l_2_1 = 0.215, 0.09 # ela to domain length ratio z_ela_l
-    z_ela_l_1_2, z_ela_l_2_2 = 0.350, 0.06
+    z_ela_l_1_2, z_ela_l_2_2 = 1.2 * z_ela_l_1_1, 1.2 * 0.09
     #numerics 
     H_cut_l = 1.0e-6
 
@@ -45,13 +46,15 @@ function adjoint_2D()
     z_ELA_0_2, z_ELA_1_2 = z_ela_l_1_2 * lsc, z_ela_l_2_2 * lsc # 2000, 800
     B0               = B0_l * lsc # 3500
     asρgn0_syn       = s_f_syn * aρgn0 * lsc^2 #5.7e-20*(ρg)^n = 5.7e-20*(910*9.81)^3 = 4.055141889402214e-8
-    asρgn0_old       = s_f_old * aρgn0 * lsc^2 #5.0e-19*(ρg)^n = 5.0e-19*(910*9.81)^3 = 3.557142008247556e-7
     asρgn0           = s_f * aρgn0 * lsc^2 #5.0e-18*(ρg)^n = 3.54627498316e-6
     b_max            = b_max_nd * lsc / tsc  #2.0 m/a = 6.341958396752917e-8 m/s
     β0, β1           = β1tsc / tsc, β2tsc / tsc  # 3.1709791983764586e-10, 4.756468797564688e-10
     H_cut            = H_cut_l * lsc # 1.0e-2
     γ0               = γ_nd * lsc^(2 - 2npow) * tsc^(-2) #1.0e-2
     dt               = dt_nd * tsc # 365*24*3600
+    t_total          = t_total_nd * tsc # 365*24*3600
+
+    # error("check")
 
     ## numerics
     nx, ny     = 128, 128
@@ -84,6 +87,10 @@ function adjoint_2D()
     H     = CUDA.zeros(Float64, nx, ny)
     H_obs = CUDA.zeros(Float64, nx, ny)
     H_old = CUDA.zeros(Float64, nx, ny)
+    H_obs_explicit = CUDA.zeros(Float64, nx, ny)
+    qmag_old = CUDA.zeros(nx-2, ny-2)
+    qmag_obs = CUDA.zeros(nx-2, ny-2)
+    qmag_obs_explicit = CUDA.zeros(Float64, nx-2, ny-2)
 
     # bedrock elevation
     ω = 8 # TODO: check!
@@ -99,9 +106,6 @@ function adjoint_2D()
     D         = CUDA.zeros(Float64, nx - 1, ny - 1)
     qHx       = CUDA.zeros(Float64, nx - 1, ny - 2)
     qHy       = CUDA.zeros(Float64, nx - 2, ny - 1)
-    qHx_obs   = CUDA.zeros(Float64, nx - 1, ny - 2)
-    qHy_obs   = CUDA.zeros(Float64, nx - 2, ny - 1)
-    # As_syn    = CUDA.fill(asρgn0_syn, nx - 1, ny - 1)
     qmag = CUDA.zeros(Float64, nx - 2, ny - 2)
 
     As_syn    = asρgn0_syn .* (0.5 .* cos.(5π .* xv ./ lx) .* sin.(5π .* yv' ./ ly) .+ 1.0) |> CuArray
@@ -109,11 +113,8 @@ function adjoint_2D()
     RH        = CUDA.zeros(Float64, nx, ny)
     Err_rel   = CUDA.zeros(Float64, nx, ny)
     Err_abs   = CUDA.zeros(Float64, nx, ny)
-    As_ini    = copy(As)
     logAs     = copy(As)
     logAs_syn = copy(As)
-    logAs_ini = copy(As)
-    logAs_old = copy(As)
 
     cost_evo = Float64[]
     iter_evo = Float64[]
@@ -121,7 +122,7 @@ function adjoint_2D()
     #pack parameters
     fwd_params = (fields            = (; H, H_old, B, β, ELA, ELA_1, ELA_2, D, qHx, qHy, As, RH, qmag, Err_rel, Err_abs),
                   scalars          = (; aρgn0, b_max, npow),
-                  numerical_params = (; nx, ny, dx, dy, dt, maxiter, ncheck, ϵtol),
+                  numerical_params = (; nx, ny, dx, dy, dt, t_total, maxiter, ncheck, ϵtol),
                   launch_config     = (; nthreads, nblocks))
 
     # fwd_visu = (; plts, fig)
@@ -136,38 +137,47 @@ function adjoint_2D()
     qmag_old .= qmag
     @info "steady state solve for H_old done"
 
+    @info "generate H_obs by explicit transient model"
+    H .= H_old
+    solve_sia_explicit!(logAs_syn, fwd_params...)
+    H_obs_explicit .= H
+    qmag_obs_explicit .= qmag
+    @info "steady state solve for H_old done"
+
     #TODO generate the H_obs by the transient forward solver
     #TODO what is the initial state of H in the transient forward solver?
     @info "generate H_obs"
-    H .= 0.0
-    solve_sia_new!(logAs_syn, fwd_params...)
+    H .= H_old
+    solve_sia_implicit!(logAs_syn, fwd_params...)
     H_obs .= H
     qmag_obs .= qmag
     @info "transient solve for H_obs done"
 
     #TODO visulize H_old H_obs and H_old .- H_obs
-    fig = Figure(; size=(1200, 400), fontsize=14)
+    fig = Figure(; size=(1200, 800), fontsize=14)
     ax  = (H_old  = Axis(fig[1, 1]; aspect=DataAspect(), title="H_old"),
     H_obs  = Axis(fig[1, 2]; aspect=DataAspect(), title="H_obs"),
-    diff   = Axis(fig[1, 3]; aspect=DataAspect(), title="difference"))
+    H_obs_explicit  = Axis(fig[2, 1]; aspect=DataAspect(), title="H_obs_explicit"),
+    diff   = Axis(fig[2, 2]; aspect=DataAspect(), title="difference"))
 
     #As_crange = filter(!isnan, As_syn_v) |> extrema
     #q_crange = filter(!isnan, qobs_mag_v) |> extrema
 
     plts = (H_old  = heatmap!(ax.H_old, xc, yc, Array(H_old); colormap=:turbo),
             H_obs  = heatmap!(ax.H_obs, xc, yc, Array(H_obs); colormap=:turbo),
-            diff   = heatmap!(ax.diff, xc, yc, Array(H_old .- H_obs); colormap=:turbo))
+            H_obs_explicit  = heatmap!(ax.H_obs_explicit, xc, yc, Array(H_obs_explicit); colormap=:turbo),
+            diff   = heatmap!(ax.diff, xc, yc, Array(H_obs .- H_obs_explicit); colormap=:turbo))
 
     #lg = axislegend(ax.slice; labelsize=10, rowgap=-5, height=40)
 
     Colorbar(fig[1, 1][1, 2], plts.H_old)
     Colorbar(fig[1, 2][1, 2], plts.H_obs)
-    Colorbar(fig[1,3][1,2], plts.diff)
+    Colorbar(fig[2, 1][1,2], plts.H_obs_explicit)
+    Colorbar(fig[2, 2][1,2], plts.diff)
     display(fig)
 
-
     #TODO save to disk
-    jldsave("synthetic_data_generated.jld2"; B, H_old, qmag_old, H_obs, qmag_obs)
+    jldsave("synthetic_data_generated.jld2"; B=Array(B), H_old =Array(H_old), qmag_old = Array(qmag_old), H_obs= Array(H_obs), qmag_obs = Array(qmag_obs))
 
     
     return

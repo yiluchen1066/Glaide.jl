@@ -4,11 +4,11 @@ using Printf
 
 include("macros.jl")
 
-function solve_sia_new!(logAs, fields, scalars, numerical_params, launch_config; visu=nothing)
+function solve_sia_implicit!(logAs, fields, scalars, numerical_params, launch_config; visu=nothing)
     # extract variables from tuples
     (; H, H_old, B, β, ELA, ELA_2, D, qHx, qHy, As, RH, qmag, Err_rel, Err_abs) = fields
     (; aρgn0, b_max, npow)                              = scalars
-    (; nx, ny, dx, dy, dt, maxiter, ncheck, ϵtol)       = numerical_params
+    (; nx, ny, dx, dy, dt, t_total, maxiter, ncheck, ϵtol)       = numerical_params
     (; nthreads, nblocks)                               = launch_config
     # initialize 
     err_abs0 = Inf
@@ -22,6 +22,8 @@ function solve_sia_new!(logAs, fields, scalars, numerical_params, launch_config;
     err_evo = (iters = Float64[],
                abs   = Float64[],
                rel   = Float64[])
+
+    # while 
     for iter in 1:maxiter
         if iter == 1 || iter % ncheck == 0
             CUDA.@sync Err_rel .= H
@@ -31,7 +33,7 @@ function solve_sia_new!(logAs, fields, scalars, numerical_params, launch_config;
         CUDA.synchronize()
         @. qmag = sqrt($avx(qHx)^2 + $avy(qHy)^2)
         # compute stable time step
-        dτ = 1 / (12.1 * maximum(D) / dx^2 + maximum(β))
+        dτ = 1 / (12.1 * maximum(D) / dx^2 + maximum(β) + 1/dt)
         @cuda threads = nthreads blocks = nblocks residual!(RH, qHx, qHy, β, H, B, ELA, b_max, H_old, dx, dy, dt)
         @cuda threads = nthreads blocks = nblocks update_H!(H, RH, dτ)
         @cuda threads = nthreads blocks = nblocks set_BC!(H)

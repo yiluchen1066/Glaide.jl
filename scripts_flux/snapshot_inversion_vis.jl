@@ -3,7 +3,7 @@ using Enzyme
 using JLD2
 
 include("macros.jl")
-include("sia_forward_flux_2D.jl")
+include("sia_forward_flux_steadystate.jl")
 
 @inline ∇(fun, args...) = (Enzyme.autodiff_deferred(Enzyme.Reverse, fun, Const, args...); return)
 const DupNN = DuplicatedNoNeed
@@ -40,25 +40,25 @@ function forward_model!(logAs, fwd_params)
     return
 end
 
-function ∂J_∂qx_vec!(q̄Hx, qmag, qobs_mag, qHx)
+function ∂J_∂qx_vec!(q̄Hx, qmag, qmag_obs, qHx)
     q̄Hx                .= 0
-    @. q̄Hx[1:end-1, :] += (qmag - qobs_mag) * $avx(qHx) / (2 * qmag + (qmag==0))
-    @. q̄Hx[2:end, :]   += (qmag - qobs_mag) * $avx(qHx) / (2 * qmag + (qmag==0))
+    @. q̄Hx[1:end-1, :] += (qmag - qmag_obs) * $avx(qHx) / (2 * qmag + (qmag==0))
+    @. q̄Hx[2:end, :]   += (qmag - qmag_obs) * $avx(qHx) / (2 * qmag + (qmag==0))
     return
 end
 
-function ∂J_∂qy_vec!(q̄Hy, qmag, qobs_mag, qHy)
+function ∂J_∂qy_vec!(q̄Hy, qmag, qmag_obs, qHy)
     q̄Hy                .= 0
-    @. q̄Hy[:, 1:end-1] += (qmag - qobs_mag) * $avy(qHy) / (2 * qmag + (qmag==0))
-    @. q̄Hy[:, 2:end]   += (qmag - qobs_mag) * $avy(qHy) / (2 * qmag + (qmag==0))
+    @. q̄Hy[:, 1:end-1] += (qmag - qmag_obs) * $avy(qHy) / (2 * qmag + (qmag==0))
+    @. q̄Hy[:, 2:end]   += (qmag - qmag_obs) * $avy(qHy) / (2 * qmag + (qmag==0))
     return
 end
 
 function loss(logAs, fwd_params, loss_params)
-    (; qobs_mag) = loss_params.fields
+    (; qmag_obs) = loss_params.fields
     (; qmag)     = fwd_params.fields
     forward_model!(logAs, fwd_params)
-    return 0.5 * sum((qmag .- qobs_mag).^2)
+    return 0.5 * sum((qmag .- qmag_obs).^2)
 end
 
 function ∇loss!(logĀs, logAs, fwd_params, adj_params, loss_params; reg=nothing)
@@ -70,12 +70,12 @@ function ∇loss!(logĀs, logAs, fwd_params, adj_params, loss_params; reg=nothi
     #unpack adjoint parameters
     (; q̄Hx, q̄Hy, D̄, H̄) = adj_params.fields
     #unpack loss parameters
-    (; qobs_mag) = loss_params.fields
+    (; qmag_obs) = loss_params.fields
 
     forward_model!(logAs, fwd_params)
 
-    ∂J_∂qx_vec!(q̄Hx, qmag, qobs_mag, qHx)
-    ∂J_∂qy_vec!(q̄Hy, qmag, qobs_mag, qHy)
+    ∂J_∂qx_vec!(q̄Hx, qmag, qmag_obs, qHx)
+    ∂J_∂qy_vec!(q̄Hy, qmag, qmag_obs, qHy)
 
     logĀs .= 0.0
     D̄ .= 0.0
@@ -109,14 +109,14 @@ function adjoint_2D()
     npow = 3
 
     # dimensionally independent physics 
-    lsc   = 80.0 #1e4 # length scale  
+    lsc   = 1.0#80.0 #1e4 # length scale  
     aρgn0 = 1.0 #1.3517139631340709e-12 # A*(ρg)^n = 1.9*10^(-24)*(910*9.81)^3
 
     # time scale
     tsc = 1 / aρgn0 / lsc^npow
     # non-dimensional numbers 
     s_f_syn  = 1e-4                  # sliding to ice flow ratio: s_f   = asρgn0/aρgn0/lx^2
-    s_f      =  0.08 # sliding to ice flow ratio: s_f   = asρgn0/aρgn0/lx^2
+    s_f      =  1e-4#0.08 # sliding to ice flow ratio: s_f   = asρgn0/aρgn0/lx^2
     b_max_nd = 4.706167536706325e-12 # m_max/lx*tsc m_max = 2.0 m/a lx = 1e3 tsc = 
     β1tsc    = 2.353083768353162e-10 # ratio between characteristic time scales of ice flow and accumulation/ablation βtsc = β0*tsc 
     β2tsc    = 3.5296256525297436e-10
@@ -151,7 +151,7 @@ function adjoint_2D()
     nblocks    = ceil.(Int, (nx, ny) ./ nthreads)
     ngd        = 25
     bt_niter   = 5
-    Δγ         = 2e-1
+    Δγ         = 1e-1#2e-1
 
     ## pre-processing
     dx, dy = lx / nx, ly / ny
@@ -202,7 +202,7 @@ function adjoint_2D()
     logĀs    = CUDA.zeros(Float64, nx - 1, ny - 1)
     Tmp      = CUDA.zeros(Float64, nx - 1, ny - 1)
     qmag     = CUDA.zeros(Float64, nx - 2, ny - 2)
-    qobs_mag = CUDA.zeros(Float64, nx - 2, ny - 2)
+    qmag_obs = CUDA.zeros(Float64, nx - 2, ny - 2)
 
     cost_evo = Float64[]
     iter_evo = Float64[]
@@ -211,37 +211,32 @@ function adjoint_2D()
     logAs_syn = log10.(As_syn)
     logAs_ini = log10.(As_ini)
 
-    #pack parameters
+    (B, H_old, qmag_old, H_obs, qmag_obs) = load("synthetic_data_generated.jld2", "B", "H_old", "qmag_old", "H_obs", "qmag_obs")
+
+    B = CuArray(B)
+    H_obs = CuArray(H_obs)
+    qmag_obs = CuArray(qmag_obs)
+    H        = copy(H_obs)
+    qmag     = copy(qmag_obs)
+        #pack parameters
     fwd_params = (fields           = (; H, B, β, ELA, D, qHx, qHy, As, RH, Err_rel, Err_abs, qmag),
                   scalars          = (; aρgn0, b_max, npow),
                   numerical_params = (; nx, ny, dx, dy, maxiter, ncheck, ϵtol),
                   launch_config    = (; nthreads, nblocks))
     adj_params = (fields=(; q̄Hx, q̄Hy, D̄, H̄),)
-    loss_params = (fields=(; qHx_obs, qHy_obs, qobs_mag),)
-
-    @info "synthetic solve"
-    @show maximum(As_syn)
-    H .= 0.0
-    solve_sia!(logAs_syn, fwd_params...)
-    H_obs .= H
-    qHx_obs .= qHx
-    qHy_obs .= qHy
-    @. qobs_mag = sqrt($avx(qHx_obs)^2 + $avy(qHy_obs)^2)
-    @show size(qobs_mag)
-    @info "synthetic solve done"
-
+    loss_params = (fields=(; qHx_obs, qHy_obs, qmag_obs),)
      # define reg
-     reg = (; nsm=500, Tmp)
+    reg = (; nsm=500, Tmp)
 
-     J(_logAs) = loss(logAs, fwd_params, loss_params)
-     ∇J!(_logĀs, _logAs) = ∇loss!(logĀs, logAs, fwd_params, adj_params, loss_params; reg)
- 
+    J(_logAs) = loss(logAs, fwd_params, loss_params)
+    ∇J!(_logĀs, _logAs) = ∇loss!(logĀs, logAs, fwd_params, adj_params, loss_params; reg)
+
      #initial guess 
-     As .= As_ini
-     @show maximum(As)
-     logAs .= log10.(As)
-     γ = γ0
-     J0 = J(logAs)
+    As .= As_ini
+    @show maximum(As)
+    logAs .= log10.(As)
+    γ = γ0
+    J0 = J(logAs)
 
     # setup visualisation
     begin
@@ -279,20 +274,20 @@ function adjoint_2D()
         As_v = Array(logAs)
         As_v[idv] .= NaN
 
-        qobs_mag_v = Array(log10.(qobs_mag))
-        qobs_mag_v[idc_inn] .= NaN
+        qmag_obs_v = Array(qmag_obs)
+        qmag_obs_v[idc_inn] .= NaN
 
-        qmag_v = Array(log10.(qmag))
+        qmag_v = Array(qmag)
         qmag_v[idc_inn] .= NaN
 
         As_crange = filter(!isnan, As_syn_v) |> extrema
-        q_crange = filter(!isnan, qobs_mag_v) |> extrema
+        q_crange = filter(!isnan, qmag_obs_v) |> extrema
 
         plts = (As_s  = (heatmap!(ax.As_s, xv, yv, As_syn_v; colormap=:turbo, colorrange=As_crange),
                 vlines!(ax.As_s, xc[nx÷2]; linestyle=:dash, color=:magenta)
                 ),
                 As_i  = heatmap!(ax.As_i, xv, yv, As_v; colormap=:turbo, colorrange=As_crange),
-                q_s   = heatmap!(ax.q_s, xc[2:end-1], yc[2:end-1], qobs_mag_v; colormap=:turbo, colorrange=q_crange),
+                q_s   = heatmap!(ax.q_s, xc[2:end-1], yc[2:end-1], qmag_obs_v; colormap=:turbo, colorrange=q_crange),
                 q_i   = heatmap!(ax.q_i, xc[2:end-1], yc[2:end-1], qmag_v; colormap=:turbo, colorrange=q_crange),
                 slice = (lines!(ax.slice, As_syn_v[nx÷2, :], yv; label="observed"),
                 lines!(ax.slice, As_v[nx÷2, :], yv; label="modeled")),
@@ -310,7 +305,8 @@ function adjoint_2D()
     push!(iter_evo, 0)
 
     @info "Gradient descent - inversion for As"
-    CairoMakie.record(fig, "snapshot.mp4", 1:ngd; framerate=1) do igd
+    #CairoMakie.record(fig, "snapshot.mp4", 1:ngd; framerate=1) do igd
+    for igd in 1:ngd
         println("GD iteration $igd \n")
         ∇J!(logĀs, logAs)
         @show maximum(exp10.(logAs))
@@ -334,13 +330,18 @@ function adjoint_2D()
         As_v = Array(logAs)
         As_v[idv] .= NaN
 
-        qmag_v = Array(log10.(qmag))
+        qmag_v = Array(qmag)
         qmag_v[idc_inn] .= NaN
 
         plts.As_i[3] = As_v
         plts.q_i[3] = qmag_v
         plts.slice[2][1][] = Point2.(As_v[nx÷2, :],yv)
         plts.conv[1] = Point2.(iter_evo, cost_evo)
+
+        if igd == ngd 
+            display(fig)
+            jldsave("synthetic_snapshot.jld2"; logAs_syn = As_syn_v, logAs_snapshot = As_v, qmag_obs=qmag_obs_v, qmag_snapshot = qmag_v, H_obs=Array(H_obs), H_snapshot=Array(H))
+        end
     end
     return
 end

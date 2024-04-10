@@ -50,8 +50,8 @@ function inversion_snapshot(logAs, geometry, observed, initial, physics, numeric
         fig = Figure(; size=(800, 525))
         #opts    = (xaxisposition=:top,) # save for later 
 
-        axs = (qmag_obs    = Axis(fig[1, 1][1, 1]; aspect=DataAspect(), xlabel="x [km]", ylabel="y [km]", title=L"|v^\mathrm{obs}|"),
-               qmag  = Axis(fig[1, 2][1,1]; aspect=DataAspect(), xlabel="x [km]", ylabel="y [km]",title="|v|"),
+        axs = (qmag_obs    = Axis(fig[1, 1][1, 1]; aspect=DataAspect(), xlabel="x [km]", ylabel="y [km]", title=L"|q^\mathrm{obs}|"),
+               qmag  = Axis(fig[1, 2][1,1]; aspect=DataAspect(), xlabel="x [km]", ylabel="y [km]",title="|q|"),
                As   = Axis(fig[1, 3][1, 1]; aspect=DataAspect(), xlabel="x [km]", ylabel="y [km]", title=L"\log_{10}(A_s)"),
                err  = Axis(fig[2, 3]; yscale=log10, title="convergence", xlabel="iter", ylabel="error"))
 
