@@ -44,7 +44,7 @@ ax  = (
 As_crange = filter(!isnan, As) |> extrema
 q_crange  = filter(!isnan, q_obs) |> extrema
 v_crange = filter(!isnan, v_obs) |> extrema
-# v_obs_max = filter(!isnan, v_obs) |> maximum
+v_obs_max = filter(!isnan, v_obs) |> maximum
 # H_obs_max = filter(!isnan, H_obs) |> maximum
 
 hidexdecorations!(ax.v_obs; grid=false)
@@ -58,7 +58,7 @@ plts = (
     v_obs    = heatmap!(ax.v_obs, xc[2:end-1]./1000, yc[2:end-1]./1000, v_obs; colormap=:turbo, colorrange=v_crange),
     v        = heatmap!(ax.v, xc[2:end-1]./1000, yc[2:end-1]./1000, v; colormap=:turbo, colorrange=v_crange),
     As     = heatmap!(ax.As, xc[1:end-1]./1000, yc[1:end-1]./1000, log10.(As); colormap=:turbo),
-    Δv    = heatmap!(ax.Δv, xc[1:end-1]./1000, yc[1:end-1]./1000, abs.(q .- q_obs)./q_obs; colormap=:turbo,colorrange=(0.0, 0.10)))
+    Δv    = heatmap!(ax.Δv, xc[1:end-1]./1000, yc[1:end-1]./1000, abs.(v .- v_obs)./v_obs_max .* 100; colormap=:turbo,colorrange=(0.0, 50)))
 
 Colorbar(fig[1,1][1,2], plts.v_obs)
 Colorbar(fig[1,2][1,2], plts.v)
