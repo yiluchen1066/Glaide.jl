@@ -109,8 +109,8 @@ function adjoint_2D()
     npow = 3
 
     # dimensionally independent physics 
-    lsc   = 1.0#80.0 #1e4 # length scale  
-    aρgn0 = 1.0 #1.3517139631340709e-12 # A*(ρg)^n = 1.9*10^(-24)*(910*9.81)^3
+    lsc   = 1e4#1.0#80.0 #1e4 # length scale  
+    aρgn0 = 1.9*10^(-24)*(910*9.81)^3#1.0 #1.3517139631340709e-12 # A*(ρg)^n = 1.9*10^(-24)*(910*9.81)^3
 
     # time scale
     tsc = 1 / aρgn0 / lsc^npow
@@ -140,7 +140,9 @@ function adjoint_2D()
     β0, β1           = β1tsc / tsc, β2tsc / tsc  # 3.1709791983764586e-10, 4.756468797564688e-10
     γ0               = γ_nd * lsc^(2 - 2npow) * tsc^(-2) #1.0e-2
 
-    
+    @show asρgn0_syn
+    @show asρgn0
+    error("check")
     
     ## numerics
     nx, ny     = 128, 128

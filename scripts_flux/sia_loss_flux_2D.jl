@@ -98,7 +98,7 @@ function ∇loss!(logĀs, logAs, fwd_params, adj_params, loss_params; reg=nothi
         (; nsm, Tmp, α) = reg
         Lap_As .= logAs
         smooth!(Lap_As, Tmp, nsm, nthreads, nblocks)
-        logAs .-= α .* (Lap_As .- logAs)
+        logĀs .-= α .* (Lap_As .- logAs)
     end 
 
     return

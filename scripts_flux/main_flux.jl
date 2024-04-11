@@ -288,7 +288,7 @@ function adjoint_2D()
 
         if igd == ngd 
             display(fig)
-            jldsave("synthetic_timedepedent.jld2"; logAs_timedepedent = As_v, qmag_timedepedent = qmag_v, H_timedepedent = Array(H))
+            jldsave("synthetic_timedepedent.jld2"; logAs_timedepedent = As_v, qmag_timedepedent = qmag_v, H_timedepedent = Array(H), xc=xc, yc= yc, xv=xv, yv=yv)
     
         end
     end
