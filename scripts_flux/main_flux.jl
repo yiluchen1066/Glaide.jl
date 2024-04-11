@@ -151,7 +151,7 @@ function adjoint_2D()
                    scalars=(; w_H, w_q))
 
     #this is to switch on/off regularization of the sensitivity 
-    reg = (; nsm=500, α=1e-8, Tmp)
+    reg = (; nsm=5, α=5e-6, Tmp)
     
     logAs     = log10.(As)
     logAs_syn = log10.(As_syn)
@@ -253,7 +253,7 @@ function adjoint_2D()
         println("GD iteration $igd \n")
         ∇J!(logĀs, logAs)
         γ = Δγ / maximum(abs.(logĀs))
-        γ = min(γ, 1 / reg.α)
+        # γ = min(γ, 1 / reg.α)
         @. logAs -= γ * logĀs
 
         push!(iter_evo, igd)
