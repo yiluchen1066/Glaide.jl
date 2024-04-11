@@ -5,14 +5,14 @@ n          = 3
 ρ          = 910 
 g          = 9.81
 
-(logAs, q_obs, q, H) = load("snapshot_Aletsch.jld2", "logAs", "q_obs", "q", "H")
+(logAs, q_obs, q, H, xc, yc) = load("snapshot_Aletsch.jld2", "logAs", "q_obs", "q", "H", "xc", "yc")
 
 #from qmag convert to vmag 
 v_obs = copy(q_obs)
-q = copy(q)
+v = copy(q)
 n_ratio = (n+2)/(n+1)
 v_obs .= q_obs ./ H  .* n_ratio
-q     .= q ./ H .* n_ratio
+v     .= q ./ H .* n_ratio
 
 #from logAs convert to As
 As          = exp10.(logAs)
@@ -22,8 +22,6 @@ lsc_data      = 1e4
 aρgn0_data    = 1.3517139631340709e-12
 tsc_data      = 1 / aρgn0_data / lsc_data^n
 s_f_syn       = 1e-4
-lx_l          = 25.0
-ly_l          = 20.0
 
 As_syn        = As_syn * s_f_syn * aρgn0_data * lsc_data^n
 As_snapshot   = As_snapshot * s_f_syn *aρgn0_data * lsc_data^n
