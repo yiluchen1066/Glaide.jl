@@ -53,7 +53,7 @@ function inversion_snapshot(logAs, geometry, observed, initial, physics, numeric
         axs = (qmag_obs    = Axis(fig[1, 1][1, 1]; aspect=DataAspect(), xlabel="x [km]", ylabel="y [km]", title=L"|q^\mathrm{obs}|"),
                qmag  = Axis(fig[1, 2][1,1]; aspect=DataAspect(), xlabel="x [km]", ylabel="y [km]",title="|q|"),
                As   = Axis(fig[1, 3][1, 1]; aspect=DataAspect(), xlabel="x [km]", ylabel="y [km]", title=L"\log_{10}(A_s)"),
-               err  = Axis(fig[2, 3]; yscale=log10, title="convergence", xlabel="iter", ylabel="error"))
+               err  = Axis(fig[2, 3]; yscale=log10, title="convergence", xlabel="iter", ylabel=L"J/J_0"))
 
         nan_to_zero(x) = isnan(x) ? zero(x) : x
 
@@ -65,10 +65,10 @@ function inversion_snapshot(logAs, geometry, observed, initial, physics, numeric
         logAs     = log10.(As)
         logAs_ini = log10.(As_ini)
 
-        qrng = extrema(replace(vmag_obs, NaN => 0.0))
+        #qrng = extrema(replace(qmag_obs, NaN => 0.0))
 
-        plts = (qmag_obs    = heatmap!(axs.qmag_obs, xc[2:end-1]./1000, yc[2:end-1]./1000, Array(vmag_obs); colormap=:turbo, colorrange=qrng),
-                qmag    = heatmap!(axs.qmag, xc[2:end-1]./1000, yc[2:end-1]./1000, Array(qmag); colormap=:turbo, colorrange=qrng),
+        plts = (qmag_obs    = heatmap!(axs.qmag_obs, xc[2:end-1]./1000, yc[2:end-1]./1000, Array(qmag_obs); colormap=:turbo),
+                qmag    = heatmap!(axs.qmag, xc[2:end-1]./1000, yc[2:end-1]./1000, Array(qmag); colormap=:turbo),
                 # D    = heatmap!(axs.D, xc[1:end-1], yc[1:end-1], Array(D); colormap=:turbo),
                 As   = heatmap!(axs.As, xc_1./1000, yc_1./1000, Array(logAs); colormap=:turbo),
                 # As_v = vlines!(axs.As, xc_1[nx÷2]; linewidth=4, color=:magenta, linewtyle=:dash),
@@ -140,6 +140,8 @@ function inversion_snapshot(logAs, geometry, observed, initial, physics, numeric
             q_vis = Array(qmag)
             v_vis = Array(vmag)
             H_vis = Array(H[2:end-1,2:end-1])
+            H_vis_1 = Array(H[1:end-1,1:end-1])
+
 
             qobs_vis = Array(qmag_obs)
             vobs_vis = Array(vmag_obs[2:end-1, 2:end-1])
@@ -149,11 +151,11 @@ function inversion_snapshot(logAs, geometry, observed, initial, physics, numeric
             v_vis[H_vis .< 0.1] .= NaN
             vobs_vis[H_vis .< 0.1] .= NaN
 
-            logAs_vis = copy(logAs)
-            logAs_vis[H_vis .< 0.1] .= NaN
+            logAs_vis = Array(logAs)
+            logAs_vis[H_vis_1 .< 0.1] .= NaN
             
-            plts.qmag[3]    = v_vis
-            plts.qmag_obs[3]    = vobs_vis
+            plts.qmag[3]    = q_vis
+            plts.qmag_obs[3]    = qobs_vis
             # plts.D[3]       = Array(D)
             plts.As[3]      = Array(logAs_vis)
             #plts.As_s[1][1] = Point2.(Array(logAs[nx÷2, :]), yc_1)
@@ -166,6 +168,7 @@ function inversion_snapshot(logAs, geometry, observed, initial, physics, numeric
             end
 
             if igd == 500
+                jldsave("snapshot_Aletsch.jld2"; logAs = logAs_vis, q_obs = qobs_vis, q = q_vis, H = H_vis, xc = xc, yc = yc)
                 save("snapshot_Aletsch.png", fig)
                 display(fig)
             end

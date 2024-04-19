@@ -152,6 +152,8 @@ function application()
     tsc_data = 1 / aρgn0_data / lsc_data^npow
     vsc_data = lsc_data / tsc_data
 
+    nratio = (npow+1)/(npow+2)
+
     #rescale
     lsc   = 1.0
     aρgn0 = 1.0
@@ -174,8 +176,8 @@ function application()
     dt       = dt  /tsc_data * tsc
     
     #dt       = dt /tsc_data*tsc
-    qmag_obs = replace(vmag_obs[2:end-1, 2:end-1], NaN => 0.0) .* H_obs[2:end-1, 2:end-1]
-    check_data = false 
+    qmag_obs = replace(vmag_obs[2:end-1, 2:end-1], NaN => 0.0) .* H_obs[2:end-1, 2:end-1] .* nratio
+    check_data =  
     if check_data 
         fig = Figure(size=(800, 800))
         ax1 = Axis(fig[1, 1][1, 1]; aspect=DataAspect(), title="Bed elevation [m.a.s.l.] after rescaling")
@@ -198,7 +200,7 @@ function application()
 
 
     #non-dimensional numbers
-    s_f      = 1e1#1e-5 #as/a/lsc^2
+    s_f      = 1e3#1e1#1e-5 #as/a/lsc^2
     #non-dimensional nuemrics numbers 
     H_cut_l = 1.0e-2 #H_cut / lsc
     γ_nd = 1.0e-2 # γ0 / lsc^(2-2npow) * tsc^2
@@ -247,7 +249,7 @@ function application()
     # run 3 inversions 
     
     inversion_snapshot(logAs_snapshot, geometry, observed, initial, physics, numerics, optim_params)
-    
+    jldsave("Altesch_scaling.jld2", aρgn0_data = aρgn0_data, tsc_data = tsc_data, lsc_data = lsc_data, s_f = s_f)
     #inversion_steadystate(logAs_steadystate, geometry, observed, initial, physics, weights_H, weights_q, numerics, optim_params; do_vis=true, do_thickness=true)
 
     # inversion_steadystate(logAs_q_steadystate, geometry, observed, initial, physics, weights_H, weights_q, numerics, optim_params; do_vis=false, do_thickness=false)

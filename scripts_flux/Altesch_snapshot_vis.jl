@@ -52,13 +52,13 @@ hidexdecorations!(ax.v; grid=false)
 hideydecorations!(ax.v; grid=false)
 hideydecorations!(ax.Δv; grid=false)
 
-rowgap!(fig.layout, Relative(1/8))
+rowgap!(fig.layout, Relative(1/12))
 
 plts = (
     v_obs    = heatmap!(ax.v_obs, xc[2:end-1]./1000, yc[2:end-1]./1000, v_obs; colormap=:turbo, colorrange=v_crange),
     v        = heatmap!(ax.v, xc[2:end-1]./1000, yc[2:end-1]./1000, v; colormap=:turbo, colorrange=v_crange),
     As     = heatmap!(ax.As, xc[1:end-1]./1000, yc[1:end-1]./1000, log10.(As); colormap=:turbo),
-    Δv    = heatmap!(ax.Δv, xc[1:end-1]./1000, yc[1:end-1]./1000, abs.(v .- v_obs)./v_obs_max .* 100; colormap=:turbo,colorrange=(0.0, 50)))
+    Δv    = heatmap!(ax.Δv, xc[1:end-1]./1000, yc[1:end-1]./1000, abs.(v .- v_obs)./v_obs_max .* 100; colormap=:turbo,colorrange=(0.0, 20)))
 
 Colorbar(fig[1,1][1,2], plts.v_obs)
 Colorbar(fig[1,2][1,2], plts.v)

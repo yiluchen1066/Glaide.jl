@@ -81,13 +81,12 @@ ax  = (
     qmag_obs  = Axis(fig[1, 2][1,1]; aspect=DataAspect()),
     H_obs   = Axis(fig[1, 3][1,1]; aspect=DataAspect()),
 
-    As_snapshot  = Axis(fig[2, 1][1,1]; aspect=DataAspect(), ylabel = "Y [km]"),
-    qmag_snapshot  = Axis(fig[2, 2][1,1]; aspect=DataAspect()),
-    H_snapshot   = Axis(fig[2, 3][1,1]; aspect=DataAspect()),
+    As_timedepedent  = Axis(fig[2, 1][1,1]; aspect=DataAspect(), ylabel = "Y [km]", xlabel="X [km]"),
+    qmag_timedepedent  = Axis(fig[2, 2][1,1]; aspect=DataAspect(), xlabel="X [km]"),
+    H_timedepedent   = Axis(fig[2, 3][1,1]; aspect=DataAspect(), xlabel="X [km]"),
 
-    As_timedepedent  = Axis(fig[3, 1][1,1]; aspect=DataAspect(), ylabel = "Y [km]", xlabel="X [km]"),
-    qmag_timedepedent  = Axis(fig[3, 2][1,1]; aspect=DataAspect(), xlabel="X [km]"),
-    H_timedepedent   = Axis(fig[3, 3][1,1]; aspect=DataAspect(), xlabel="X [km]"))
+    As_snapshot  = Axis(fig[3, 1][1,1]; aspect=DataAspect(), ylabel = "Y [km]"),
+    qmag_snapshot  = Axis(fig[3, 2][1,1]; aspect=DataAspect()))
 
 As_crange = filter(!isnan, As_syn) |> extrema
 v_crange = filter(!isnan, v_obs) |> extrema
@@ -99,7 +98,6 @@ xlims!(ax.qmag_obs, -100, 100)
 xlims!(ax.H_obs, -100, 100)
 xlims!(ax.As_snapshot, -100, 100)
 xlims!(ax.qmag_snapshot, -100, 100)
-xlims!(ax.H_snapshot, -100, 100)
 xlims!(ax.As_timedepedent, -100, 100)
 xlims!(ax.qmag_timedepedent, -100, 100)
 xlims!(ax.H_timedepedent, -100, 100)
@@ -109,39 +107,37 @@ hidexdecorations!(ax.qmag_obs; grid=false)
 hidexdecorations!(ax.H_obs; grid=false)
 hidexdecorations!(ax.As_snapshot; grid=false)
 hidexdecorations!(ax.qmag_snapshot; grid=false)
-hidexdecorations!(ax.H_snapshot; grid=false)
+
 
 hideydecorations!(ax.qmag_obs; grid=false)
 hideydecorations!(ax.H_obs; grid=false)
 hideydecorations!(ax.qmag_snapshot; grid=false)
-hideydecorations!(ax.H_snapshot; grid=false)
 hideydecorations!(ax.qmag_timedepedent; grid=false)
 hideydecorations!(ax.H_timedepedent; grid=false)
 
-rowgap!(fig.layout, Relative(1/20))
+rowgap!(fig.layout, Relative(1/16))
 
 plts = (
     As_syn    = heatmap!(ax.As_syn, xv./1000, yv./1000, log10.(As_syn); colormap=:turbo),
     qmag_obs  = heatmap!(ax.qmag_obs, xc[1:end-1]./1000, yc[1:end-1]./1000, v_obs; colormap=:turbo, colorrange=(1.0, 350.0)),
     H_obs     = heatmap!(ax.H_obs, xc./1000, yc./1000, H_obs; colormap=:turbo),
-    
-    As_snapshot    = heatmap!(ax.As_snapshot, xv./1000, yv./1000, log10.(As_snapshot); colormap=:turbo),
-    qmag_snapshot  = heatmap!(ax.qmag_snapshot, xc[1:end-1]./1000, yc[1:end-1]./1000, (abs.(v_snapshot .- v_obs)./v_obs_max).*100; colormap=:turbo, colorrange=(0, 0.1)),
-    H_snapshot     = heatmap!(ax.H_snapshot, xc./1000, yc./1000, (abs.(H_snapshot .- H_obs) ./ H_obs_max).*100; colormap=:turbo, colorrange=(0, 0.1)),
 
     As_timedepedent    = heatmap!(ax.As_timedepedent, xv./1000, yv./1000, log10.(As_timedepedent); colormap=:turbo),
     qmag_timedepedent  = heatmap!(ax.qmag_timedepedent, xc[1:end-1]./1000, yc[1:end-1]./1000, (abs.(v_timedepedent .- v_obs)./v_obs_max).*100; colormap=:turbo, colorrange=(0, 0.2)),
-    H_timedepedent     = heatmap!(ax.H_timedepedent, xc./1000, yc./1000, (abs.(H_timedepedent .- H_obs) ./ H_obs).*100; colormap=:turbo, colorrange=(0, 0.2)))
+    H_timedepedent     = heatmap!(ax.H_timedepedent, xc./1000, yc./1000, (abs.(H_timedepedent .- H_obs) ./ H_obs).*100; colormap=:turbo, colorrange=(0, 0.2)),
+    
+    As_snapshot    = heatmap!(ax.As_snapshot, xv./1000, yv./1000, log10.(As_snapshot); colormap=:turbo),
+    qmag_snapshot  = heatmap!(ax.qmag_snapshot, xc[1:end-1]./1000, yc[1:end-1]./1000, (abs.(v_snapshot .- v_obs)./v_obs_max).*100; colormap=:turbo, colorrange=(0, 0.2)))
 
 Colorbar(fig[1,1][1,2], plts.As_syn)
 Colorbar(fig[1,2][1,2], plts.qmag_obs)
 Colorbar(fig[1,3][1,2], plts.H_obs)
-Colorbar(fig[2,1][1,2], plts.As_snapshot)
-Colorbar(fig[2,2][1,2], plts.qmag_snapshot)
-Colorbar(fig[2,3][1,2], plts.H_snapshot)
-Colorbar(fig[3,1][1,2], plts.As_timedepedent)
-Colorbar(fig[3,2][1,2], plts.qmag_timedepedent)
-Colorbar(fig[3,3][1,2], plts.H_timedepedent)
+Colorbar(fig[2,1][1,2], plts.As_timedepedent)
+Colorbar(fig[2,2][1,2], plts.qmag_timedepedent)
+Colorbar(fig[2,3][1,2], plts.H_timedepedent)
+Colorbar(fig[3,1][1,2], plts.As_snapshot)
+Colorbar(fig[3,2][1,2], plts.qmag_snapshot)
+
 
 
 display(fig)
