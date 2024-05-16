@@ -64,10 +64,10 @@ function compute_D!(D, H, B, As, aρgn0, n, dx, dy)
                (B[ix + 1, iy] - B[ix, iy]) / dx +
                (H[ix + 1, iy] - H[ix, iy]) / dx)
         ∇Sy = 0.5 *
-              ((B[ix + 1, iy + 1] - B[ix + 1, iy]) / dy +
-               (H[ix + 1, iy + 1] - H[ix + 1, iy]) / dy +
-               (B[ix, iy + 1] - B[ix, iy]) / dy +
-               (H[ix, iy + 1] - H[ix, iy]) / dy)
+                ((B[ix + 1, iy + 1] - B[ix + 1, iy]) / dy +
+                (H[ix + 1, iy + 1] - H[ix + 1, iy]) / dy +
+                (B[ix, iy + 1] - B[ix, iy]) / dy +
+                (H[ix, iy + 1] - H[ix, iy]) / dy)
         D[ix, iy] = (aρgn0 * @av_xy(H)^(n + 2) + As[ix, iy] * @av_xy(H)^n) * sqrt(∇Sx^2 + ∇Sy^2)^(n - 1)
     end
     return
@@ -76,6 +76,7 @@ end
 # compute ice flux
 function compute_q!(qHx, qHy, D, H, B, dx, dy)
     @get_indices
+    #if ix <= nx-1 && iy <= ny-2?
     @inbounds if ix <= size(qHx, 1) && iy <= size(qHx, 2)
         qHx[ix, iy] = -@av_ya(D) * (@d_xi(H) + @d_xi(B)) / dx
     end
@@ -85,6 +86,15 @@ function compute_q!(qHx, qHy, D, H, B, dx, dy)
     return
 end
 
+# function compute_q!(qHx, qHy, D, H, B, dx, dy)
+#     @get_indices 
+#     if ix <= size(qHx,1) && iy <= size(qHy,2)
+#     # if ix <= qHx.shape[0] && iy <= qHy.shape[1]
+#     # shape(qHx) = [nx-1, ny-2]
+#     for ix in range(0, nx-1): 
+#         for j in range(0, ny-2): 
+#             qHx[ix, iy]= -0.5*(D[ix,iy]+D[ix+1])*(S[ix+1, iy+1]+S[ix, iy+1])/dx
+        
 # compute ice flow residual
 function residual!(RH, qHx, qHy, β, H, B, ELA, b_max, dx, dy)
     @get_indices

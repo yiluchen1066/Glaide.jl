@@ -94,10 +94,6 @@ function adjoint_2D()
     ELA_2 = fill(z_ELA_0_2, nx, ny) .+ z_ELA_1_2 .* atan.(yc' ./ ly .+ 0 .* xc) |> CuArray
     ELA   = CUDA.zeros(Float64, nx, ny)
 
-    @show(extrema(H_old))
-    @show(extrema(H_obs))
-    @show(z_ELA_0_1, z_ELA_1_1)
-
     D         = CUDA.zeros(Float64, nx - 1, ny - 1)
     qHx       = CUDA.zeros(Float64, nx - 1, ny - 2)
     qHy       = CUDA.zeros(Float64, nx - 2, ny - 1)
@@ -205,8 +201,6 @@ function adjoint_2D()
 
         As_crange = filter(!isnan, As_syn_v) |> extrema
         q_crange = filter(!isnan, qmag_obs_v) |> extrema
-
-        @show typeof(qmag_obs_v)
 
         plts = (As_s  = (heatmap!(ax.As_s, xv, yv, As_syn_v; colormap=:turbo, colorrange=As_crange),
                 vlines!(ax.As_s, xc[nx÷2]; linestyle=:dash, color=:magenta)),

@@ -177,7 +177,7 @@ function application()
     
     #dt       = dt /tsc_data*tsc
     qmag_obs = replace(vmag_obs[2:end-1, 2:end-1], NaN => 0.0) .* H_obs[2:end-1, 2:end-1] .* nratio
-    check_data =  
+     
     if check_data 
         fig = Figure(size=(800, 800))
         ax1 = Axis(fig[1, 1][1, 1]; aspect=DataAspect(), title="Bed elevation [m.a.s.l.] after rescaling")

@@ -34,19 +34,20 @@ end
 
 #compute the cost function 
 function loss(logAs, fwd_params, loss_params; kwags...)
+    (; H, qmag) = fwd_params.fields
     (; H_obs, qmag_obs) = loss_params.fields
     (; w_H, w_q) = loss_params.scalars
     @info "Forward solve"
     solve_sia_implicit!(logAs, fwd_params...; kwags...)
-    H = fwd_params.fields.H
-    qmag = fwd_params.fields.qmag
+    # H = fwd_params.fields.H
+    # qmag = fwd_params.fields.qmag
     return 0.5 * (w_H * sum((H .- H_obs) .^ 2) + w_q * sum((qmag .- qmag_obs) .^ 2))
 end
 
 #compute the sensitivity: hradient of the loss function
 function ∇loss!(logĀs, logAs, fwd_params, adj_params, loss_params; reg=nothing, kwags...)
     #unpack
-    (; RH, qHx, qHy, β, H, H_old, B, D, ELA, As, qmag) = fwd_params.fields
+    (; RH, qHx, qHy, β, H, H_old, B, D, ELA, As, qmag, mask) = fwd_params.fields
     (; dx, dy, dt) = fwd_params.numerical_params
     (; aρgn0, b_max, npow) = fwd_params.scalars
     (; nthreads, nblocks) = fwd_params.launch_config
@@ -68,14 +69,14 @@ function ∇loss!(logĀs, logAs, fwd_params, adj_params, loss_params; reg=nothi
     H̄ .= 0.0
     D̄ .= 0.0
 
-    #residual!(RH, qHx, qHy, β, H, B, ELA, b_max, H_old, dx, dy, dt)
+    #residual!(RH, qHx, qHy, β, H, B, ELA, b_max, H_old, mask, dx, dy, dt)
     @cuda threads = nthreads blocks = nblocks ∇(residual!,
                                                 DupNN(RH, R̄H),
                                                 DupNN(qHx, q̄Hx),
                                                 DupNN(qHy, q̄Hy),
                                                 Const(β),
                                                 DupNN(H, H̄),
-                                                Const(B), Const(ELA), Const(b_max), Const(H_old), Const(dx), Const(dy), Const(dt))
+                                                Const(B), Const(ELA), Const(b_max), Const(H_old), Const(mask), Const(dx), Const(dy), Const(dt))
     #compute_q!(qHx, qHy, D, H, B, dx, dy)
     @cuda threads = nthreads blocks = nblocks ∇(compute_q!,
                                                 DupNN(qHx, q̄Hx),

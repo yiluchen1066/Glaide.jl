@@ -192,7 +192,7 @@ function adjoint_2D()
 
 
     #TODO visulize H_old H_obs and H_old .- H_obs
-    fig = Figure(; size=(850, 500), fontsize=14)
+    fig = Figure(; size=(800, 500), fontsize=14)
     ax  = (H_old  = Axis(fig[1, 1]; aspect=DataAspect(), ylabel="Y [km]",title="a"),
         H_obs  = Axis(fig[1, 2]; aspect=DataAspect(), title="b"),
         diff_H   = Axis(fig[1, 3][1, 1]; aspect=DataAspect(), title="c"),
@@ -218,23 +218,20 @@ function adjoint_2D()
 
     colgap!(fig.layout, Relative(1/128))
 
-    c_H_diff_range = filter(!isnan, Array(abs.(H_obs.-H_old))) |> extrema
-    #c_v_diff_range = filter(!isnan, Array(abs.(v_obs.-v_old))) |> extrema
-
-    plts = (H_old  = heatmap!(ax.H_old, xc./1000, yc./1000, Array(H_old); colormap=:GnBu_9),
-            H_obs  = heatmap!(ax.H_obs, xc./1000, yc./1000, Array(H_obs); colormap=:GnBu_9),
-            diff_H   = heatmap!(ax.diff_H, xc./1000, yc./1000, Array(abs.(H_obs .- H_old)); colormap=:GnBu_9, colorrange = c_H_diff_range),
-            v_old  = heatmap!(ax.v_old, xc[1:end-1]./1000, yc[1:end-1]./1000, Array(qmag_old); colormap=:GnBu_9),
-            v_obs  = heatmap!(ax.v_obs, xc[1:end-1]./1000, yc[1:end-1]./1000, Array(qmag_obs); colormap=:GnBu_9),
-            diff_v   = heatmap!(ax.diff_v, xc[1:end-1]./1000, yc[1:end-1]./1000, Array(abs.(v_obs .- v_old)); colormap=:GnBu_9))
+    plts = (H_old  = heatmap!(ax.H_old, xc./1000, yc./1000, Array(H_old); colormap=:turbo),
+            H_obs  = heatmap!(ax.H_obs, xc./1000, yc./1000, Array(H_obs); colormap=:turbo),
+            diff_H   = heatmap!(ax.diff_H, xc./1000, yc./1000, Array(abs.(H_obs .- H_old)); colormap=:turbo, colorrange=(1.0, 350.0)),
+            v_old  = heatmap!(ax.v_old, xc[1:end-1]./1000, yc[1:end-1]./1000, Array(v_old); colormap=:turbo, colorrange=(1.0, 350.0)),
+            v_obs  = heatmap!(ax.v_obs, xc[1:end-1]./1000, yc[1:end-1]./1000, Array(v_obs); colormap=:turbo, colorrange=(1.0, 350.0)),
+            diff_v   = heatmap!(ax.diff_v, xc[1:end-1]./1000, yc[1:end-1]./1000, Array(abs.(v_obs .- v_old)); colormap=:turbo, colorrange=(1.0, 350.0)))
 
     #lg = axislegend(ax.slice; labelsize=10, rowgap=-5, height=40)
 
     # Colorbar(fig[1, 1][1, 2], plts.H_old)
-    Colorbar(fig[1, 2][1, 2], plts.H_obs)
+    # Colorbar(fig[1, 2][1, 2], plts.H_obs)
     Colorbar(fig[1, 3][1, 2], plts.diff_H)
     # Colorbar(fig[2, 1][1, 2], plts.v_old)
-    Colorbar(fig[2, 2][1, 2], plts.v_obs)
+    # Colorbar(fig[2, 2][1, 2], plts.v_obs)
     Colorbar(fig[2, 3][1, 2], plts.diff_v)
     display(fig)
     save("generated_synthetic.png", fig)

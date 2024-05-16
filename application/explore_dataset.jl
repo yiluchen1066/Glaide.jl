@@ -36,6 +36,10 @@ function create_raster_stack()
     surface_2009 = resample(surface_2009; to=bedrock)
     surface_2009 = replace_missing(surface_2009, NaN)
 
+    surface_2023 = Raster("application/datasets/Aletsch/alesch2023.asc"; crs = EPSG(21781))
+    surface_2023 = resample(surface_2023; to=bedrock)
+    surface_2023 = replace_missing(surface_2023, NaN)
+
     y = 2016 
     t = (y - 2009) ./ (2017 - 2009)
     surface_2016 = surface_2017 * t + surface_2009 * (1 - t)
@@ -50,6 +54,10 @@ function create_raster_stack()
     surface_2017[.!mask_2017] .= bedrock[.!mask_2017]
     surface_2017[surface_2017 .< bedrock] .= bedrock[surface_2017 .< bedrock]
 
+    mask_2023 = replace_missing(missingmask(surface_2023), false)
+    surface_2023[.!mask_2023] .= bedrock[.!mask_2023]
+    surface_2023[surface_2023 .< bedrock] .= bedrock[surface_2023 .< bedrock]
+
     #load velocity data from rabatel et al. 
     velocity_stack = RasterStack("application/datasets/Aletsch/velocity_data/ALPES_wFLAG_wKT_ANNUALv2016-2021.nc"; crs = EPSG(32632))
     velocity_2016_2017 = velocity_stack.v2016_2017
@@ -59,7 +67,14 @@ function create_raster_stack()
                                 crs = crs(velocity_2016_2017))
     velocity_2016_2017 = resample(velocity_2016_2017; to=bedrock)
 
-    stack = RasterStack((; bedrock, surface_2016, surface_2017, velocity_2016_2017)) 
+    velocity_2017_2018 = velocity_stack.v2017_2018
+    velocity_2017_2018 = reverse(velocity_2017_2018; dims=2)
+    velocity_2017_2018 = replace_missing(velocity_2017_2018, NaN)
+    velocity_2017_2018 = Raster(velocity_2017_2018; dims = coords_as_ranges(velocity_2017_2018),
+                                crs = crs(velocity_2017_2018))
+    velocity_2017_2018 = resample(velocity_2017_2018; to=bedrock)
+
+    stack = RasterStack((; bedrock, surface_2016, surface_2017, surface_2023, velocity_2016_2017, velocity_2017_2018)) 
     write("aletsch_data_2016_2017.nc", stack)
     return 
 end 

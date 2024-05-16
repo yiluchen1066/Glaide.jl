@@ -15,6 +15,7 @@ function inversion_snapshot(logAs, geometry, observed, initial, physics, numeric
     (; ϵtol, maxiter) = numerics
     (; Δγ, ngd) = optim_params
 
+
     #pre-processing 
     dx       = xc[2] - xc[1]
     dy       = yc[2] - yc[1]

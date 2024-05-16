@@ -5,7 +5,7 @@ const DupNN = DuplicatedNoNeed
 
 function solve_adjoint_sia!(fwd_params, adj_params, loss_params)
     #unpack forward 
-    (; H, H_old, B, β, ELA, ELA_2, D, qHx, qHy, As, RH, qmag) = fwd_params.fields
+    (; H, H_old, B, β, ELA, D, qHx, qHy, As, RH, qmag, mask) = fwd_params.fields
     (; aρgn0, b_max, npow)                = fwd_params.scalars
     (; nx, ny, dx, dy, dt, maxiter)           = fwd_params.numerical_params
     (; nthreads, nblocks)                 = fwd_params.launch_config
@@ -15,7 +15,6 @@ function solve_adjoint_sia!(fwd_params, adj_params, loss_params)
     (; H_obs,  ∂J_∂H, qmag_obs) = loss_params.fields
     (; w_H, w_q) = loss_params.scalars
 
-    ELA .= ELA_2
     dτ = 1.0 / (8.1 * maximum(D) / min(dx, dy)^2 + maximum(β)+ 1/dt)
     ∂J_∂H .= w_H.* (H .- H_obs)
 
@@ -51,14 +50,14 @@ function solve_adjoint_sia!(fwd_params, adj_params, loss_params)
         D̄   .= 0.0
         H̄   .= .-∂J_∂H
         #CUDA.synchronize()
-        #residual!(RH, qHx, qHy, β, H, B, ELA, b_max, H_old, dx, dy, dt)
+        #residual!(RH, qHx, qHy, β, H, B, ELA, b_max, H_old, mask, dx, dy, dt)
         @cuda threads = nthreads blocks = nblocks ∇(residual!,
                                                     DupNN(RH, R̄H),
                                                     DupNN(qHx, q̄Hx),
                                                     DupNN(qHy, q̄Hy),
                                                     Const(β),
                                                     DupNN(H, H̄), # dR_H
-                                                    Const(B), Const(ELA), Const(b_max), Const(H_old), Const(dx), Const(dy), Const(dt))
+                                                    Const(B), Const(ELA), Const(b_max), Const(H_old), Const(mask), Const(dx), Const(dy), Const(dt))
 
         @cuda threads = nthreads blocks = nblocks ∇(compute_q!,
                                                     DupNN(qHx, q̄Hx),

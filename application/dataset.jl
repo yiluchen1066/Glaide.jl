@@ -107,12 +107,20 @@ using ArchGDAL
     vmag_Alet = vmag.data 
     #Alet_offset = bed_offset.data
 
+    @show extrema(B_Alet)
+    @show extrema(S_Alet_2016)
+    @show extrema(S_Alet_2017)
+
     oz = minimum(B_Alet)
     B_Alet .-= oz 
     S_Alet .-= oz 
 
-    @show typeof(H_Alet_2016)
-    @show typeof(vmag_Alet)
+    @show extrema(B_Alet)
+    @show extrema(S_Alet_2016)
+    @show extrema(S_Alet_2017)
+    
+    error("check")
+
 
     visu_data = true
     if visu_data
