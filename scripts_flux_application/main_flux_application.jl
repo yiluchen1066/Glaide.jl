@@ -104,8 +104,8 @@ function adjoint_2D()
 
     fig = Figure(; size=(750,600), fontsize=14)
     # how do I text the title
-    ax = Axis(fig[1,1][1,1]; xlabel="X (km)", ylabel="Y (km)")
-    mb_plots = heatmap!(ax, xc./1000, yc./1000, M; label="real mass balance", linewidth=3)
+    ax = Axis(fig[1,1][1,1]; aspect=DataAspect(), xlabel="X (km)", ylabel="Y (km)")
+    mb_plots = heatmap!(ax, xc./1000, yc./1000, M.*(365*24*3600); label="real mass balance", linewidth=3)
     
     Colorbar(fig[1, 1][1, 2], mb_plots, label=L"m/s")
     display(fig)
@@ -125,37 +125,6 @@ function adjoint_2D()
     vsc_data = lsc_data / tsc_data
 
     nratio = (npow+1)/(npow+2)
-
-    check_data = true
-    if check_data 
-        replace!(vmag_obs, 0.0 => NaN)
-        replace!(H_old, 0.0 => NaN)
-        replace!(H_obs, 0.0 => NaN)
-        fig = Figure(size=(600, 600))
-        ax1 = Axis(fig[1, 1][1, 1]; aspect=DataAspect(), ylabel="Y (km)", title="a")
-        ax2 = Axis(fig[1, 2][1, 1]; aspect=DataAspect(), title="b")
-        ax3 = Axis(fig[2, 1][1, 1]; aspect=DataAspect(), xlabel="X (km)", ylabel="Y (km)",title="c")
-        ax4 = Axis(fig[2, 2][1, 1]; aspect=DataAspect(), xlabel="X (km)",title="d")
-
-        hidexdecorations!(ax1; grid=false)
-        hidexdecorations!(ax2; grid=false)
-        hideydecorations!(ax2; grid=false)
-        hideydecorations!(ax4; grid=false)
-
-        hm1 = heatmap!(ax1, xc./1000, yc./1000, B; colormap=:terrain)
-        hm2 = heatmap!(ax2, xc./1000, yc./1000, vmag_obs; colormap=:turbo)
-        hm3 = heatmap!(ax3, xc./1000, yc./1000, H_old; colormap=:magma)
-        hm4 = heatmap!(ax4, xc./1000, yc./1000, H_obs; colormap=:magma)
-
-        Colorbar(fig[1, 1][1, 2], hm1)
-        Colorbar(fig[1, 2][1, 2], hm2)
-        Colorbar(fig[2, 1][1, 2], hm3)
-        Colorbar(fig[2, 2][1, 2], hm4)
-        save("Aletsch_data.png", fig)
-        display(fig)
-    end
-
-    error("check")
 
 
     #rescale
@@ -336,8 +305,6 @@ function adjoint_2D()
         Colorbar(fig[2, 1][1, 2], plts.H)
         Colorbar(fig[2, 2][1, 2], plts.qmag)
     end
-
-    error("check")
 
     As    .= As_ini
     logAs .= log10.(As)
