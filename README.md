@@ -3,11 +3,14 @@
 ## synthetic case
 
 run include("scripts_flux/snapshot_inversion_vis.jl") for snapshot inversion on synthetic glacier, which save the results to "synthetic_snapshot.jld2" 
+
 run include("scripts_flux/main_flux.jl") for time-dependent inversion on synthetic glacier, which save the results to "synthetic_timedepedent.jld2"
+
 run include("scripts_flux/visulization_snap_timedepedent.jl") for visualization 
+
 run include("scripts_flux/visulization_synthetic_timedepedent.jl") for visulization of time depedent approach with different weights 
 
-## Aletscch case 
+## Aletsch case 
 
 run include("application/application.jl") for snapshot inversion on Aletsch glacier, which save the results to "snapshot_Aletsch.jld2"
 
