@@ -96,7 +96,7 @@ function ∇loss_snapshot!(logĀs, logAs, fwd_params, adj_params, loss_params; 
     logĀs[:, [1, end]] = logĀs[:, [2, end - 1]]
 
     #smoothing 
-
+    
     # convert to dJ/dlogAs
     logĀs .*= As
 

@@ -36,17 +36,18 @@ using GLM
     mb_predict = zeros(length(z_lg)) |> Vector
     mb_predict .= slope.* z_lg .+ intercept
     L"x\text{ [km]}"
-    fig = Figure()
+    fig = Figure(; size=(750,600), fontsize=14)
     # how do I text the title
-    ax = Axis(fig[1,1]; xlabel=L"Elevation \text{ [m]}", ylabel=L"$Annual$ $mass$ $balance$ $[\text{m}\cdot \text{a}^{-1}]$")
+    ax = Axis(fig[1,1]; xlabel="Elevation (m)", ylabel="Annual mass balance (m/a)")
     
     mb_plots = scatterlines!(ax, z, mb2019; label=L"$real$ $mass$ $balance$", linewidth=3)
     scatterlines!(ax, z_lg, mb_predict; color=:red, label=L"$modeled$ $mass$ $balance$", linewidth=3)
     vlines!(ax, df2019[8];color=:gray, linestyle=:dash, label=L"$ELA$", linewidth=3)
-    hlines!(ax, b_max; color=:red, linestyle=:dash, label=L"$b_{max}$", linewidth=3)
+    hlines!(ax, b_max; color=:red, linestyle=:dash, label=L"b_{max}", linewidth=3)
 
     axislegend(ax; position=:rb, labelsize=16)
-    # display(fig)
+    display(fig)
+    save("Aletch_mb_data.png", fig)
 
     b_max_Alet = b_max / (365*24*3600)
     ELA_Alet = ELA 

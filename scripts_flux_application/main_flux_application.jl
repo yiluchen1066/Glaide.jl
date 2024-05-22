@@ -93,28 +93,6 @@ function adjoint_2D()
     smooth_masked_2!(B, D_reg, nsm_topo)
     @info "Smoothed the bedrock"
 
-    crange = filter(!isnan, H_old) |> extrema
-
-    # check_data = true
-    # if check_data 
-    #     fig = Figure(size=(800, 800))
-    #     ax1 = Axis(fig[1, 1][1, 1]; aspect=DataAspect(), title="Bed elevation [m.a.s.l.]")
-    #     ax2 = Axis(fig[1, 2][1, 1]; aspect=DataAspect(), title="Ice thickness (2023) [m.a.s.l.]")
-    #     ax3 = Axis(fig[2, 1][1, 1]; aspect=DataAspect(), title="Ice thickness (2016) [m.a.s.l.]")
-    #     ax4 = Axis(fig[2, 2][1, 1]; aspect=DataAspect(), title="Ice thickness (2017) [m.a.s.l.]")
-
-    #     hm1 = heatmap!(ax1, B; colormap=:terrain)
-    #     hm2 = heatmap!(ax2, H_2023; colormap=:magma, colorrange=crange)
-    #     hm3 = heatmap!(ax3, H_old; colormap=:magma, colorrange=crange)
-    #     hm4 = heatmap!(ax4, H_obs; colormap=:magma, colorrange=crange)
-
-    #     Colorbar(fig[1, 1][1, 2], hm1)
-    #     Colorbar(fig[1, 2][1, 2], hm2)
-    #     Colorbar(fig[2, 1][1, 2], hm3)
-    #     Colorbar(fig[2, 2][1, 2], hm4)
-    #     display(fig)
-    # end
-
     #load the mass balance data: m/s, m, 1/s
     b_max_Alet, ELA_Alet, β_Alet = load_massbalance()
     ELA_Alet -= oz
@@ -123,6 +101,15 @@ function adjoint_2D()
     Mask        = ones(Float64, size(H_old))
     Mask[M .>0.0 .&& H_old.<= 0] .= 0.0
     M           .*= Mask 
+
+    fig = Figure(; size=(750,600), fontsize=14)
+    # how do I text the title
+    ax = Axis(fig[1,1][1,1]; xlabel="X (km)", ylabel="Y (km)")
+    mb_plots = heatmap!(ax, xc./1000, yc./1000, M; label="real mass balance", linewidth=3)
+    
+    Colorbar(fig[1, 1][1, 2], mb_plots, label=L"m/s")
+    display(fig)
+    save("Aletsch_mb.png", fig)
 
     #real scale
     lsc_data = mean(H_old)
@@ -138,6 +125,38 @@ function adjoint_2D()
     vsc_data = lsc_data / tsc_data
 
     nratio = (npow+1)/(npow+2)
+
+    check_data = true
+    if check_data 
+        replace!(vmag_obs, 0.0 => NaN)
+        replace!(H_old, 0.0 => NaN)
+        replace!(H_obs, 0.0 => NaN)
+        fig = Figure(size=(600, 600))
+        ax1 = Axis(fig[1, 1][1, 1]; aspect=DataAspect(), ylabel="Y (km)", title="a")
+        ax2 = Axis(fig[1, 2][1, 1]; aspect=DataAspect(), title="b")
+        ax3 = Axis(fig[2, 1][1, 1]; aspect=DataAspect(), xlabel="X (km)", ylabel="Y (km)",title="c")
+        ax4 = Axis(fig[2, 2][1, 1]; aspect=DataAspect(), xlabel="X (km)",title="d")
+
+        hidexdecorations!(ax1; grid=false)
+        hidexdecorations!(ax2; grid=false)
+        hideydecorations!(ax2; grid=false)
+        hideydecorations!(ax4; grid=false)
+
+        hm1 = heatmap!(ax1, xc./1000, yc./1000, B; colormap=:terrain)
+        hm2 = heatmap!(ax2, xc./1000, yc./1000, vmag_obs; colormap=:turbo)
+        hm3 = heatmap!(ax3, xc./1000, yc./1000, H_old; colormap=:magma)
+        hm4 = heatmap!(ax4, xc./1000, yc./1000, H_obs; colormap=:magma)
+
+        Colorbar(fig[1, 1][1, 2], hm1)
+        Colorbar(fig[1, 2][1, 2], hm2)
+        Colorbar(fig[2, 1][1, 2], hm3)
+        Colorbar(fig[2, 2][1, 2], hm4)
+        save("Aletsch_data.png", fig)
+        display(fig)
+    end
+
+    error("check")
+
 
     #rescale
     lsc   = 1.0
@@ -162,7 +181,9 @@ function adjoint_2D()
     yc       = yc ./ lsc_data .* lsc
     dt       = dt  /tsc_data * tsc
 
+
     qmag_obs = replace(vmag_obs[2:end-1, 2:end-1], NaN => 0.0) .* H_obs[2:end-1, 2:end-1] .* nratio
+
 
     # γ_nd     = 1e2
     s_f      = 1e3
@@ -316,12 +337,13 @@ function adjoint_2D()
         Colorbar(fig[2, 2][1, 2], plts.qmag)
     end
 
+    error("check")
 
     As    .= As_ini
     logAs .= log10.(As)
     fwd_visu =(; plts, fig)
     #Define loss functions 
-    J(_logAs) = loss(logAs, fwd_params, loss_params;  visu=fwd_visu)
+    J(_logAs) = loss(logAs, fwd_params, loss_params;  visu=nothing)
     ∇J!(_logĀs, _logAs) = ∇loss!(logĀs, logAs, fwd_params, adj_params, loss_params;reg)
     @info "inversion for As"
 
@@ -370,8 +392,10 @@ function adjoint_2D()
         plts.H[3] = H_v
         plts.qmag[3] = qmag_v
         plts.conv[1] = Point2.(iter_evo, cost_evo)
+    
 
-        #jldsave("output_steadystate/step_$iframe.jld2"; As_v, H, qmag_v, iter_evo, cost_evo)
+        jldsave("output_TD_Aletsch/step_$iframe.jld2"; logAs_td_Aletsch=As_v, qmag_td_Aletsch=qmag_v, H_td_Aletsch=H_v, 
+                qmag_Aletsch_obs=qmag_obs_v, H_Aletsch_obs=H_obs_v, iter_evo, cost_evo, xc, yc)
         iframe += 1
         display(fig)
 

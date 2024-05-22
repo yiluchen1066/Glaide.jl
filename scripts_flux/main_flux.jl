@@ -63,8 +63,8 @@ function adjoint_2D()
     bt_niter   = 5
     Δγ         = 1.0e-1
 
-    w_H_nd = sqrt(10)/10#1.0#0.5*sqrt(2)
-    w_q_nd = 3*sqrt(10)/10#0.0#0.5*sqrt(2)
+    w_H_nd = 0.5*sqrt(2)#sqrt(10)/10#1.0#0.5*sqrt(2)
+    w_q_nd = 0.5*sqrt(2)#3*sqrt(10)/10#0.0#0.5*sqrt(2)
 
     ## pre-processing
     dx, dy = lx / nx, ly / ny
@@ -298,7 +298,7 @@ function adjoint_2D()
 
         if igd == ngd 
             display(fig)
-            jldsave("synthetic_timedepedent_23.jld2"; logAs_timedepedent = As_v, qmag_timedepedent = qmag_v, H_timedepedent = Array(H), iter_evo, cost_evo, xc=xc, yc= yc, xv=xv, yv=yv)
+            jldsave("synthetic_timedepedent.jld2"; logAs_timedepedent = As_v, qmag_timedepedent = qmag_v, H_timedepedent = Array(H), iter_evo, cost_evo, xc=xc, yc= yc, xv=xv, yv=yv)
     
         end
     end

@@ -107,7 +107,7 @@ function application()
 
     check_data = true
     if check_data 
-        fig = Figure(size=(800, 800))
+        fig = Figure(size=(600, 600))
         ax1 = Axis(fig[1, 1][1, 1]; aspect=DataAspect(), title="Bed elevation [m.a.s.l.]")
         ax2 = Axis(fig[1, 2][1, 1]; aspect=DataAspect(), title="Surface velocity (2016-2017) [m/y]")
         ax3 = Axis(fig[2, 1][1, 1]; aspect=DataAspect(), title="Ice thickness (2016) [m.a.s.l.]")
@@ -198,7 +198,6 @@ function application()
         display(fig)
     end
 
-
     #non-dimensional numbers
     s_f      = 1e3#1e1#1e-5 #as/a/lsc^2
     #non-dimensional nuemrics numbers 
@@ -222,7 +221,7 @@ function application()
     S_ini       = CuArray(S_old)
     S_obs       = CuArray(S_obs)
     H_obs       = CuArray(H_obs)
-    H_ini       = CuArray(H_old)
+    H_ini       = CuArray(H_obs)
     qmag_obs    = CuArray(qmag_obs)
     qmag        = CUDA.zeros(Float64,size(qmag_obs))
     vmag_obs    = CuArray(vmag_obs)

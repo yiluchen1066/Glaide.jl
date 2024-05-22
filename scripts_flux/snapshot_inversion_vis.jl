@@ -341,7 +341,7 @@ function adjoint_2D()
 
         if igd == ngd 
             display(fig)
-            jldsave("synthetic_snapshot.jld2"; logAs_syn = As_syn_v, logAs_snapshot = As_v, qmag_obs=qmag_obs_v, qmag_snapshot = qmag_v, H_obs=Array(H_obs), H_snapshot=Array(H))
+            jldsave("synthetic_snapshot.jld2"; logAs_syn = As_syn_v, logAs_snapshot = As_v, qmag_obs=qmag_obs_v, qmag_snapshot = qmag_v, H_obs=Array(H_obs), H_snapshot=Array(H), iter_evo, cost_evo)
         end
     end
     return
