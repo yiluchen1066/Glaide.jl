@@ -237,7 +237,7 @@ function adjoint_2D()
     Colorbar(fig[2, 2][1, 2], plts.v_obs)
     Colorbar(fig[2, 3][1, 2], plts.diff_v)
     display(fig)
-    save("generated_synthetic.png", fig)
+    #save("generated_synthetic.png", fig)
 
     #TODO save to disk
     #jldsave("synthetic_data_generated.jld2"; B=Array(B), H_old =Array(H_old), qmag_old = Array(qmag_old), H_obs= Array(H_obs), qmag_obs = Array(qmag_obs))

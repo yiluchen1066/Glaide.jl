@@ -62,56 +62,46 @@ v_td_obs .*= 365*24*3600
 v_td     .*= 365*24*3600
 
 # subplots of logAs_snapshot_Aletsch, logAs_td_Aletsch
-fig = Figure(; size=(500, 300), fontsize=14)
+fig = Figure(; size=(750, 550), fontsize=14)
 ax  = (
-    As_snapshot       = Axis(fig[1, 1][1,1]; aspect=DataAspect(), xlabel="X (km)", ylabel="Y (km)", title="a"),
-    As_timedepedent   = Axis(fig[1, 2][1,1]; aspect=DataAspect(), xlabel="X (km)", title="b"))
-    #ΔAs               = Axis(fig[1, 3][1,1]; aspect=DataAspect(), xlabel="X (km)", title="c"))
+    As_snapshot       = Axis(fig[1, 1][1,1]; aspect=DataAspect(),  ylabel="Y (km)", title="a"),
+    As_timedepedent   = Axis(fig[1, 2][1,1]; aspect=DataAspect(),  title="b"),
+    #ΔAs               = Axis(fig[1, 3][1,1]; aspect=DataAspect(),  title="c"),
+    qmag_snapshot     = Axis(fig[2, 1][1,1]; aspect=DataAspect(), xlabel="X (km)", ylabel="Y (km)", title="c"),
+    qmag_timedepedent  = Axis(fig[2, 2][1,1]; aspect=DataAspect(), xlabel="X (km)", title="d"),
+    H_timedepedent   = Axis(fig[2, 3][1,1]; aspect=DataAspect(), xlabel="X (km)", title="e"))
 
 # As_crange = filter(!isnan, As_syn) |> extrema
 # As_syn_max = filter(!isnan, As_syn) |> maximum
-
-hideydecorations!(ax.As_timedepedent; grid=false)
-
-#rowgap!(fig.layout, Relative(1/16))
-plts = (
-    As_snapshot     = heatmap!(ax.As_snapshot, xc[1:end-1]./1000, yc[1:end-1]./1000, log10.(As_snapshot); colormap=:GnBu_9),
-    As_timedepedent = heatmap!(ax.As_timedepedent, xc[1:end-1]./1000, yc[1:end-1]./1000, log10.(As_timedepedent); colormap=:GnBu_9))
-    #ΔAs             = heatmap!(ax.ΔAs, xc[1:end-1]./1000, yc[1:end-1]./1000, abs.(log10.(As_snapshot)-log10.(As_timedepedent)); colormap=:GnBu_9))
-
-Colorbar(fig[1,2][1,2], plts.As_timedepedent, label=L"(Pa^{-3}m^2s^{-1})")
-#Colorbar(fig[1,3][1,2], plts.ΔAs, label=L"(Pa^{-3}m^2s^{-1})")
-
-display(fig)
-#save("As_Aletsch.png", fig)
-
-
-fig = Figure(; size=(700,300), fontsize=14)
-ax  = (
-    qmag_snapshot  = Axis(fig[1, 1][1,1]; aspect=DataAspect(), xlabel="X (km)", ylabel="Y (km)", title="a"),
-    qmag_timedepedent  = Axis(fig[1, 2][1,1]; aspect=DataAspect(), xlabel="X (km)", title="b"),
-    H_timedepedent   = Axis(fig[1, 3][1,1]; aspect=DataAspect(), xlabel="X (km)", title="c"))
-
-hideydecorations!(ax.qmag_timedepedent; grid=false)
-hideydecorations!(ax.H_timedepedent; grid=false)
 
 v_sp_max = filter(!isnan, v_sp_obs) |> maximum
 v_td_max = filter(!isnan, v_td_obs) |> maximum
 H_td_max = filter(!isnan, H_Aletsch_obs) |> maximum
 
-extre = filter(!isnan, abs.(v_td .- v_td_obs))|>extrema
+hidexdecorations!(ax.As_snapshot; grid=false)
+hidexdecorations!(ax.As_timedepedent; grid=false)
+#hidexdecorations!(ax.ΔAs; grid=false)
+hideydecorations!(ax.As_timedepedent; grid=false)
+#hideydecorations!(ax.ΔAs; grid=false)
+hideydecorations!(ax.qmag_timedepedent; grid=false)
+hideydecorations!(ax.H_timedepedent; grid=false)
 
-@show(extre)
-
+#rowgap!(fig.layout, Relative(1/16))
 plts = (
-    qmag_snapshot  = heatmap!(ax.qmag_snapshot, xc[1:end-1]./1000, yc[1:end-1]./1000, v_sp; colormap=:GnBu_9, colorrange=(0.0,300.0)),
-    qmag_timedepedent  = heatmap!(ax.qmag_timedepedent, xc[1:end-1]./1000, yc[1:end-1]./1000, v_td; colormap=:GnBu_9, colorrange=(0.0,300.0)),
+    As_snapshot     = heatmap!(ax.As_snapshot, xc[1:end-1]./1000, yc[1:end-1]./1000, log10.(As_snapshot); colormap=:GnBu_9),
+    As_timedepedent = heatmap!(ax.As_timedepedent, xc[1:end-1]./1000, yc[1:end-1]./1000, log10.(As_timedepedent); colormap=:GnBu_9),
+    #ΔAs             = heatmap!(ax.ΔAs, xc[1:end-1]./1000, yc[1:end-1]./1000, (abs.(log10.(As_snapshot)-log10.(As_timedepedent))./As_sp_max).*100; colormap=:GnBu_9),
+    qmag_snapshot  = heatmap!(ax.qmag_snapshot, xc[1:end-1]./1000, yc[1:end-1]./1000, (abs.(v_sp.- v_sp_obs)./v_sp_max).*100; colormap=:GnBu_9, colorrange=(0.0,10.0)),
+    qmag_timedepedent  = heatmap!(ax.qmag_timedepedent, xc[1:end-1]./1000, yc[1:end-1]./1000, (abs.(v_td.- v_td_obs)./v_td_max).*100; colormap=:GnBu_9, colorrange=(0.0,10.0)),
     H_timedepedent     = heatmap!(ax.H_timedepedent, xc./1000, yc./1000, (abs.(H_td_Aletsch.- H_Aletsch_obs)./H_td_max).*100 ; colormap=:GnBu_9, colorrange=(0.0, 10.0)))
-# :GnBu_9
-Colorbar(fig[1,1][1,2], plts.qmag_snapshot)
-Colorbar(fig[1,2][1,2], plts.qmag_timedepedent)
-Colorbar(fig[1,3][1,2], plts.H_timedepedent, label=L"%")
+
+Colorbar(fig[1,2][1,2], plts.As_timedepedent, label=L"(Pa^{-3}m^2s^{-1})")
+#Colorbar(fig[1,3][1,2], plts.ΔAs, label=L"(Pa^{-3}m^2s^{-1})")
+# # :GnBu_9
+# Colorbar(fig[1,1][1,2], plts.qmag_snapshot)
+# Colorbar(fig[1,2][1,2], plts.qmag_timedepedent)
+Colorbar(fig[2,3][1,2], plts.H_timedepedent, label=L"%")
 
 display(fig)
-#save("Aletsch_misfit.png", fig)
+save("Aletsch_sp_td.png", fig)
 

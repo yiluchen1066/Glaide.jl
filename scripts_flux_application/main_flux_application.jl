@@ -101,16 +101,6 @@ function adjoint_2D()
     Mask        = ones(Float64, size(H_old))
     Mask[M .>0.0 .&& H_old.<= 0] .= 0.0
     M           .*= Mask 
-
-    fig = Figure(; size=(750,600), fontsize=14)
-    # how do I text the title
-    ax = Axis(fig[1,1][1,1]; aspect=DataAspect(), xlabel="X (km)", ylabel="Y (km)")
-    mb_plots = heatmap!(ax, xc./1000, yc./1000, M.*(365*24*3600); label="real mass balance", linewidth=3)
-    
-    Colorbar(fig[1, 1][1, 2], mb_plots, label=L"m/s")
-    display(fig)
-    save("Aletsch_mb.png", fig)
-
     #real scale
     lsc_data = mean(H_old)
     ρ = 910 #kg/m^3
@@ -288,7 +278,6 @@ function adjoint_2D()
 
         As_crange = filter(!isnan, As_v) |> extrema
         q_crange = filter(!isnan, qmag_obs_v) |> extrema
-
 
         plts = (H_obs      = heatmap!(axs.H_obs, xc, yc, H_obs_v; colormap=:turbo),
                 qmag_obs   = heatmap!(axs.qmag_obs, xc[2:end-1], yc[2:end-1], qmag_obs_v; colormap=:turbo, colorrange=(0.0, 1000.0)),
