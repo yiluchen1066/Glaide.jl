@@ -19,3 +19,10 @@ run include("scripts_flux_application/main_flux_application.jl") for time depend
 run include("scirpts_flux_application/visu_Aletsch_snap_td.jl") for visulization for Aletsch glacier.
 
 "aletsch_data_2016_2017.nc" is needed to run "application/application.jl" and "scripts_flux_application/main_flux_application.jl", which is on my suerzack. 
+
+## visualization on MS 
+fig1: run ("scripts_flux_application/generated_synthetic_data.jl")
+fig4: run ("scripts_flux/visuliation_snap_timedepedent.jl")
+fig5: run ("scripts_flux/visuliati_on_synthetic_timedepedent.jl")
+fig6: run ("scripts_flux/synthetic_convergence.jl")
+fig7: run ("scripts_flux_application/visu_Aletsch_snap_td.jl")
