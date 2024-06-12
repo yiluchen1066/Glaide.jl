@@ -67,7 +67,6 @@ function generate_synthetic_data(nx, ny)
     fill!(mb_mask, 1.0)
 
     # figures
-
     fields       = (; B, H, H_old, qx, qy, D, As, r_H, d_H, dH_dτ)
     scalars      = (; ρgn, A, npow, dt)
     mass_balance = (; β, ELA, b_max, mb_mask)
