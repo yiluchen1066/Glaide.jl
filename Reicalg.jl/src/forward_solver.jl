@@ -29,7 +29,7 @@ function solve_sia!(fields, scalars, mass_balance, numerics; debug_vis=false, re
         dτ = compute_pt_time_step(cfl, D, β, dt, dx, dy)
 
         # empirically calibrated damping coefficient to accelerate convergence
-        dmp = iter > 5nx ? 0.7 : 0.5
+        dmp = iter > 5max(nx, ny) ? 0.7 : 0.5
         update_ice_thickness!(H, dH_dτ, r_H, dτ, dmp)
 
         # apply Neumann boundary conditions
