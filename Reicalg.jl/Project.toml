@@ -1,0 +1,10 @@
+name = "Reicalg"
+uuid = "86ebb91d-c5a7-4194-9fc7-3d0b981bb521"
+authors = ["Ivan Utkin <iutkin@ethz.ch>"]
+version = "0.1.0"
+
+[deps]
+CUDA = "052768ef-5323-5732-b1bb-66c8b64840ba"
+CairoMakie = "13f3f980-e62b-5c42-98c6-ff1f3baf88f0"
+JLD2 = "033835bb-8acc-5ee8-8aae-3f567f8a3819"
+Printf = "de0858da-6303-5e67-8744-51eddeeeb8d7"
