@@ -65,7 +65,7 @@ function solve_sia!(fields, scalars, mass_balance, numerics; debug_vis=false, re
         iter += 1
     end
 
-    report && @printf("forward solver converged")
+    report && println("forward solver converged")
 
     return
 end

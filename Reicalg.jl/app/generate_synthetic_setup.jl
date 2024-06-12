@@ -79,14 +79,14 @@ function generate_synthetic_data(nx, ny)
     # save geometry
     H_old = copy(H)
 
-    # step change in mass balance (ELA +20%)
-    mass_balance = merge(mass_balance, (; ELA=1.2 .* ELA))
+    # step change in mass balance (ELA and β +20%)
+    mass_balance = merge(mass_balance, (; ELA=1.2 .* ELA, β=1.2 * β))
 
     # start from current geometry
     fields = merge(fields, (; H_old))
 
-    # finite time step
-    dt = 1 * SECONDS_IN_YEAR
+    # finite time step (50y)
+    scalars = merge(scalars, (; dt=50 * SECONDS_IN_YEAR))
 
     # solve again
     solve_sia!(fields, scalars, mass_balance, numerics; debug_vis=false)
