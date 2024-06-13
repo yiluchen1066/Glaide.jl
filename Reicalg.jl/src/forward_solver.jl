@@ -14,6 +14,7 @@ function solve_sia!(fields, scalars, mass_balance, numerics; debug_vis=false, re
         vis = create_debug_visualisation(fields, numerics)
     end
 
+    # iterative loop
     iter = 1
     stop_iterations = false
     while !stop_iterations
