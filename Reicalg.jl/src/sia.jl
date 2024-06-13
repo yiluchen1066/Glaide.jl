@@ -1,43 +1,53 @@
 # CUDA kernels
 
+# surface gradient
+Base.@propagate_inbounds function ∇S(H, B, dx, dy, ix, iy)
+    ∇Sx = 0.5 * (@d_xi(B) + @d_xa(B)) / dx +
+          0.5 * (@d_xi(H) + @d_xa(H)) / dx
+
+    ∇Sy = 0.5 * (@d_yi(B) + @d_ya(B)) / dy +
+          0.5 * (@d_yi(H) + @d_ya(H)) / dy
+
+    return sqrt(∇Sx^2 + ∇Sy^2)
+end
+
+# SIA fluxes
+Base.@propagate_inbounds function qx(H, B, D, dx, dy, ix, iy)
+    return -@av_ya(D) * (@d_xi(H) + @d_xi(B)) / dx
+end
+
+Base.@propagate_inbounds function qy(H, B, D, dx, dy, ix, iy)
+    return -@av_xa(D) * (@d_yi(H) + @d_yi(B)) / dy
+end
+
 # SIA diffusivity
 function _diffusivity!(D, H, B, As, A, ρgn, npow, dx, dy)
     @get_indices
     @inbounds if ix <= size(D, 1) && iy <= size(D, 2)
-        # surface graient
-        ∇Sx = 0.5 * (@d_xi(B) / dx + @d_xa(B) / dx) +
-              0.5 * (@d_xi(H) / dx + @d_xa(H) / dx)
-
-        ∇Sy = 0.5 * (@d_yi(H) / dy + @d_ya(H) / dy) +
-              0.5 * (@d_yi(B) / dy + @d_ya(B) / dy)
-
+        # surface gradient
+        gradS = ∇S(H, B, dx, dy, ix, iy)
         # diffusion coefficient
-        D[ix, iy] = 2.0 / (npow + 2.0) * ρgn * (A * @av_xy(H)^(npow + 2) + As[ix, iy] * @av_xy(H)^npow) * sqrt(∇Sx^2 + ∇Sy^2)^(npow - 1)
-    end
-    return
-end
-
-# surface flux q = ∫v dz
-function _flux!(qx, qy, D, H, B, dx, dy)
-    @get_indices
-    @inbounds if ix <= size(qx, 1) && iy <= size(qx, 2)
-        qx[ix, iy] = -@av_ya(D) * (@d_xi(H) + @d_xi(B)) / dx
-    end
-    @inbounds if ix <= size(qy, 1) && iy <= size(qy, 2)
-        qy[ix, iy] = -@av_xa(D) * (@d_yi(H) + @d_yi(B)) / dy
+        D[ix, iy] = 2.0 / (npow + 2) * ρgn * (A * @av_xy(H)^(npow + 2) + As[ix, iy] * @av_xy(H)^npow) * gradS^(npow - 1)
     end
     return
 end
 
 # mass conservation residual
-function _residual!(r_H, B, H, H_old, qx, qy, β, ELA, b_max, mb_mask, dt, dx, dy)
+function _residual!(r_H, B, H, H_old, D, β, ELA, b_max, mb_mask, dt, dx, dy)
     @get_indices
     @inbounds if ix <= size(H, 1) - 2 && iy <= size(H, 2) - 2
         # observed geometry changes
         dH_dt = (H[ix+1, iy+1] - H_old[ix+1, iy+1]) / dt
 
+        # interface fluxes
+        qx_w = qx(H, B, D, dx, dy, ix, iy)
+        qx_e = qx(H, B, D, dx, dy, ix + 1, iy)
+
+        qy_s = qy(H, B, D, dx, dy, ix, iy)
+        qy_n = qy(H, B, D, dx, dy, ix, iy + 1)
+
         # ice flow
-        divQ = @d_xa(qx) / dx + @d_ya(qy) / dy
+        divQ = (qx_e - qx_w) / dx + (qy_n - qy_s) / dy
 
         # surface mass balance
         b = ela_mass_balance(B[ix+1, iy+1] + H[ix+1, iy+1], β, ELA[ix, iy], b_max)
@@ -55,6 +65,7 @@ end
 function _update_ice_thickness!(H, dH_dτ, r_H, dτ, dmp)
     @get_indices
     @inbounds if ix <= size(H, 1) - 2 && iy <= size(H, 2) - 2
+        # residual damping improves convergence
         dH_dτ[ix, iy] = dH_dτ[ix, iy] * dmp + r_H[ix, iy]
         H[ix+1, iy+1] = max(0.0, H[ix+1, iy+1] + dτ * dH_dτ[ix, iy])
 
@@ -88,8 +99,14 @@ end
 #! format: on
 
 # surface velocity magnitude
-function surface_velocity!(v, H, B, As, A, ρgn, npow, dx, dy)
-    # TODO
+function _surface_velocity!(v, H, B, As, A, ρgn, npow, dx, dy)
+    @get_indices
+    @inbounds if ix <= size(v, 1) && iy <= size(v, 2)
+        # surface gradient
+        gradS = ∇S(H, B, dx, dy, ix, iy)
+        # diffusion coefficient
+        v[ix, iy] = 2.0 * ρgn * (inv(npow + 1) * A * @av_xy(H)^(npow + 1) + inv(npow + 2) * As[ix, iy] * @av_xy(H)^(npow - 1)) * gradS^npow
+    end
     return
 end
 
@@ -100,15 +117,9 @@ function diffusivity!(D, H, B, As, A, ρgn, npow, dx, dy)
     return
 end
 
-function flux!(qx, qy, D, H, B, dx, dy)
+function residual!(r_H, B, H, H_old, D, β, ELA, b_max, mb_mask, dt, dx, dy)
     nthreads, nblocks = launch_config(size(H))
-    @cuda threads = nthreads blocks = nblocks _flux!(qx, qy, D, H, B, dx, dy)
-    return
-end
-
-function residual!(r_H, B, H, H_old, qx, qy, β, ELA, b_max, mb_mask, dt, dx, dy)
-    nthreads, nblocks = launch_config(size(H))
-    @cuda threads = nthreads blocks = nblocks _residual!(r_H, B, H, H_old, qx, qy, β, ELA, b_max, mb_mask, dt, dx, dy)
+    @cuda threads = nthreads blocks = nblocks _residual!(r_H, B, H, H_old, D, β, ELA, b_max, mb_mask, dt, dx, dy)
     return
 end
 
@@ -128,4 +139,9 @@ function bc!(H, B)
     @cuda threads = nthreads blocks = nblocks _bc_y!(H, B)
 
     return
+end
+
+function surface_velocity!(v, H, B, As, A, ρgn, npow, dx, dy)
+    nthreads, nblocks = launch_config(size(H))
+    @cuda threads = nthreads blocks = nblocks _surface_velocity!(v, H, B, As, A, ρgn, npow, dx, dy)
 end

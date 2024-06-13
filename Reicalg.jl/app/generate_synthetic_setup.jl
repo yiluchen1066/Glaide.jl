@@ -75,8 +75,10 @@ function generate_synthetic_data(nx, ny)
     # solve for a steady state to get initial synthetic geometry
     solve_sia!(fields, scalars, mass_balance, numerics; debug_vis=false)
 
-    # save geometry
+    # save geometry and surface velocity
     H_old = copy(H)
+    v_old = CUDA.zeros(Float64, nx - 1, ny - 1)
+    surface_velocity!(v_old, H_old, B, As, A, ρgn, npow, dx, dy)
 
     # step change in mass balance (ELA and β +20%)
     mass_balance = merge(mass_balance, (; ELA=1.2 .* ELA, β=1.2 * β))
@@ -90,11 +92,17 @@ function generate_synthetic_data(nx, ny)
     # solve again
     solve_sia!(fields, scalars, mass_balance, numerics; debug_vis=false)
 
+    # save velocity
+    v = CUDA.zeros(Float64, nx - 1, ny - 1)
+    surface_velocity!(v, H, B, As, A, ρgn, npow, dx, dy)
+
     # transfer arrays to CPU
     H     = Array(H)
     H_old = Array(H_old)
     B     = Array(B)
     As    = Array(As)
+    v     = Array(v)
+    v_old = Array(v_old)
 
     # generate ice mask and mask all data
     #! format: off
@@ -106,26 +114,32 @@ function generate_synthetic_data(nx, ny)
 
     As[ice_mask] .= NaN
 
-    fig = Figure(; size=(600, 450), fontsize=12)
+    fig = Figure(; size=(800, 400), fontsize=12)
 
     axs = (B     = Axis(fig[1, 1][1, 1]; aspect=DataAspect(), title="bedrock"),
+           As    = Axis(fig[2, 1][1, 1]; aspect=DataAspect(), title="sliding parameter (log10)"),
            H_old = Axis(fig[1, 2][1, 1]; aspect=DataAspect(), title="H_old"),
            H     = Axis(fig[2, 2][1, 1]; aspect=DataAspect(), title="H"),
-           As    = Axis(fig[2, 1][1, 1]; aspect=DataAspect(), title="sliding parameter (log10)"))
+           v_old = Axis(fig[1, 3][1, 1]; aspect=DataAspect(), title="v_old"),
+           v     = Axis(fig[2, 3][1, 1]; aspect=DataAspect(), title="v"))
 
     xc_km, yc_km = xc / 1e3, yc / 1e3
 
     #! format: off
-    hms = (B     = heatmap!(axs.B    , xc_km, yc_km, B         ; colormap=:terrain),
-           H_old = heatmap!(axs.H_old, xc_km, yc_km, H_old     ; colormap=:turbo, colorrange=(0, 450)),
-           H     = heatmap!(axs.H    , xc_km, yc_km, H         ; colormap=:turbo, colorrange=(0, 450)),
-           As    = heatmap!(axs.As   , xc_km, yc_km, log10.(As); colormap=:turbo))
+    hms = (B     = heatmap!(axs.B    , xc_km, yc_km, B                       ; colormap=:terrain),
+           As    = heatmap!(axs.As   , xc_km, yc_km, log10.(As)              ; colormap=:roma),
+           H_old = heatmap!(axs.H_old, xc_km, yc_km, H_old                   ; colormap=:turbo, colorrange=(0, 450)),
+           H     = heatmap!(axs.H    , xc_km, yc_km, H                       ; colormap=:turbo, colorrange=(0, 450)),
+           v_old = heatmap!(axs.v_old, xc_km, yc_km, v_old .* SECONDS_IN_YEAR; colormap=:vik),
+           v     = heatmap!(axs.v    , xc_km, yc_km, v     .* SECONDS_IN_YEAR; colormap=:vik))
     #! format: on
 
     cbs = (B     = Colorbar(fig[1, 1][1, 2], hms.B),
+           As    = Colorbar(fig[2, 1][1, 2], hms.As),
            H_old = Colorbar(fig[1, 2][1, 2], hms.H_old),
            H     = Colorbar(fig[2, 2][1, 2], hms.H),
-           As    = Colorbar(fig[2, 1][1, 2], hms.As))
+           v_old = Colorbar(fig[1, 3][1, 2], hms.v_old),
+           v     = Colorbar(fig[2, 3][1, 2], hms.v))
 
     display(fig)
 

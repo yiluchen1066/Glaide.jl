@@ -1,7 +1,7 @@
 module Reicalg
 
 export ela_mass_balance
-export diffusivity!, flux!, residual!, update_ice_thickness!
+export diffusivity!, residual!, update_ice_thickness!, surface_velocity!
 
 export solve_sia!
 
