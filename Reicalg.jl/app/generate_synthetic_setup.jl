@@ -131,8 +131,8 @@ function generate_synthetic_data(nx, ny; vis=true)
 
         fig = Figure(; size=(800, 400), fontsize=12)
 
-        axs = (B     = Axis(fig[1, 1][1, 1]; aspect=DataAspect(), title="bedrock"),
-               As    = Axis(fig[2, 1][1, 1]; aspect=DataAspect(), title="sliding parameter (log10)"),
+        axs = (B     = Axis(fig[1, 1][1, 1]; aspect=DataAspect(), title="B"),
+               As    = Axis(fig[2, 1][1, 1]; aspect=DataAspect(), title="log10(As)"),
                H_old = Axis(fig[1, 2][1, 1]; aspect=DataAspect(), title="H_old"),
                H     = Axis(fig[2, 2][1, 1]; aspect=DataAspect(), title="H"),
                v_old = Axis(fig[1, 3][1, 1]; aspect=DataAspect(), title="v_old"),
