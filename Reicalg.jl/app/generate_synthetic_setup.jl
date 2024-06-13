@@ -65,16 +65,17 @@ function generate_synthetic_data(nx, ny; vis=true)
 
     fill!(mb_mask, 1.0)
 
+    # pack all solver parameters into named tuples
     fields       = (; B, H, H_old, D, As, r_H, d_H, dH_dτ)
     scalars      = (; ρgn, A, npow, dt)
     mass_balance = (; β, ELA, b_max, mb_mask)
     numerics     = (; nx, ny, dx, dy, cfl, maxiter, ncheck, ϵtol)
 
     # solve for a steady state to get initial synthetic geometry
-    solve_sia!(fields, scalars, mass_balance, numerics; debug_vis=false)
+    solve_sia!((; fields, scalars, mass_balance, numerics); debug_vis=true)
 
     # save geometry and surface velocity
-    H_old = copy(H)
+    H_old .= H
     v_old = CUDA.zeros(Float64, nx - 1, ny - 1)
     surface_velocity!(v_old, H_old, B, As, A, ρgn, npow, dx, dy)
 
@@ -84,14 +85,12 @@ function generate_synthetic_data(nx, ny; vis=true)
 
     mass_balance = merge(mass_balance, (; ELA, β))
 
-    # start from current geometry
-    fields = merge(fields, (; H_old))
-
     # finite time step (50y)
-    scalars = merge(scalars, (; dt=50 * SECONDS_IN_YEAR))
+    dt = 50 * SECONDS_IN_YEAR
+    scalars = merge(scalars, (; dt))
 
     # solve again
-    solve_sia!(fields, scalars, mass_balance, numerics; debug_vis=false)
+    solve_sia!((; fields, scalars, mass_balance, numerics); debug_vis=true)
 
     # save velocity
     v = CUDA.zeros(Float64, nx - 1, ny - 1)
@@ -107,7 +106,7 @@ function generate_synthetic_data(nx, ny; vis=true)
     ELA   = Array(ELA)
 
     # save data
-    save_vars = (; B, H_old, H, v_old, v, As, npow, A, ρgn, β, b_max, ELA, lx, ly)
+    save_vars = (; B, H_old, H, v_old, v, As, npow, A, ρgn, β, b_max, ELA, lx, ly, dt)
 
     # remove existing data
     outdir = joinpath(pwd(), "datasets", "synthetic")

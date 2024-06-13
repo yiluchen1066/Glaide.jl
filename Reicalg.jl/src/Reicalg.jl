@@ -10,6 +10,7 @@ export avx, avy, vmag
 using Printf
 using CairoMakie
 using CUDA
+using Enzyme
 
 # surface mass balance model
 ela_mass_balance(z, β, ela, b_max) = min(β * (z - ela), b_max)
@@ -27,15 +28,17 @@ function launch_config(sz::NTuple{2,Integer})
     return nthreads, nblocks
 end
 
-# array utils
-@views avx(q) = @. 0.5 * (q[1:end-1, :] + q[2:end, :])
-@views avy(q) = @. 0.5 * (q[:, 1:end-1] + q[:, 2:end])
-
-vmag(qx, qy) = sqrt.(avx(qx) .^ 2 .+ avy(qy) .^ 2)
+# Enzyme utils
+@inline ∇(fun, args...) = (Enzyme.autodiff_deferred(Enzyme.Reverse, fun, Const, args...); return)
+const DupNN = DuplicatedNoNeed
 
 include("macros.jl")
 include("sia.jl")
 include("debug_visualisation.jl")
 include("forward_solver.jl")
+
+include("sia_adjoint.jl")
+include("adjoint_debug_visualisation.jl")
+include("adjoint_solver.jl")
 
 end # module Reicalg

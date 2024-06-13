@@ -1,17 +1,17 @@
-function solve_sia!(fields, scalars, mass_balance, numerics; debug_vis=false, report=true)
+function solve_sia!(params; debug_vis=false, report=true)
     # unpack SIA parameters
-    (; B, H, H_old, D, As, r_H, d_H, dH_dτ) = fields
-    (; ρgn, A, npow, dt) = scalars
+    (; B, H, H_old, D, As, r_H, d_H, dH_dτ) = params.fields
+    (; ρgn, A, npow, dt) = params.scalars
 
     # unpack mass balance data
-    (; β, ELA, b_max, mb_mask) = mass_balance
+    (; β, ELA, b_max, mb_mask) = params.mass_balance
 
     # unpack numerical params
-    (; nx, ny, dx, dy, cfl, maxiter, ncheck, ϵtol) = numerics
+    (; nx, ny, dx, dy, cfl, maxiter, ncheck, ϵtol) = params.numerics
 
     # create debug visualisation
     if debug_vis
-        vis = create_debug_visualisation(fields, numerics)
+        vis = create_debug_visualisation(params)
     end
 
     # iterative loop
@@ -41,11 +41,11 @@ function solve_sia!(fields, scalars, mass_balance, numerics; debug_vis=false, re
             lsc = maximum(H)
             vsc = 2 / (npow + 2) * ρgn * (A * lsc^(npow + 1) + minimum(As) * lsc^(npow - 1))
 
-            # check convergence
+            # compute absolute and relative errors
             err_abs = maximum(abs.(r_H)) / vsc
             err_rel = maximum(abs.(d_H)) / lsc
 
-            # print convergence
+            # print convergence status
             report && @printf("    iter = %.2f × nx, error: [abs = %1.3e, rel = %1.3e]\n", iter / nx, err_abs, err_rel)
 
             # check if simulation has failed
@@ -53,7 +53,7 @@ function solve_sia!(fields, scalars, mass_balance, numerics; debug_vis=false, re
                 error("simulation failed: detected NaNs")
             end
 
-            debug_vis && update_debug_visualisation!(vis, fields, iter / nx, (; err_abs, err_rel))
+            debug_vis && update_debug_visualisation!(vis, params, iter / nx, (; err_abs, err_rel))
 
             stop_iterations = (err_rel < ϵtol)
         end
