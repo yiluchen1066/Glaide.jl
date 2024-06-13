@@ -22,7 +22,6 @@ function solve_sia!(fields, scalars, mass_balance, numerics; debug_vis=false, re
 
         # update flux and residual
         diffusivity!(D, H, B, As, A, ρgn, npow, dx, dy)
-        # flux!(qx, qy, D, H, B, dx, dy)
         residual!(r_H, B, H, H_old, D, β, ELA, b_max, mb_mask, dt, dx, dy)
         # compute pseudo-time step
         dτ = compute_pt_time_step(cfl, D, β, dt, dx, dy)
