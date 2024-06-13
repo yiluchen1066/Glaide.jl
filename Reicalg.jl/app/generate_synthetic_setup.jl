@@ -1,12 +1,13 @@
 using Reicalg
 using CUDA
 using CairoMakie
+using JLD2
 
 const SECONDS_IN_YEAR = 3600 * 24 * 365
 
 @views av1(a) = @. 0.5 * (a[1:end-1] + a[2:end])
 
-function generate_synthetic_data(nx, ny)
+function generate_synthetic_data(nx, ny; vis=true)
     # set CUDA device
     CUDA.device!(1)
 
@@ -57,7 +58,7 @@ function generate_synthetic_data(nx, ny)
 
     # initialise
 
-    # two bumps as per (Visnjevic et al., 2018)
+    # two bumps as in (Visnjevic et al., 2018)
     copy!(B, @. B0 * (exp(-xc^2 / 1e10 - yc'^2 / 1e9) +
                       exp(-xc^2 / 1e9 - (yc' - ly / 8)^2 / 1e10)))
 
@@ -66,7 +67,6 @@ function generate_synthetic_data(nx, ny)
 
     fill!(mb_mask, 1.0)
 
-    # figures
     fields       = (; B, H, H_old, qx, qy, D, As, r_H, d_H, dH_dτ)
     scalars      = (; ρgn, A, npow, dt)
     mass_balance = (; β, ELA, b_max, mb_mask)
@@ -81,7 +81,10 @@ function generate_synthetic_data(nx, ny)
     surface_velocity!(v_old, H_old, B, As, A, ρgn, npow, dx, dy)
 
     # step change in mass balance (ELA and β +20%)
-    mass_balance = merge(mass_balance, (; ELA=1.2 .* ELA, β=1.2 * β))
+    ELA .*= 1.2
+    β *= 1.2
+
+    mass_balance = merge(mass_balance, (; ELA, β))
 
     # start from current geometry
     fields = merge(fields, (; H_old))
@@ -103,45 +106,58 @@ function generate_synthetic_data(nx, ny)
     As    = Array(As)
     v     = Array(v)
     v_old = Array(v_old)
+    ELA   = Array(ELA)
 
-    # generate ice mask and mask all data
-    #! format: off
-    ice_mask = Array(H[1:end-1, 1:end-1] .== 0 .||
-                     H[2:end  , 1:end-1] .== 0 .||
-                     H[1:end-1, 2:end  ] .== 0 .||
-                     H[2:end  , 2:end  ] .== 0)
-    #! format: on
+    # save data
+    save_vars = (; B, H_old, H, v_old, v, As, npow, A, ρgn, β, b_max, ELA, lx, ly)
 
-    As[ice_mask] .= NaN
+    # remove existing data
+    outdir = joinpath(pwd(), "datasets", "synthetic")
+    ispath(outdir) && rm(outdir; recursive=true)
+    mkpath(outdir)
 
-    fig = Figure(; size=(800, 400), fontsize=12)
+    jldsave(joinpath(outdir, "synthetic_setup.jld2"); save_vars...)
 
-    axs = (B     = Axis(fig[1, 1][1, 1]; aspect=DataAspect(), title="bedrock"),
-           As    = Axis(fig[2, 1][1, 1]; aspect=DataAspect(), title="sliding parameter (log10)"),
-           H_old = Axis(fig[1, 2][1, 1]; aspect=DataAspect(), title="H_old"),
-           H     = Axis(fig[2, 2][1, 1]; aspect=DataAspect(), title="H"),
-           v_old = Axis(fig[1, 3][1, 1]; aspect=DataAspect(), title="v_old"),
-           v     = Axis(fig[2, 3][1, 1]; aspect=DataAspect(), title="v"))
+    if vis
+        # generate ice mask and mask all data
+        #! format: off
+        ice_mask = Array(H[1:end-1, 1:end-1] .== 0 .||
+                         H[2:end  , 1:end-1] .== 0 .||
+                         H[1:end-1, 2:end  ] .== 0 .||
+                         H[2:end  , 2:end  ] .== 0)
+        #! format: on
 
-    xc_km, yc_km = xc / 1e3, yc / 1e3
+        As[ice_mask] .= NaN
 
-    #! format: off
-    hms = (B     = heatmap!(axs.B    , xc_km, yc_km, B                       ; colormap=:terrain),
-           As    = heatmap!(axs.As   , xc_km, yc_km, log10.(As)              ; colormap=:roma),
-           H_old = heatmap!(axs.H_old, xc_km, yc_km, H_old                   ; colormap=:turbo, colorrange=(0, 450)),
-           H     = heatmap!(axs.H    , xc_km, yc_km, H                       ; colormap=:turbo, colorrange=(0, 450)),
-           v_old = heatmap!(axs.v_old, xc_km, yc_km, v_old .* SECONDS_IN_YEAR; colormap=:vik),
-           v     = heatmap!(axs.v    , xc_km, yc_km, v     .* SECONDS_IN_YEAR; colormap=:vik))
-    #! format: on
+        fig = Figure(; size=(800, 400), fontsize=12)
 
-    cbs = (B     = Colorbar(fig[1, 1][1, 2], hms.B),
-           As    = Colorbar(fig[2, 1][1, 2], hms.As),
-           H_old = Colorbar(fig[1, 2][1, 2], hms.H_old),
-           H     = Colorbar(fig[2, 2][1, 2], hms.H),
-           v_old = Colorbar(fig[1, 3][1, 2], hms.v_old),
-           v     = Colorbar(fig[2, 3][1, 2], hms.v))
+        axs = (B     = Axis(fig[1, 1][1, 1]; aspect=DataAspect(), title="bedrock"),
+               As    = Axis(fig[2, 1][1, 1]; aspect=DataAspect(), title="sliding parameter (log10)"),
+               H_old = Axis(fig[1, 2][1, 1]; aspect=DataAspect(), title="H_old"),
+               H     = Axis(fig[2, 2][1, 1]; aspect=DataAspect(), title="H"),
+               v_old = Axis(fig[1, 3][1, 1]; aspect=DataAspect(), title="v_old"),
+               v     = Axis(fig[2, 3][1, 1]; aspect=DataAspect(), title="v"))
 
-    display(fig)
+        xc_km, yc_km = xc / 1e3, yc / 1e3
+
+        #! format: off
+        hms = (B     = heatmap!(axs.B    , xc_km, yc_km, B                       ; colormap=:terrain),
+               As    = heatmap!(axs.As   , xc_km, yc_km, log10.(As)              ; colormap=:roma),
+               H_old = heatmap!(axs.H_old, xc_km, yc_km, H_old                   ; colormap=:turbo, colorrange=(0, 450)),
+               H     = heatmap!(axs.H    , xc_km, yc_km, H                       ; colormap=:turbo, colorrange=(0, 450)),
+               v_old = heatmap!(axs.v_old, xc_km, yc_km, v_old .* SECONDS_IN_YEAR; colormap=:vik  , colorrange=(0, 600)),
+               v     = heatmap!(axs.v    , xc_km, yc_km, v     .* SECONDS_IN_YEAR; colormap=:vik  , colorrange=(0, 600)))
+        #! format: on
+
+        cbs = (B     = Colorbar(fig[1, 1][1, 2], hms.B),
+               As    = Colorbar(fig[2, 1][1, 2], hms.As),
+               H_old = Colorbar(fig[1, 2][1, 2], hms.H_old),
+               H     = Colorbar(fig[2, 2][1, 2], hms.H),
+               v_old = Colorbar(fig[1, 3][1, 2], hms.v_old),
+               v     = Colorbar(fig[2, 3][1, 2], hms.v))
+
+        display(fig)
+    end
 
     return
 end
