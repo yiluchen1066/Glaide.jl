@@ -1,6 +1,6 @@
 function solve_sia!(fields, scalars, mass_balance, numerics; debug_vis=false, report=true)
     # unpack SIA parameters
-    (; B, H, H_old, qx, qy, D, As, r_H, d_H, dH_dτ) = fields
+    (; B, H, H_old, D, As, r_H, d_H, dH_dτ) = fields
     (; ρgn, A, npow, dt) = scalars
 
     # unpack mass balance data
