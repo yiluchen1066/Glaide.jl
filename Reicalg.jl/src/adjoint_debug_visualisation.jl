@@ -14,7 +14,7 @@ function create_adjoint_debug_visualisation(params)
     conv_hist = Point2{Float64}[]
 
     # make figure and title
-    fig = Figure(; size=(800, 500), fontsize=12)
+    fig = Figure(; size=(700, 500), fontsize=12)
     Label(fig[0, 1:2], "DEBUG VISUALISATION (ADJOINT SOLVE)"; color=:red, font=:bold)
 
     # make axes
