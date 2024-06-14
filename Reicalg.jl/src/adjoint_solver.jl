@@ -1,13 +1,13 @@
 function adjoint_sia!(fwd_params, adj_params; debug_vis=false, report=true)
     # unpack forward parameters
-    (; B, H, H_old, D, As, r_H, d_H, dH_dτ) = fwd_params.fields
-    (; ρgn, A, npow, dt) = fwd_params.scalars
-
-    # unpack mass balance data
-    (; β, ELA, b_max, mb_mask) = fwd_params.mass_balance
+    (; B, H, H_old, D, As, ELA, mb_mask, r_H, d_H, dH_dτ) = fwd_params.fields
+    (; ρgn, A, npow, β, b_max, dt) = fwd_params.scalars
 
     # unpack adjoint state and shadows
     (; ψ, r̄_H, H̄, D̄, ∂J_∂H) = adj_params.fields
+
+    # unpack numerical parameters
+    (; nx, ny, dx, dy, cfl, maxiter, ncheck, ϵtol) = adj_params.numerics
 
     # create debug visualisation
     if debug_vis
@@ -24,10 +24,7 @@ function adjoint_sia!(fwd_params, adj_params; debug_vis=false, report=true)
     d_ψ   = d_H
     dψ_dτ = @view(dH_dτ[2:end-1, 2:end-1])
 
-    # unpack
-
-    # unpack numerical params
-    (; nx, ny, dx, dy, cfl, maxiter, ncheck, ϵtol) = adj_params.numerics
+    dψ_dτ .= 0.0
 
     # pseudo-time step (constant beteween iterations, depends only on D)
     dτ = compute_pt_time_step(cfl, D, β, dt, dx, dy)
@@ -44,8 +41,6 @@ function adjoint_sia!(fwd_params, adj_params; debug_vis=false, report=true)
         H̄   .= ∂J_∂H
         D̄   .= 0.0
 
-        ∇bc!(DupNN(H, H̄), Const(B))
-
         ∇residual!(DupNN(r_H, r̄_H),
                    Const(B),
                    DupNN(H, H̄),
@@ -60,15 +55,16 @@ function adjoint_sia!(fwd_params, adj_params; debug_vis=false, report=true)
                       Const(ρgn), Const(npow),
                       Const(dx), Const(dy))
 
-        dmp = 0.0
+        dmp = 0.9
         update_adjoint_state!(ψ, dψ_dτ, H̄, H, dτ, dmp)
 
         if iter % ncheck == 0
+
             # difference in adjoint state between iterations
             d_ψ .-= ψ
 
             # compute L∞ norm of adjoint state increment
-            err_rel = maximum(abs.(d_ψ)) / maximum(abs.(ψ))
+            err_rel = maximum(abs.(d_ψ)) / (maximum(abs.(ψ)) + eps())
 
             # print convergence status
             report && @printf("    iter = %.2f × nx, error: [rel = %1.3e]\n", iter / nx, err_rel)
@@ -78,7 +74,7 @@ function adjoint_sia!(fwd_params, adj_params; debug_vis=false, report=true)
                 error("simulation failed: detected NaNs")
             end
 
-            debug_vis && update_adjoint_debug_visualisation(vis, adj_params)
+            debug_vis && update_adjoint_debug_visualisation!(vis, adj_params, iter / nx, (; err_rel))
 
             stop_iterations = (err_rel < ϵtol)
         end

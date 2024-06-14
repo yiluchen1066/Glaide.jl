@@ -1,44 +1,34 @@
 # update adjoint thickness, manually setting to zero where H == 0
 function _update_adjoint_state!(ψ, dψ_dτ, H̄, H, dτ, dmp)
     @get_indices
-    @inbounds if ix <= size(H, 1) - 2 && iy <= size(H, 2) - 2
+    @inbounds if ix <= size(ψ, 1) && iy <= size(ψ, 2)
         # residual damping improves convergence
         dψ_dτ[ix, iy] = dψ_dτ[ix, iy] * dmp + H̄[ix+1, iy+1]
-        ψ[ix, iy] = ifelse(H[ix+1, iy+1] > 0.0, ψ[ix, iy] + dτ * dψ_dτ[ix, iy], 0.0)
 
-        # set residual to zero in ice-free cells to correctly detect convergence
-        if H[ix+1, iy+1] == 0.0
-            H̄[ix, iy] = 0.0
+        if H[ix+1, iy+1] > 0.0
+            ψ[ix, iy] += dτ * dψ_dτ[ix, iy]
+        else
+            ψ[ix, iy] = 0.0
+            H̄[ix+1, iy+1] = 0.0
         end
     end
     return
 end
 
 function ∇diffusivity!(D, H, B, As, A, ρgn, npow, dx, dy)
-    nthreads, nblocks = launch_config(size(H))
+    nthreads, nblocks = launch_config(size(H.val))
     @cuda threads = nthreads blocks = nblocks ∇(_diffusivity!, D, H, B, As, A, ρgn, npow, dx, dy)
     return
 end
 
 function ∇residual!(r_H, B, H, H_old, D, β, ELA, b_max, mb_mask, dt, dx, dy)
-    nthreads, nblocks = launch_config(size(H))
+    nthreads, nblocks = launch_config(size(H.val))
     @cuda threads = nthreads blocks = nblocks ∇(_residual!, r_H, B, H, H_old, D, β, ELA, b_max, mb_mask, dt, dx, dy)
     return
 end
 
-function ∇bc!(H, B)
-    # grad bc in y
-    nthreads, nblocks = launch_config(size(H, 1))
-    @cuda threads = nthreads blocks = nblocks ∇(_bc_y!, H, B)
-
-    # grad bc in x
-    nthreads, nblocks = launch_config(size(H, 2))
-    @cuda threads = nthreads blocks = nblocks ∇(_bc_x!, H, B)
-    return
-end
-
 function ∇surface_velocity!(v, H, B, As, A, ρgn, npow, dx, dy)
-    nthreads, nblocks = launch_config(size(H))
+    nthreads, nblocks = launch_config(size(H.val))
     @cuda threads = nthreads blocks = nblocks ∇(_surface_velocity!, v, H, B, As, A, ρgn, npow, dx, dy)
     return
 end

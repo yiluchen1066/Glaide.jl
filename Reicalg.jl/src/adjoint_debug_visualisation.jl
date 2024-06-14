@@ -27,7 +27,7 @@ function create_adjoint_debug_visualisation(params)
            heatmap!(axs[2], xc, yc, vis_fields.H̄; colormap=:turbo))
 
     # make line plots
-    plt = scatterlines!(axs[4], conv_hist; label="relative")
+    plt = scatterlines!(axs[3], conv_hist; label="relative")
 
     # make colorbars
     cbr = (Colorbar(fig[1, 1][1, 2], hms[1]),
@@ -38,25 +38,25 @@ function create_adjoint_debug_visualisation(params)
     return (; fig, axs, hms, plt, cbr, vis_fields, conv_hist)
 end
 
-function update_adjoint_debug_visualisation!(vis, fields, iter, errs)
+function update_adjoint_debug_visualisation!(vis, params, iter, errs)
     (; fig, axs, hms, plt, vis_fields, conv_hist) = vis
 
     # update convergence history
     push!(conv_hist, Point2(iter, errs.err_rel))
 
     # copy data from GPU to CPU for visualisation
-    copy!(vis_fields.ψ, fields.ψ)
-    copy!(vis_fields.H̄, fields.H̄)
+    copy!(vis_fields.ψ, params.fields.ψ)
+    copy!(vis_fields.H̄, params.fields.H̄)
 
     # update heatmaps
     hms[1][3] = vis_fields.ψ
     hms[2][3] = vis_fields.H̄
 
     # update plots
-    plt[1] = conv_hist.err_rel
+    plt[1] = conv_hist
 
     # update axis limits for plots
-    autolimits!(axs[3])
+    # autolimits!(axs[3])
 
     display(fig)
     return

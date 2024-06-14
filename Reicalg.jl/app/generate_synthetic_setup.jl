@@ -66,13 +66,12 @@ function generate_synthetic_data(nx, ny; vis=true)
     fill!(mb_mask, 1.0)
 
     # pack all solver parameters into named tuples
-    fields       = (; B, H, H_old, D, As, r_H, d_H, dH_dτ)
-    scalars      = (; ρgn, A, npow, dt)
-    mass_balance = (; β, ELA, b_max, mb_mask)
+    fields       = (; B, H, H_old, D, As, ELA, mb_mask, r_H, d_H, dH_dτ)
+    scalars      = (; ρgn, A, npow, β, b_max, dt)
     numerics     = (; nx, ny, dx, dy, cfl, maxiter, ncheck, ϵtol)
 
     # solve for a steady state to get initial synthetic geometry
-    solve_sia!((; fields, scalars, mass_balance, numerics); debug_vis=true)
+    solve_sia!((; fields, scalars, numerics); debug_vis=false)
 
     # save geometry and surface velocity
     H_old .= H
@@ -83,37 +82,38 @@ function generate_synthetic_data(nx, ny; vis=true)
     ELA .*= 1.2
     β *= 1.2
 
-    mass_balance = merge(mass_balance, (; ELA, β))
-
     # finite time step (50y)
     dt = 50 * SECONDS_IN_YEAR
-    scalars = merge(scalars, (; dt))
+
+    # scalars are copied by value, need to override
+    scalars = merge(scalars, (; β, dt))
 
     # solve again
-    solve_sia!((; fields, scalars, mass_balance, numerics); debug_vis=true)
+    solve_sia!((; fields, scalars, numerics); debug_vis=false)
 
     # save velocity
     v = CUDA.zeros(Float64, nx - 1, ny - 1)
     surface_velocity!(v, H, B, As, A, ρgn, npow, dx, dy)
 
     # transfer arrays to CPU
-    H     = Array(H)
-    H_old = Array(H_old)
-    B     = Array(B)
-    As    = Array(As)
-    v     = Array(v)
-    v_old = Array(v_old)
-    ELA   = Array(ELA)
+    H       = Array(H)
+    H_old   = Array(H_old)
+    B       = Array(B)
+    As      = Array(As)
+    v       = Array(v)
+    v_old   = Array(v_old)
+    ELA     = Array(ELA)
+    mb_mask = Array(mb_mask)
 
-    # save data
-    save_vars = (; B, H_old, H, v_old, v, As, npow, A, ρgn, β, b_max, ELA, lx, ly, dt)
+    fields   = (; B, H, H_old, v, v_old, As, ELA, mb_mask)
+    numerics = (; nx, ny, dx, dy, xc, yc, xv, yv)
 
     # remove existing data
     outdir = joinpath(pwd(), "datasets", "synthetic")
     ispath(outdir) && rm(outdir; recursive=true)
     mkpath(outdir)
 
-    jldsave(joinpath(outdir, "synthetic_setup.jld2"); save_vars...)
+    jldsave(joinpath(outdir, "synthetic_setup.jld2"); fields, scalars, numerics)
 
     if vis
         # generate ice mask and mask all data

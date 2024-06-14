@@ -1,10 +1,7 @@
 function solve_sia!(params; debug_vis=false, report=true)
     # unpack SIA parameters
-    (; B, H, H_old, D, As, r_H, d_H, dH_dτ) = params.fields
-    (; ρgn, A, npow, dt) = params.scalars
-
-    # unpack mass balance data
-    (; β, ELA, b_max, mb_mask) = params.mass_balance
+    (; B, H, H_old, D, As, r_H, d_H, dH_dτ, ELA, mb_mask) = params.fields
+    (; ρgn, A, npow, β, b_max, dt) = params.scalars
 
     # unpack numerical params
     (; nx, ny, dx, dy, cfl, maxiter, ncheck, ϵtol) = params.numerics
