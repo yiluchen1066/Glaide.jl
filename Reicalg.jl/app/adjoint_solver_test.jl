@@ -41,6 +41,8 @@ function adjoint_solver_test()
                   V_obs = 1.1 .* V)
 
 
+    
+
     @show objective_time_dependent!(fwd_params, obj_params)
 
     dJ_dAs = CUDA.zeros(Float64, size(As))

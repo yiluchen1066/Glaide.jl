@@ -99,13 +99,13 @@ end
 #! format: on
 
 # surface velocity magnitude
-function _surface_velocity!(v, H, B, As, A, ρgn, npow, dx, dy)
+function _surface_velocity!(V, H, B, As, A, ρgn, npow, dx, dy)
     @get_indices
-    @inbounds if ix <= size(v, 1) && iy <= size(v, 2)
+    @inbounds if ix <= size(V, 1) && iy <= size(V, 2)
         # surface gradient
         gradS = ∇S(H, B, dx, dy, ix, iy)
         # diffusion coefficient
-        v[ix, iy] = ρgn * (2.0 * inv(npow + 1) * A * @av_xy(H)^(npow + 1) + As[ix, iy] * @av_xy(H)^(npow - 1)) * gradS^npow
+        V[ix, iy] = ρgn * (2.0 * inv(npow + 1) * A * @av_xy(H)^(npow + 1) + As[ix, iy] * @av_xy(H)^(npow - 1)) * gradS^npow
     end
     return
 end
@@ -141,7 +141,7 @@ function bc!(H, B)
     return
 end
 
-function surface_velocity!(v, H, B, As, A, ρgn, npow, dx, dy)
+function surface_velocity!(V, H, B, As, A, ρgn, npow, dx, dy)
     nthreads, nblocks = launch_config(size(H))
-    @cuda threads = nthreads blocks = nblocks _surface_velocity!(v, H, B, As, A, ρgn, npow, dx, dy)
+    @cuda threads = nthreads blocks = nblocks _surface_velocity!(V, H, B, As, A, ρgn, npow, dx, dy)
 end

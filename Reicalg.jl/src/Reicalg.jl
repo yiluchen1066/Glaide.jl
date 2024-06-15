@@ -35,6 +35,7 @@ const DupNN = DuplicatedNoNeed
 
 include("macros.jl")
 include("fields.jl")
+
 include("sia.jl")
 include("debug_visualisation.jl")
 include("forward_solver.jl")
@@ -43,7 +44,11 @@ include("sia_adjoint.jl")
 include("adjoint_debug_visualisation.jl")
 include("adjoint_solver.jl")
 
-include("objective.jl")
 include("regularisation.jl")
+
+include("gradient_descent.jl")
+
+include("objective_snapshot.jl")
+include("objective_time_dependent.jl")
 
 end # module Reicalg
