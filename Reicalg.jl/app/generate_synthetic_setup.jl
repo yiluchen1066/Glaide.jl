@@ -13,12 +13,12 @@ function generate_synthetic_data(nx, ny; vis=true)
 
     # ice flow parameters
     npow = 3                 # glen's power law exponent
-    A    = 1.9e-24           # ice flow parameter
-    As0  = 5.7e-20           # sliding flow parameter
+    A    = 2.5e-24           # ice flow parameter
+    As0  = 1e-21             # sliding flow parameter
     ρgn  = (910 * 9.81)^npow # gravity (pre-exponentiated)
 
     # synthetic geometry parameters
-    lx, ly = 220e3, 200e3
+    lx, ly = 200e3, 200e3
     B0     = 3500.0
 
     # synthetic mass balance parameters
@@ -43,16 +43,9 @@ function generate_synthetic_data(nx, ny; vis=true)
     xv, yv = av1(xc), av1(yc)
 
     # arrays
-    B       = CUDA.zeros(Float64, nx, ny)
-    H       = CUDA.zeros(Float64, nx, ny)
-    H_old   = CUDA.zeros(Float64, nx, ny)
-    D       = CUDA.zeros(Float64, nx - 1, ny - 1)
-    As      = CUDA.zeros(Float64, nx - 1, ny - 1)
-    mb_mask = CUDA.zeros(Float64, nx - 2, ny - 2)
-    r_H     = CUDA.zeros(Float64, nx - 2, ny - 2)
-    d_H     = CUDA.zeros(Float64, nx - 2, ny - 2)
-    dH_dτ   = CUDA.zeros(Float64, nx - 2, ny - 2)
-    ELA     = CUDA.zeros(Float64, nx - 2, ny - 2)
+    fields = SIA_fields(nx, ny)
+
+    (; B, H, H_old, V, As, ELA, mb_mask) = fields
 
     # initialise
 
@@ -60,23 +53,21 @@ function generate_synthetic_data(nx, ny; vis=true)
     copy!(B, @. B0 * (exp(-xc^2 / 1e10 - yc'^2 / 1e9) +
                       exp(-xc^2 / 1e9 - (yc' - ly / 8)^2 / 1e10)))
 
-    copy!(As, @. exp(log(As0) * (0.1 * cos(5π * xv / lx) * sin(5π * yv' / ly) + 1.0)))
+    copy!(As, @. exp(log(As0) * (0.15 * cos(5π * xv / lx) * sin(5π * yv' / ly) + 1.0)))
     copy!(ELA, @. ELA0 + 900 * atan(0 * xc[2:end-1] + yc[2:end-1]' / ly))
 
     fill!(mb_mask, 1.0)
 
-    # pack all solver parameters into named tuples
-    fields       = (; B, H, H_old, D, As, ELA, mb_mask, r_H, d_H, dH_dτ)
-    scalars      = (; ρgn, A, npow, β, b_max, dt)
-    numerics     = (; nx, ny, dx, dy, cfl, maxiter, ncheck, ϵtol)
+    # pack solver parameters into named tuples
+    scalars  = (; ρgn, A, npow, β, b_max, dt)
+    numerics = (; nx, ny, dx, dy, cfl, maxiter, ncheck, ϵtol)
 
     # solve for a steady state to get initial synthetic geometry
-    solve_sia!((; fields, scalars, numerics); debug_vis=false)
+    solve_sia!((; fields, scalars, numerics); debug_vis=true)
 
     # save geometry and surface velocity
     H_old .= H
-    v_old = CUDA.zeros(Float64, nx - 1, ny - 1)
-    surface_velocity!(v_old, H_old, B, As, A, ρgn, npow, dx, dy)
+    V_old = copy(V)
 
     # step change in mass balance (ELA and β +20%)
     ELA .*= 1.2
@@ -89,23 +80,19 @@ function generate_synthetic_data(nx, ny; vis=true)
     scalars = merge(scalars, (; β, dt))
 
     # solve again
-    solve_sia!((; fields, scalars, numerics); debug_vis=false)
-
-    # save velocity
-    v = CUDA.zeros(Float64, nx - 1, ny - 1)
-    surface_velocity!(v, H, B, As, A, ρgn, npow, dx, dy)
+    solve_sia!((; fields, scalars, numerics); debug_vis=true)
 
     # transfer arrays to CPU
     H       = Array(H)
     H_old   = Array(H_old)
     B       = Array(B)
     As      = Array(As)
-    v       = Array(v)
-    v_old   = Array(v_old)
+    V       = Array(V)
+    V_old   = Array(V_old)
     ELA     = Array(ELA)
     mb_mask = Array(mb_mask)
 
-    fields   = (; B, H, H_old, v, v_old, As, ELA, mb_mask)
+    fields   = (; B, H, H_old, V, V_old, As, ELA, mb_mask)
     numerics = (; nx, ny, dx, dy, xc, yc, xv, yv)
 
     # remove existing data
@@ -132,8 +119,8 @@ function generate_synthetic_data(nx, ny; vis=true)
                As    = Axis(fig[2, 1][1, 1]; aspect=DataAspect(), title="log10(As)"),
                H_old = Axis(fig[1, 2][1, 1]; aspect=DataAspect(), title="H_old"),
                H     = Axis(fig[2, 2][1, 1]; aspect=DataAspect(), title="H"),
-               v_old = Axis(fig[1, 3][1, 1]; aspect=DataAspect(), title="v_old"),
-               v     = Axis(fig[2, 3][1, 1]; aspect=DataAspect(), title="v"))
+               V_old = Axis(fig[1, 3][1, 1]; aspect=DataAspect(), title="V_old"),
+               V     = Axis(fig[2, 3][1, 1]; aspect=DataAspect(), title="V"))
 
         xc_km, yc_km = xc / 1e3, yc / 1e3
 
@@ -142,16 +129,16 @@ function generate_synthetic_data(nx, ny; vis=true)
                As    = heatmap!(axs.As   , xc_km, yc_km, log10.(As)              ; colormap=:roma),
                H_old = heatmap!(axs.H_old, xc_km, yc_km, H_old                   ; colormap=:turbo, colorrange=(0, 450)),
                H     = heatmap!(axs.H    , xc_km, yc_km, H                       ; colormap=:turbo, colorrange=(0, 450)),
-               v_old = heatmap!(axs.v_old, xc_km, yc_km, v_old .* SECONDS_IN_YEAR; colormap=:vik  , colorrange=(0, 600)),
-               v     = heatmap!(axs.v    , xc_km, yc_km, v     .* SECONDS_IN_YEAR; colormap=:vik  , colorrange=(0, 600)))
+               V_old = heatmap!(axs.V_old, xc_km, yc_km, V_old .* SECONDS_IN_YEAR; colormap=:vik  , colorrange=(0, 600)),
+               V     = heatmap!(axs.V    , xc_km, yc_km, V     .* SECONDS_IN_YEAR; colormap=:vik  , colorrange=(0, 600)))
         #! format: on
 
         cbs = (B     = Colorbar(fig[1, 1][1, 2], hms.B),
                As    = Colorbar(fig[2, 1][1, 2], hms.As),
                H_old = Colorbar(fig[1, 2][1, 2], hms.H_old),
                H     = Colorbar(fig[2, 2][1, 2], hms.H),
-               v_old = Colorbar(fig[1, 3][1, 2], hms.v_old),
-               v     = Colorbar(fig[2, 3][1, 2], hms.v))
+               V_old = Colorbar(fig[1, 3][1, 2], hms.V_old),
+               V     = Colorbar(fig[2, 3][1, 2], hms.V))
 
         display(fig)
     end

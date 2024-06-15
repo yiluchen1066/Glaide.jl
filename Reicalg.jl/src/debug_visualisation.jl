@@ -1,6 +1,6 @@
 function create_debug_visualisation(params)
     # unpack
-    (; H, B, As)       = params.fields
+    (; H, B, As, V)    = params.fields
     (; A, ρgn, npow)   = params.scalars
     (; nx, ny, dx, dy) = params.numerics
 
@@ -9,10 +9,9 @@ function create_debug_visualisation(params)
     xc = LinRange(-lx / 2 + dx / 2, lx / 2 - dx / 2, nx)
     yc = LinRange(-ly / 2 + dy / 2, ly / 2 - dy / 2, ny)
 
-    v = CUDA.zeros(nx - 1, ny - 1)
-    surface_velocity!(v, H, B, As, A, ρgn, npow, dx, dy)
+    surface_velocity!(V, H, B, As, A, ρgn, npow, dx, dy)
 
-    vis_fields = (v  = Array(v),
+    vis_fields = (V  = Array(V),
                   H  = Array(H),
                   As = Array(log10.(As)))
 
@@ -31,7 +30,7 @@ function create_debug_visualisation(params)
 
     # make heatmaps
     hms = (heatmap!(axs[1], xc, yc, vis_fields.H; colormap=:turbo),
-           heatmap!(axs[2], xc, yc, vis_fields.v; colormap=:turbo),
+           heatmap!(axs[2], xc, yc, vis_fields.V; colormap=:turbo),
            heatmap!(axs[3], xc, yc, vis_fields.As; colormap=:turbo))
 
     # make line plots
@@ -45,18 +44,18 @@ function create_debug_visualisation(params)
 
     display(fig)
 
-    return (; fig, axs, hms, plt, cbr, v, vis_fields, conv_hist)
+    return (; fig, axs, hms, plt, cbr, vis_fields, conv_hist)
 end
 
 function update_debug_visualisation!(vis, params, iter, errs)
-    (; fig, axs, hms, plt, v, vis_fields, conv_hist) = vis
+    (; fig, axs, hms, plt, vis_fields, conv_hist) = vis
 
     # unpack
-    (; H, B, As)     = params.fields
+    (; H, B, As, V)  = params.fields
     (; A, ρgn, npow) = params.scalars
     (; dx, dy)       = params.numerics
 
-    surface_velocity!(v, H, B, As, A, ρgn, npow, dx, dy)
+    surface_velocity!(V, H, B, As, A, ρgn, npow, dx, dy)
 
     # update convergence history
     push!(conv_hist.err_abs, Point2(iter, errs.err_abs))
@@ -64,12 +63,12 @@ function update_debug_visualisation!(vis, params, iter, errs)
 
     # copy data from GPU to CPU for visualisation
     copy!(vis_fields.H, H)
-    copy!(vis_fields.v, v)
+    copy!(vis_fields.V, V)
     copy!(vis_fields.As, log10.(As))
 
     # update heatmaps
     hms[1][3] = vis_fields.H
-    hms[2][3] = vis_fields.v
+    hms[2][3] = vis_fields.V
     hms[3][3] = vis_fields.As
 
     # update plots

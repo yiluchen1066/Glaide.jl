@@ -24,8 +24,6 @@ function adjoint_sia!(fwd_params, adj_params; debug_vis=false, report=true)
     d_ψ   = d_H
     dψ_dτ = @view(dH_dτ[2:end-1, 2:end-1])
 
-    dψ_dτ .= 0.0
-
     # pseudo-time step (constant beteween iterations, depends only on D)
     dτ = compute_pt_time_step(cfl, D, β, dt, dx, dy)
 
@@ -59,7 +57,6 @@ function adjoint_sia!(fwd_params, adj_params; debug_vis=false, report=true)
         update_adjoint_state!(ψ, dψ_dτ, H̄, H, dτ, dmp)
 
         if iter % ncheck == 0
-
             # difference in adjoint state between iterations
             d_ψ .-= ψ
 

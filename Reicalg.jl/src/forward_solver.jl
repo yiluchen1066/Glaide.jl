@@ -1,6 +1,6 @@
 function solve_sia!(params; debug_vis=false, report=true)
     # unpack SIA parameters
-    (; B, H, H_old, D, As, r_H, d_H, dH_dτ, ELA, mb_mask) = params.fields
+    (; B, H, H_old, V, D, As, r_H, d_H, dH_dτ, ELA, mb_mask) = params.fields
     (; ρgn, A, npow, β, b_max, dt) = params.scalars
 
     # unpack numerical params
@@ -10,6 +10,9 @@ function solve_sia!(params; debug_vis=false, report=true)
     if debug_vis
         vis = create_debug_visualisation(params)
     end
+
+    # initialise ice thickness
+    copy!(H, H_old)
 
     # iterative loop
     iter = 1
@@ -56,12 +59,15 @@ function solve_sia!(params; debug_vis=false, report=true)
         end
 
         # check if too many iterations
-        (iter < maxiter) || error("simulation failed: iter > maxiter")
+        ((iter < maxiter) || stop_iterations) || error("simulation failed: iter > maxiter")
 
         iter += 1
     end
 
     report && println("forward solver converged")
+
+    # compute surface velocity
+    surface_velocity!(V, H, B, As, A, ρgn, npow, dx, dy)
 
     return
 end
