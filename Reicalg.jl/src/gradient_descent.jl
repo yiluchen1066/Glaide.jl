@@ -24,7 +24,7 @@ function gradient_descent(J, ∇J!, As0, γ, maxiter; reg_params=nothing, callba
         ∇J!(Ās, As)
 
         # damped gradient
-        dmp = 0.95
+        dmp = 0.0#0.95
         @. dAs_dγ = dAs_dγ * dmp + (Ās * As)
 
         # invert in log-space to avoid negative values

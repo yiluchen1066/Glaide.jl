@@ -12,7 +12,8 @@ function solve_sia!(params; debug_vis=false, report=true)
     end
 
     # initialise ice thickness
-    copy!(H, H_old)
+    # copy!(H, H_old)
+    dH_dτ .= 0.0
 
     # iterative loop
     iter = 1

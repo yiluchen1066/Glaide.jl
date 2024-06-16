@@ -35,7 +35,7 @@ function grad_objective_time_dependent!(∇J, fwd_params, adj_params, obj_params
     (; ∂J_∂H, V̄, D̄, ψ) = adj_params.fields
 
     # velocity is a function of the ice thickness, propagate derivatives with AD
-    @. V̄ = ωᵥ * (V - V_obs)
+    @. V̄ = -ωᵥ * (V - V_obs)
     @. ∂J_∂H = 0.0
 
     ∇surface_velocity!(DupNN(V, V̄), DupNN(H, ∂J_∂H),

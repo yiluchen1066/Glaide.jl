@@ -15,7 +15,7 @@ function adjoint_sia!(fwd_params, adj_params; debug_vis=false, report=true)
     end
 
     # init
-    ψ .= 0.0
+    # ψ .= 0.0
 
     # we reuse memory for some of the fields to save memory
     d_H   .= 0.0
