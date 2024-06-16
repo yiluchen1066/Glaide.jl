@@ -1,11 +1,11 @@
 # laplacian smoothing
-function _smooth!(Ãs, As, dτ_β, dx, dy)
+function _smooth!(Ãs, As, dτβ, dx, dy)
     @get_indices
     @inbounds if ix <= size(As, 1) - 2 && iy <= size(As, 2) - 2
         ΔAs = (As[ix, iy+1] - 2.0 * As[ix+1, iy+1] + As[ix+2, iy+1]) / dx^2 +
               (As[ix+1, iy] - 2.0 * As[ix+1, iy+1] + As[ix+1, iy+2]) / dy^2
 
-        Ãs[ix+1, iy+1] = As[ix+1, iy+1] + dτ_β * ΔAs
+        Ãs[ix+1, iy+1] = As[ix+1, iy+1] + dτβ * ΔAs
     end
     return
 end
@@ -32,20 +32,20 @@ end
 #! format: on
 
 # Tikhonov regularisation with regularity parameter β and step size γ
-function regularise!(As, Ãs, β, γ, dx, dy)
+function regularise!(As, Ãs, γ, β, dx, dy)
     dτ     = min(dx, dy)^2 / β / 4.1
     nsteps = ceil(Int, γ / dτ)
-    dτ_β   = γ / nsteps / β
+    dτβ    = γ / nsteps * β
 
     # smoothing kernel launch config
     nth, nbl = launch_config(size(As))
 
     # bc kernels launch config
-    nth_x, nbl_x = launch_config(size(H, 2))
-    nth_y, nbl_y = launch_config(size(H, 1))
+    nth_x, nbl_x = launch_config(size(As, 2))
+    nth_y, nbl_y = launch_config(size(As, 1))
 
     for _ in 1:nsteps
-        @cuda threads = nth blocks = nbl _smooth!(Ãs, As, dτ_β, dx, dy)
+        @cuda threads = nth blocks = nbl _smooth!(Ãs, As, dτβ, dx, dy)
         @cuda threads = nth_x blocks = nbl_x _bc_x!(Ãs)
         @cuda threads = nth_y blocks = nbl_y _bc_y!(Ãs)
         As, Ãs = Ãs, As

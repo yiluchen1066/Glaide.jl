@@ -63,7 +63,7 @@ function generate_synthetic_data(nx, ny; vis=true)
     numerics = (; nx, ny, dx, dy, cfl, maxiter, ncheck, ϵtol)
 
     # solve for a steady state to get initial synthetic geometry
-    solve_sia!((; fields, scalars, numerics); debug_vis=true)
+    solve_sia!((; fields, scalars, numerics); debug_vis=false)
 
     # save geometry and surface velocity
     H_old .= H
@@ -80,7 +80,7 @@ function generate_synthetic_data(nx, ny; vis=true)
     scalars = merge(scalars, (; β, dt))
 
     # solve again
-    solve_sia!((; fields, scalars, numerics); debug_vis=true)
+    solve_sia!((; fields, scalars, numerics); debug_vis=false)
 
     # transfer arrays to CPU
     H       = Array(H)

@@ -1,4 +1,4 @@
-function objective_time_dependent!(fwd_params, obj_params; kwargs...)
+function objective_snapshot!(fwd_params, obj_params; kwargs...)
     # unpack objective params
     (; ωᵥ, V_obs) = obj_params
 
@@ -14,7 +14,7 @@ function objective_time_dependent!(fwd_params, obj_params; kwargs...)
     return ωᵥ * 0.5 * sum((V .- V_obs) .^ 2)
 end
 
-function grad_objective_time_dependent!(∇J, fwd_params, adj_params, obj_params; kwargs...)
+function grad_objective_snapshot!(∇J, fwd_params, adj_params, obj_params; kwargs...)
     # unpack objective params
     (; ωᵥ, V_obs) = obj_params
 
@@ -32,6 +32,7 @@ function grad_objective_time_dependent!(∇J, fwd_params, adj_params, obj_params
     # velocity is a function of the ice thickness, propagate derivatives with AD
     @. V̄ = ωᵥ * (V - V_obs)
 
+    # Enzyme accumulates results in-place, initialise with zeros
     ∇J .= 0.0
 
     ∇surface_velocity!(DupNN(V, V̄), Const(H),

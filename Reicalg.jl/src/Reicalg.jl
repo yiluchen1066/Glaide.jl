@@ -7,6 +7,8 @@ export SIA_fields, SIA_adjoint_fields
 export solve_sia!, adjoint_sia!
 
 export objective_time_dependent!, grad_objective_time_dependent!
+export objective_snapshot!, grad_objective_snapshot!
+export gradient_descent
 
 using Printf
 using CairoMakie

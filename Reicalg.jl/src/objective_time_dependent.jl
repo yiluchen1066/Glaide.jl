@@ -55,6 +55,7 @@ function grad_objective_time_dependent!(∇J, fwd_params, adj_params, obj_params
                Const(β), Const(ELA), Const(b_max), Const(mb_mask),
                Const(dt), Const(dx), Const(dy))
 
+    # Enzyme accumulates results in-place, initialise with zeros
     ∇J .= 0.0
 
     ∇diffusivity!(DupNN(D, D̄),
