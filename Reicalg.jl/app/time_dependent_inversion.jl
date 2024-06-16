@@ -43,19 +43,14 @@ function time_dependent_inversion()
     ωᵥ = α * inv(sum(V_obs .^ 2))
     ωₕ = √(1 - α^2) * inv(sum(H_obs .^ 2))
 
-    ∂J_∂H = CUDA.zeros(Float64, nx, ny)
-    H̄    = CUDA.zeros(Float64, nx, ny)
-    V̄    = CUDA.zeros(Float64, nx - 1, ny - 1)
-    D̄    = CUDA.zeros(Float64, nx - 1, ny - 1)
-    ψ     = CUDA.zeros(Float64, nx - 2, ny - 2)
-    r̄_H  = CUDA.zeros(Float64, nx - 2, ny - 2)
+    adj_fields = SIA_adjoint_fields(nx, ny)
 
     As0 = fields.As
     fill!(As0, 1e-20)
     As0 .= exp.(log.(As0) .+ 1.0 .* (2.0 .* CUDA.rand(Float64, size(As0)) .- 1.0))
 
     obj_params = (; V_obs, H_obs, ωᵥ, ωₕ)
-    adj_params = (; fields=(; ∂J_∂H, H̄, V̄, D̄, r̄_H, ψ), numerics=adj_numerics)
+    adj_params = (; fields=adj_fields, numerics=adj_numerics)
     reg_params = (; β=10.0, dx, dy)
 
     function J(As)
