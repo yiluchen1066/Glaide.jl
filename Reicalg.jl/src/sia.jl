@@ -27,7 +27,7 @@ function _diffusivity!(D, H, B, As, A, ρgn, npow, dx, dy)
         # surface gradient
         gradS = ∇S(H, B, dx, dy, ix, iy)
         # diffusion coefficient
-        D[ix, iy] = ρgn * (2.0 / (npow + 2) * A * @av_xy(H)^(npow + 2) + As[ix, iy] * @av_xy(H)^npow) * gradS^(npow - 1)
+        D[ix, iy] = ρgn * (2.0 * inv(npow + 2) * A * @av_xy(H)^(npow + 2) + As[ix, iy] * @av_xy(H)^npow) * gradS^(npow - 1)
     end
     return
 end
