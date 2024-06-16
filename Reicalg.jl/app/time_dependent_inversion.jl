@@ -56,7 +56,7 @@ function time_dependent_inversion()
 
     obj_params = (; V_obs, H_obs, ωᵥ, ωₕ)
     adj_params = (; fields=(; ∂J_∂H, H̄, V̄, D̄, r̄_H, ψ), numerics=adj_numerics)
-    reg_params = (; β=50.0, dx, dy)
+    reg_params = (; β=10.0, dx, dy)
 
     function J(As)
         fields     = merge(fields, (; As))

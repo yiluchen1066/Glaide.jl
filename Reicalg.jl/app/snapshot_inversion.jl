@@ -36,7 +36,7 @@ function snapshot_inversion()
 
     obj_params = (; V_obs, ωᵥ)
     adj_params = (; fields=(; V̄))
-    reg_params = (; β=5.0, dx, dy)
+    reg_params = (; β=10.0, dx, dy)
 
     function J(As)
         fields     = merge(fields, (; As))
