@@ -88,7 +88,7 @@ function time_dependent_inversion()
           Colorbar(fig[2, 2][1, 2], hm[4]))
 
     function callback(iter, γ, J1, As, Ās)
-        if iter % 10 == 0
+        if iter % 200 == 0
             @printf("  iter = %d, J = %1.3e\n", iter, J1)
 
             hm[1][3] = Array(log10.(As))
@@ -101,7 +101,7 @@ function time_dependent_inversion()
         end
     end
 
-    gradient_descent(J, ∇J!, As0, 2e3, 1000; callback, reg_params)
+    gradient_descent(J, ∇J!, As0, 2e3, 2000; callback, reg_params)
 
     display(fig)
 
