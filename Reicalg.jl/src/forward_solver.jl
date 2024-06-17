@@ -21,7 +21,7 @@ function solve_sia!(params; debug_vis=false, report=true)
         # save ice thickness to check relative change
         (iter % ncheck == 0) && copyto!(d_H, @view(H[2:end-1, 2:end-1]))
 
-        # update flux and residual
+        # update diffusivity and residual
         diffusivity!(D, H, B, As, A, ρgn, npow, dx, dy)
         residual!(r_H, B, H, H_old, D, β, ELA, b_max, mb_mask, dt, dx, dy)
         # compute pseudo-time step
