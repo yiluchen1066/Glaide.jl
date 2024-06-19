@@ -32,6 +32,8 @@ function time_dependent_inversion()
                                     ncheck=1nx,
                                     ϵtol=1e-6))
 
+    solve_reports = false
+
     xc = xc ./ 1e3
     yc = yc ./ 1e3
 
@@ -56,13 +58,13 @@ function time_dependent_inversion()
     function J(As)
         fields     = merge(fields, (; As))
         fwd_params = (; fields, scalars, numerics=fwd_numerics)
-        objective_time_dependent!(fwd_params, obj_params)
+        objective_time_dependent!(fwd_params, obj_params; report=solve_reports)
     end
 
     function ∇J!(Ās, As)
         fields     = merge(fields, (; As))
         fwd_params = (; fields, scalars, numerics=fwd_numerics)
-        grad_objective_time_dependent!(Ās, fwd_params, adj_params, obj_params)
+        grad_objective_time_dependent!(Ās, fwd_params, adj_params, obj_params; report=solve_reports)
     end
 
     fig = Figure(; size=(650, 450))
@@ -83,7 +85,7 @@ function time_dependent_inversion()
           Colorbar(fig[2, 2][1, 2], hm[4]))
 
     function callback(iter, γ, J1, As, Ās)
-        if iter % 200 == 0
+        if iter % 50 == 0
             @printf("  iter = %d, J = %1.3e\n", iter, J1)
 
             hm[1][3] = Array(log10.(As))

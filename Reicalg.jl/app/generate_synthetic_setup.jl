@@ -9,7 +9,7 @@ const SECONDS_IN_YEAR = 3600 * 24 * 365
 
 function generate_synthetic_data(nx, ny; vis=true)
     # set CUDA device
-    CUDA.device!(1)
+    CUDA.device!(0)
 
     # ice flow parameters
     npow = 3                 # glen's power law exponent
