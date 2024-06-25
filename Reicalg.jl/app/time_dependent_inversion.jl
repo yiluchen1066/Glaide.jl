@@ -47,22 +47,21 @@ function time_dependent_inversion()
 
     As0 = fields.As
     fill!(As0, 1e-20)
-    As0 .= exp.(log.(As0) .+ 1.0 .* (2.0 .* CUDA.rand(Float64, size(As0)) .- 1.0))
 
     obj_params = (; V_obs, H_obs, ωᵥ, ωₕ)
     adj_params = (; fields=adj_fields, numerics=adj_numerics)
-    reg_params = (; β=10.0, dx, dy)
+    reg_params = (; β=2.0, dx, dy)
 
     function J(As)
         fields     = merge(fields, (; As))
         fwd_params = (; fields, scalars, numerics=fwd_numerics)
-        objective_time_dependent!(fwd_params, obj_params)
+        objective_time_dependent!(fwd_params, obj_params; report=false)
     end
 
     function ∇J!(Ās, As)
         fields     = merge(fields, (; As))
         fwd_params = (; fields, scalars, numerics=fwd_numerics)
-        grad_objective_time_dependent!(Ās, fwd_params, adj_params, obj_params)
+        grad_objective_time_dependent!(Ās, fwd_params, adj_params, obj_params; report=false)
     end
 
     fig = Figure(; size=(650, 450))
@@ -96,7 +95,7 @@ function time_dependent_inversion()
         end
     end
 
-    gradient_descent(J, ∇J!, As0, 2e3, 2000; callback, reg_params)
+    gradient_descent(J, ∇J!, As0, 4e3, 2000; callback, reg_params)
 
     display(fig)
 

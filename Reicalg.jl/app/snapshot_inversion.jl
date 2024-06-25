@@ -32,11 +32,10 @@ function snapshot_inversion()
 
     As0 = fields.As
     fill!(As0, 1e-20)
-    As0 .= exp.(log.(As0) .+ 1.0 .* (2.0 .* CUDA.rand(Float64, size(As0)) .- 1.0))
 
     obj_params = (; V_obs, ωᵥ)
     adj_params = (; fields=(; V̄))
-    reg_params = (; β=10.0, dx, dy)
+    reg_params = (; β=2.0, dx, dy)
 
     function J(As)
         fields     = merge(fields, (; As))
@@ -68,7 +67,7 @@ function snapshot_inversion()
           Colorbar(fig[2, 2][1, 2], hm[4]))
 
     function callback(iter, γ, J1, As, Ās)
-        if iter % 200 == 0
+        if iter % 500 == 0
             @printf("  iter = %d, J = %1.3e\n", iter, J1)
 
             hm[1][3] = Array(log10.(As))
@@ -81,7 +80,7 @@ function snapshot_inversion()
         end
     end
 
-    gradient_descent(J, ∇J!, As0, 2e3, 2000; callback, reg_params)
+    gradient_descent(J, ∇J!, As0, 4e3, 2000; callback, reg_params)
 
     display(fig)
 

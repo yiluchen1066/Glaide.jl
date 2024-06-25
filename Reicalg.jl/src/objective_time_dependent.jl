@@ -49,7 +49,7 @@ function grad_objective_time_dependent!(∇J, fwd_params, adj_params, obj_params
     adjoint_sia!(fwd_params, adj_params; kwargs...)
 
     # propagate derivatives to compute gradient without regularisation term
-    ∇residual!(DupNN(r_H, ψ),
+    ∇residual!(DupNN(r_H, copy(ψ)),
                Const(B), Const(H), Const(H_old),
                DupNN(D, D̄),
                Const(β), Const(ELA), Const(b_max), Const(mb_mask),
