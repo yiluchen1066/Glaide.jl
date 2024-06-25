@@ -32,6 +32,8 @@ function time_dependent_inversion()
                                     ncheck=1nx,
                                     ϵtol=1e-6))
 
+    solve_reports = false
+
     xc = xc ./ 1e3
     yc = yc ./ 1e3
 
@@ -82,7 +84,7 @@ function time_dependent_inversion()
           Colorbar(fig[2, 2][1, 2], hm[4]))
 
     function callback(iter, γ, J1, As, Ās)
-        if iter % 200 == 0
+        if iter % 50 == 0
             @printf("  iter = %d, J = %1.3e\n", iter, J1)
 
             hm[1][3] = Array(log10.(As))
