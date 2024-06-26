@@ -45,13 +45,11 @@ function regularise!(As, Ãs, γ, β, dx, dy)
     nth_y, nbl_y = launch_config(size(As, 1))
 
     for _ in 1:nsteps
-        @cuda threads = nth blocks = nbl _smooth!(Ãs, As, dτβ, dx, dy)
-        @cuda threads = nth_x blocks = nbl_x _bc_x!(Ãs)
-        @cuda threads = nth_y blocks = nbl_y _bc_y!(Ãs)
+        CUDA.@sync @cuda threads = nth blocks = nbl _smooth!(Ãs, As, dτβ, dx, dy)
+        CUDA.@sync @cuda threads = nth_x blocks = nbl_x _bc_x!(Ãs)
+        CUDA.@sync @cuda threads = nth_y blocks = nbl_y _bc_y!(Ãs)
         As, Ãs = Ãs, As
     end
-
-    CUDA.synchronize()
 
     return As, Ãs
 end

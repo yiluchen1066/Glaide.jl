@@ -113,35 +113,35 @@ end
 # wrappers
 function diffusivity!(D, H, B, As, A, ρgn, npow, dx, dy)
     nthreads, nblocks = launch_config(size(H))
-    @cuda threads = nthreads blocks = nblocks _diffusivity!(D, H, B, As, A, ρgn, npow, dx, dy)
+    CUDA.@sync @cuda threads = nthreads blocks = nblocks _diffusivity!(D, H, B, As, A, ρgn, npow, dx, dy)
     return
 end
 
 function residual!(r_H, B, H, H_old, D, β, ELA, b_max, mb_mask, dt, dx, dy)
     nthreads, nblocks = launch_config(size(H))
-    @cuda threads = nthreads blocks = nblocks _residual!(r_H, B, H, H_old, D, β, ELA, b_max, mb_mask, dt, dx, dy)
+    CUDA.@sync @cuda threads = nthreads blocks = nblocks _residual!(r_H, B, H, H_old, D, β, ELA, b_max, mb_mask, dt, dx, dy)
     return
 end
 
 function update_ice_thickness!(H, dH_dτ, r_H, dτ, dmp)
     nthreads, nblocks = launch_config(size(H))
-    @cuda threads = nthreads blocks = nblocks _update_ice_thickness!(H, dH_dτ, r_H, dτ, dmp)
+    CUDA.@sync @cuda threads = nthreads blocks = nblocks _update_ice_thickness!(H, dH_dτ, r_H, dτ, dmp)
     return
 end
 
 function bc!(H, B)
     # bc in x
     nthreads, nblocks = launch_config(size(H, 2))
-    @cuda threads = nthreads blocks = nblocks _bc_x!(H, B)
+    CUDA.@sync @cuda threads = nthreads blocks = nblocks _bc_x!(H, B)
 
     # bc in y
     nthreads, nblocks = launch_config(size(H, 1))
-    @cuda threads = nthreads blocks = nblocks _bc_y!(H, B)
+    CUDA.@sync @cuda threads = nthreads blocks = nblocks _bc_y!(H, B)
 
     return
 end
 
 function surface_velocity!(V, H, B, As, A, ρgn, npow, dx, dy)
     nthreads, nblocks = launch_config(size(H))
-    @cuda threads = nthreads blocks = nblocks _surface_velocity!(V, H, B, As, A, ρgn, npow, dx, dy)
+    CUDA.@sync @cuda threads = nthreads blocks = nblocks _surface_velocity!(V, H, B, As, A, ρgn, npow, dx, dy)
 end
