@@ -1,25 +1,10 @@
 using Reicalg
 using CUDA
 using CairoMakie
-using JLD2
 using Printf
 
-function load_from_file(path)
-    scalars, numerics = load(path, "scalars", "numerics")
-    fields = SIA_fields(numerics.nx, numerics.ny)
-
-    host_fields = load(path, "fields")
-
-    for name in intersect(keys(fields), keys(host_fields))
-        copy!(fields[name], host_fields[name])
-    end
-
-    return fields, scalars, numerics
-end
-
 function snapshot_inversion()
-    fields, scalars, numerics = load_from_file("datasets/synthetic/synthetic_setup.jld2")
-
+    fields, scalars, numerics = load_from_file(joinpath(@__DIR__, "../datasets/synthetic/synthetic_setup.jld2"))
     (; nx, ny, dx, dy, xc, yc) = numerics
 
     xc = xc ./ 1e3

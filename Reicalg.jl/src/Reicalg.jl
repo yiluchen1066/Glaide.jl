@@ -10,6 +10,8 @@ export objective_time_dependent!, grad_objective_time_dependent!
 export objective_snapshot!, grad_objective_snapshot!
 export gradient_descent
 
+export load_from_file
+
 using Printf
 using CairoMakie
 using CUDA
@@ -37,6 +39,7 @@ const DupNN = DuplicatedNoNeed
 
 include("macros.jl")
 include("fields.jl")
+include("file_IO.jl")
 
 include("sia.jl")
 include("debug_visualisation.jl")

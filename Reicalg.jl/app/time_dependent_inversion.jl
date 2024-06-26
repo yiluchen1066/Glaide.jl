@@ -1,7 +1,6 @@
 using Reicalg
 using CUDA
 using CairoMakie
-using JLD2
 using Printf
 
 function load_from_file(path)
@@ -18,7 +17,7 @@ function load_from_file(path)
 end
 
 function time_dependent_inversion()
-    fields, scalars, numerics = load_from_file("datasets/synthetic/synthetic_setup.jld2")
+    fields, scalars, numerics = load_from_file(joinpath(@__DIR__, "../datasets/synthetic/synthetic_setup.jld2"))
 
     (; nx, ny, dx, dy, xc, yc) = numerics
 
