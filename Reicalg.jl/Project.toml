@@ -4,8 +4,13 @@ authors = ["Ivan Utkin <iutkin@ethz.ch>"]
 version = "0.1.0"
 
 [deps]
+ArchGDAL = "c9ce4bd3-c3d5-55b8-8973-c0e20141b8c3"
 CUDA = "052768ef-5323-5732-b1bb-66c8b64840ba"
 CairoMakie = "13f3f980-e62b-5c42-98c6-ff1f3baf88f0"
 Enzyme = "7da242da-08ed-463a-9acd-ee780be4f1d9"
+Extents = "411431e0-e8b7-467b-b5e0-f676ba4f2910"
 JLD2 = "033835bb-8acc-5ee8-8aae-3f567f8a3819"
+NCDatasets = "85f8d34a-cbdd-5861-8df4-14fed0d494ab"
 Printf = "de0858da-6303-5e67-8744-51eddeeeb8d7"
+Rasters = "a3a2b9e3-a471-40c9-b274-f788e487c689"
+ZipArchives = "49080126-0e18-4c2a-b176-c102e4b3760c"

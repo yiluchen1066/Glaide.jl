@@ -18,9 +18,13 @@ function load_from_file(path)
 end
 
 function snapshot_inversion()
-    fields, scalars, numerics = load_from_file("datasets/synthetic/synthetic_setup.jld2")
+    fields, scalars, numerics = load_from_file("datasets/aletsch/aletsch_setup.jld2")
+    # fields, scalars, numerics = load_from_file("datasets/synthetic/synthetic_setup.jld2")
 
     (; nx, ny, dx, dy, xc, yc) = numerics
+
+    E = 1e-1
+    scalars = merge(scalars, (; A=scalars.A * E))
 
     xc = xc ./ 1e3
     yc = yc ./ 1e3
@@ -35,7 +39,7 @@ function snapshot_inversion()
 
     obj_params = (; V_obs, ωᵥ)
     adj_params = (; fields=(; V̄))
-    reg_params = (; β=2.0, dx, dy)
+    reg_params = (; β=1e-3, dx, dy)
 
     function J(As)
         fields     = merge(fields, (; As))
@@ -58,8 +62,8 @@ function snapshot_inversion()
 
     hm = (heatmap!(ax[1], xc, yc, Array(log10.(As0)); colormap=:turbo),
           heatmap!(ax[2], xc, yc, Array(log10.(As0)); colormap=:turbo),
-          heatmap!(ax[3], xc, yc, Array(V_obs); colormap=:turbo),
-          heatmap!(ax[4], xc, yc, Array(fields.V); colormap=:turbo))
+          heatmap!(ax[3], xc, yc, Array(V_obs); colormap=:turbo, colorrange=(0, 1e-5)),
+          heatmap!(ax[4], xc, yc, Array(fields.V); colormap=:turbo, colorrange=(0, 1e-5)))
 
     cb = (Colorbar(fig[1, 1][1, 2], hm[1]),
           Colorbar(fig[1, 2][1, 2], hm[2]),
@@ -67,7 +71,7 @@ function snapshot_inversion()
           Colorbar(fig[2, 2][1, 2], hm[4]))
 
     function callback(iter, γ, J1, As, Ās)
-        if iter % 500 == 0
+        if iter % 100 == 0
             @printf("  iter = %d, J = %1.3e\n", iter, J1)
 
             hm[1][3] = Array(log10.(As))
@@ -80,7 +84,8 @@ function snapshot_inversion()
         end
     end
 
-    gradient_descent(J, ∇J!, As0, 4e3, 2000; callback, reg_params)
+    # gradient_descent(J, ∇J!, As0, 4e3, 2000; callback, reg_params)
+    gradient_descent(J, ∇J!, As0, 5e3, 2000; callback, reg_params)
 
     display(fig)
 
