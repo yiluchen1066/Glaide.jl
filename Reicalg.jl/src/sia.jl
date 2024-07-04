@@ -33,7 +33,7 @@ function _diffusivity!(D, H, B, As, A, ρgn, npow, dx, dy)
 end
 
 # mass conservation residual
-function _residual!(r_H, B, H, H_old, D, β, ELA, b_max, mb_mask, dt, dx, dy)
+function _residual!(r_H, B, H, H_old, D, β, ela, b_max, mb_mask, dt, dx, dy)
     @get_indices
     @inbounds if ix <= size(H, 1) - 2 && iy <= size(H, 2) - 2
         # observed geometry changes
@@ -50,7 +50,7 @@ function _residual!(r_H, B, H, H_old, D, β, ELA, b_max, mb_mask, dt, dx, dy)
         divQ = (qx_e - qx_w) / dx + (qy_n - qy_s) / dy
 
         # surface mass balance
-        b = ela_mass_balance(B[ix+1, iy+1] + H[ix+1, iy+1], β, ELA[ix, iy], b_max)
+        b = ela_mass_balance(B[ix+1, iy+1] + H[ix+1, iy+1], β, ela, b_max)
 
         # no accumulation if (b > 0) && (H == 0) at t == t0
         b *= mb_mask[ix, iy]
@@ -77,27 +77,6 @@ function _update_ice_thickness!(H, dH_dτ, r_H, dτ, dmp)
     return
 end
 
-# boundary conditions
-#! format: off
-function _bc_x!(H, B)
-    @get_index_1d
-    @inbounds if i <= size(H, 2)
-        H[1  , i] = H[2    , i] + (B[2    , i] - B[1  , i])
-        H[end, i] = H[end-1, i] + (B[end-1, i] - B[end, i])
-    end
-    return
-end
-
-function _bc_y!(H, B)
-    @get_index_1d
-    @inbounds if i <= size(H, 1)
-        H[i, 1  ] = H[i, 2    ] + (B[i, 2    ] - B[i, 1  ])
-        H[i, end] = H[i, end-1] + (B[i, end-1] - B[i, end])
-    end
-    return
-end
-#! format: on
-
 # surface velocity magnitude
 function _surface_velocity!(V, H, B, As, A, ρgn, npow, dx, dy)
     @get_indices
@@ -117,27 +96,15 @@ function diffusivity!(D, H, B, As, A, ρgn, npow, dx, dy)
     return
 end
 
-function residual!(r_H, B, H, H_old, D, β, ELA, b_max, mb_mask, dt, dx, dy)
+function residual!(r_H, B, H, H_old, D, β, ela, b_max, mb_mask, dt, dx, dy)
     nthreads, nblocks = launch_config(size(H))
-    @cuda threads = nthreads blocks = nblocks _residual!(r_H, B, H, H_old, D, β, ELA, b_max, mb_mask, dt, dx, dy)
+    @cuda threads = nthreads blocks = nblocks _residual!(r_H, B, H, H_old, D, β, ela, b_max, mb_mask, dt, dx, dy)
     return
 end
 
 function update_ice_thickness!(H, dH_dτ, r_H, dτ, dmp)
     nthreads, nblocks = launch_config(size(H))
     @cuda threads = nthreads blocks = nblocks _update_ice_thickness!(H, dH_dτ, r_H, dτ, dmp)
-    return
-end
-
-function bc!(H, B)
-    # bc in x
-    nthreads, nblocks = launch_config(size(H, 2))
-    @cuda threads = nthreads blocks = nblocks _bc_x!(H, B)
-
-    # bc in y
-    nthreads, nblocks = launch_config(size(H, 1))
-    @cuda threads = nthreads blocks = nblocks _bc_y!(H, B)
-
     return
 end
 

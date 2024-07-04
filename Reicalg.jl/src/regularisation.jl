@@ -1,57 +1,60 @@
+struct Regularisation{T<:Real,A<:AbstractMatrix{T}}
+    β::T
+    dx::T
+    dy::T
+    X̃::A
+end
+function Regularisation(β::Real, dx::Real, dy::Real, X::AbstractMatrix)
+    return Regularisation(promote(β, dx, dy)..., similar(X))
+end
+
 # laplacian smoothing
-function _smooth!(Ãs, As, dτβ, dx, dy)
+function _smooth!(X̃, X, dτβ, dx, dy)
     @get_indices
-    @inbounds if ix <= size(As, 1) - 2 && iy <= size(As, 2) - 2
-        ΔAs = (As[ix, iy+1] - 2.0 * As[ix+1, iy+1] + As[ix+2, iy+1]) / dx^2 +
-              (As[ix+1, iy] - 2.0 * As[ix+1, iy+1] + As[ix+1, iy+2]) / dy^2
+    @inbounds if ix <= size(X, 1) - 2 && iy <= size(X, 2) - 2
+        ΔX = (X[ix, iy+1] - 2.0 * X[ix+1, iy+1] + X[ix+2, iy+1]) / dx^2 +
+             (X[ix+1, iy] - 2.0 * X[ix+1, iy+1] + X[ix+1, iy+2]) / dy^2
 
-        Ãs[ix+1, iy+1] = As[ix+1, iy+1] + dτβ * ΔAs
+        X̃[ix+1, iy+1] = X[ix+1, iy+1] + dτβ * ΔX
     end
     return
 end
 
-# boundary conditions
-#! format: off
-function _bc_x!(As)
-    @get_index_1d
-    @inbounds if i <= size(As, 2)
-        As[1  , i] = As[2    , i]
-        As[end, i] = As[end-1, i]
-    end
+function smooth!(X̃, X, dτβ, dx, dy)
+    nthreads, nblocks = launch_config(size(X))
+    @cuda threads = nthreads blocks = nblocks _smooth!(X̃, X, dτβ, dx, dy)
     return
 end
 
-function _bc_y!(As)
-    @get_index_1d
-    @inbounds if i <= size(As, 1)
-        As[i, 1  ] = As[i, 2    ]
-        As[i, end] = As[i, end-1]
-    end
-    return
-end
-#! format: on
+# fallback for no regularisation
+regularise!(::Any, ::Any, ::Nothing) = nothing
 
 # Tikhonov regularisation with regularity parameter β and step size γ
-function regularise!(As, Ãs, γ, β, dx, dy)
-    dτ     = min(dx, dy)^2 / β / 4.1
+function regularise!(X, γ, regularisation::Regularisation)
+    (; β, dx, dy, X̃) = regularisation
+
+    # maximum step size for Laplacian smoothing from von Neumann stability analysis
+    dτ = min(dx, dy)^2 / β / 4
+
+    # number of steps for Laplacian smoothing
     nsteps = ceil(Int, γ / dτ)
-    dτβ    = γ / nsteps * β
 
-    # smoothing kernel launch config
-    nth, nbl = launch_config(size(As))
-
-    # bc kernels launch config
-    nth_x, nbl_x = launch_config(size(As, 2))
-    nth_y, nbl_y = launch_config(size(As, 1))
+    # total step size for Laplacian smoothing should sum up to γ
+    dτβ = γ / nsteps * β
 
     for _ in 1:nsteps
-        @cuda threads = nth blocks = nbl _smooth!(Ãs, As, dτβ, dx, dy)
-        @cuda threads = nth_x blocks = nbl_x _bc_x!(Ãs)
-        @cuda threads = nth_y blocks = nbl_y _bc_y!(Ãs)
-        As, Ãs = Ãs, As
+        # smooth As and apply homogeneous Neumann boundary conditions
+        smooth!(X̃, X, dτβ, dx, dy)
+        bc!(X̃)
+        # swap As and Ãs
+        X, X̃ = X̃, X
     end
 
-    CUDA.synchronize()
+    # copy back to the original array if number of steps is odd
+    # to make sure X always contains the regularised field
+    if nsteps % 2 == 1
+        copy!(X̃, X)
+    end
 
-    return As, Ãs
+    return
 end

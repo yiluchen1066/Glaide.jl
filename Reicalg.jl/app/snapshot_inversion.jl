@@ -1,74 +1,48 @@
 using Reicalg
 using CUDA
 using CairoMakie
-using JLD2
 using Printf
 
-function load_from_file(path)
-    scalars, numerics = load(path, "scalars", "numerics")
-    fields = SIA_fields(numerics.nx, numerics.ny)
+function snapshot_inversion(filepath; As_init, E, β_reg, γ, niter, momentum)
+    model = SnapshotSIA(filepath)
 
-    host_fields = load(path, "fields")
+    (; dx, dy, xc, yc) = model.numerics
+    (; As, V)          = model.fields
 
-    for name in intersect(keys(fields), keys(host_fields))
-        copy!(fields[name], host_fields[name])
-    end
+    As0 = As
 
-    return fields, scalars, numerics
-end
+    model.scalars.A *= E
 
-function snapshot_inversion()
-    fields, scalars, numerics = load_from_file("datasets/aletsch/aletsch_setup.jld2")
-    # fields, scalars, numerics = load_from_file("datasets/synthetic/synthetic_setup.jld2")
-
-    (; nx, ny, dx, dy, xc, yc) = numerics
-
-    E = 1e-1
-    scalars = merge(scalars, (; A=scalars.A * E))
-
-    xc = xc ./ 1e3
-    yc = yc ./ 1e3
-
-    V_obs = copy(fields.V)
+    V_obs = copy(V)
     ωᵥ    = inv(sum(V_obs .^ 2))
 
-    V̄ = CUDA.zeros(Float64, nx - 1, ny - 1)
+    fill!(model.fields.As, As_init)
+    solve!(model)
 
-    As0 = fields.As
-    fill!(As0, 1e-20)
+    objective = SnapshotObjective(ωᵥ, V_obs)
+    regularisation = Regularisation(β_reg, dx, dy, As)
 
-    obj_params = (; V_obs, ωᵥ)
-    adj_params = (; fields=(; V̄))
-    reg_params = (; β=1e-3, dx, dy)
-
-    function J(As)
-        fields     = merge(fields, (; As))
-        fwd_params = (; fields, scalars, numerics)
-        objective_snapshot!(fwd_params, obj_params)
-    end
-
-    function ∇J!(Ās, As)
-        fields     = merge(fields, (; As))
-        fwd_params = (; fields, scalars, numerics)
-        grad_objective_snapshot!(Ās, fwd_params, adj_params, obj_params)
-    end
+    xc_km = xc ./ 1e3
+    yc_km = yc ./ 1e3
 
     fig = Figure(; size=(650, 450))
 
+    #! format:off
     ax = (Axis(fig[1, 1][1, 1]; aspect=DataAspect(), title="log10(As)"),
           Axis(fig[1, 2][1, 1]; aspect=DataAspect(), title="Ās"),
           Axis(fig[2, 1][1, 1]; aspect=DataAspect(), title="V_obs"),
           Axis(fig[2, 2][1, 1]; aspect=DataAspect(), title="V"))
 
-    hm = (heatmap!(ax[1], xc, yc, Array(log10.(As0)); colormap=:turbo),
-          heatmap!(ax[2], xc, yc, Array(log10.(As0)); colormap=:turbo),
-          heatmap!(ax[3], xc, yc, Array(V_obs); colormap=:turbo, colorrange=(0, 1e-5)),
-          heatmap!(ax[4], xc, yc, Array(fields.V); colormap=:turbo, colorrange=(0, 1e-5)))
+    hm = (heatmap!(ax[1], xc_km, yc_km, Array(log10.(As0)); colormap=:turbo),
+          heatmap!(ax[2], xc_km, yc_km, Array(log10.(As0)); colormap=:turbo),
+          heatmap!(ax[3], xc_km, yc_km, Array(V_obs)      ; colormap=:turbo, colorrange=(0, 1e-5)),
+          heatmap!(ax[4], xc_km, yc_km, Array(V)          ; colormap=:turbo, colorrange=(0, 1e-5)))
 
     cb = (Colorbar(fig[1, 1][1, 2], hm[1]),
           Colorbar(fig[1, 2][1, 2], hm[2]),
           Colorbar(fig[2, 1][1, 2], hm[3]),
           Colorbar(fig[2, 2][1, 2], hm[4]))
+    #! format:on
 
     function callback(iter, γ, J1, As, Ās)
         if iter % 100 == 0
@@ -76,7 +50,7 @@ function snapshot_inversion()
 
             hm[1][3] = Array(log10.(As))
             hm[2][3] = Array(Ās)
-            hm[4][3] = Array(fields.V)
+            hm[4][3] = Array(V)
             autolimits!(ax[1])
             autolimits!(ax[2])
             autolimits!(ax[4])
@@ -84,12 +58,13 @@ function snapshot_inversion()
         end
     end
 
-    # gradient_descent(J, ∇J!, As0, 4e3, 2000; callback, reg_params)
-    gradient_descent(J, ∇J!, As0, 5e3, 2000; callback, reg_params)
-
-    display(fig)
+    gradient_descent(model, objective, As0, γ, niter; regularisation, callback, momentum)
 
     return
 end
 
-snapshot_inversion()
+snapshot_inversion("datasets/synthetic/synthetic_setup.jld2";
+                   As_init=1e-20, E=1.0, β_reg=1.0e-2, γ=2e3, niter=2000, momentum=0.8)
+
+snapshot_inversion("datasets/aletsch/aletsch_setup.jld2";
+                   As_init=1e-20, E=2.0e-1, β_reg=1.0e-3, γ=2e3, niter=2000, momentum=0.8)

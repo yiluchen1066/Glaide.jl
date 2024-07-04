@@ -1,107 +1,79 @@
 using Reicalg
 using CUDA
 using CairoMakie
-using JLD2
 using Printf
 
-function load_from_file(path)
-    scalars, numerics = load(path, "scalars", "numerics")
-    fields = SIA_fields(numerics.nx, numerics.ny)
+function time_dependent_inversion(filepath; As_init, E, β_reg, γ, niter, momentum, α)
+    model = TimeDependentSIA(filepath)
 
-    host_fields = load(path, "fields")
+    (; dx, dy, xc, yc) = model.numerics
+    (; As, V, H)       = model.fields
 
-    for name in intersect(keys(fields), keys(host_fields))
-        copy!(fields[name], host_fields[name])
-    end
+    As0 = As
 
-    return fields, scalars, numerics
-end
+    model.scalars.A *= E
 
-function time_dependent_inversion()
-    fields, scalars, numerics = load_from_file("datasets/synthetic/synthetic_setup.jld2")
-
-    (; nx, ny, dx, dy, xc, yc) = numerics
-
-    fwd_numerics = merge(numerics, (; cfl=1 / 6.1,
-                                    maxiter=100 * max(nx, ny),
-                                    ncheck=2nx,
-                                    ϵtol=1e-6))
-
-    adj_numerics = merge(numerics, (; cfl=1 / 4.1,
-                                    maxiter=50 * max(nx, ny),
-                                    ncheck=1nx,
-                                    ϵtol=1e-6))
-
-    solve_reports = false
-
-    xc = xc ./ 1e3
-    yc = yc ./ 1e3
-
-    V_obs = copy(fields.V)
-    H_obs = copy(fields.H)
-
-    α = 0.5√2
+    V_obs = copy(V)
+    H_obs = copy(H)
 
     ωᵥ = α * inv(sum(V_obs .^ 2))
     ωₕ = √(1 - α^2) * inv(sum(H_obs .^ 2))
 
-    adj_fields = SIA_adjoint_fields(nx, ny)
+    fill!(As0, As_init)
+    solve!(model)
 
-    As0 = fields.As
-    fill!(As0, 1e-20)
+    objective      = TimeDependentObjective(ωᵥ, ωₕ, V_obs, H_obs)
+    regularisation = Regularisation(β_reg, dx, dy, As)
 
-    obj_params = (; V_obs, H_obs, ωᵥ, ωₕ)
-    adj_params = (; fields=adj_fields, numerics=adj_numerics)
-    reg_params = (; β=2.0, dx, dy)
+    xc_km = xc / 1e3
+    yc_km = yc / 1e3
 
-    function J(As)
-        fields     = merge(fields, (; As))
-        fwd_params = (; fields, scalars, numerics=fwd_numerics)
-        objective_time_dependent!(fwd_params, obj_params; report=false)
-    end
+    fig = Figure(; size=(650, 750))
 
-    function ∇J!(Ās, As)
-        fields     = merge(fields, (; As))
-        fwd_params = (; fields, scalars, numerics=fwd_numerics)
-        grad_objective_time_dependent!(Ās, fwd_params, adj_params, obj_params; report=false)
-    end
-
-    fig = Figure(; size=(650, 450))
-
+    #! format:off
     ax = (Axis(fig[1, 1][1, 1]; aspect=DataAspect(), title="log10(As)"),
           Axis(fig[1, 2][1, 1]; aspect=DataAspect(), title="Ās"),
           Axis(fig[2, 1][1, 1]; aspect=DataAspect(), title="V_obs"),
-          Axis(fig[2, 2][1, 1]; aspect=DataAspect(), title="V"))
+          Axis(fig[2, 2][1, 1]; aspect=DataAspect(), title="V"),
+          Axis(fig[3, 1][1, 1]; aspect=DataAspect(), title="H_obs"),
+          Axis(fig[3, 2][1, 1]; aspect=DataAspect(), title="H"))
 
-    hm = (heatmap!(ax[1], xc, yc, Array(log10.(As0)); colormap=:turbo),
-          heatmap!(ax[2], xc, yc, Array(log10.(As0)); colormap=:turbo),
-          heatmap!(ax[3], xc, yc, Array(V_obs); colormap=:turbo),
-          heatmap!(ax[4], xc, yc, Array(fields.V); colormap=:turbo))
+    hm = (heatmap!(ax[1], xc_km, yc_km, Array(log10.(As0)); colormap=:turbo),
+          heatmap!(ax[2], xc_km, yc_km, Array(log10.(As0)); colormap=:turbo),
+          heatmap!(ax[3], xc_km, yc_km, Array(V_obs)      ; colormap=:turbo, colorrange=(0, 1e-5)),
+          heatmap!(ax[4], xc_km, yc_km, Array(V)          ; colormap=:turbo, colorrange=(0, 1e-5)),
+          heatmap!(ax[5], xc_km, yc_km, Array(H_obs)      ; colormap=:turbo, colorrange=(0, 800)),
+          heatmap!(ax[6], xc_km, yc_km, Array(H)          ; colormap=:turbo, colorrange=(0, 800)))
 
     cb = (Colorbar(fig[1, 1][1, 2], hm[1]),
           Colorbar(fig[1, 2][1, 2], hm[2]),
           Colorbar(fig[2, 1][1, 2], hm[3]),
-          Colorbar(fig[2, 2][1, 2], hm[4]))
+          Colorbar(fig[2, 2][1, 2], hm[4]),
+          Colorbar(fig[3, 1][1, 2], hm[5]),
+          Colorbar(fig[3, 2][1, 2], hm[6]))
+    #! format:on
 
     function callback(iter, γ, J1, As, Ās)
-        if iter % 50 == 0
+        if iter % 10 == 0
             @printf("  iter = %d, J = %1.3e\n", iter, J1)
 
             hm[1][3] = Array(log10.(As))
             hm[2][3] = Array(Ās)
-            hm[4][3] = Array(fields.V)
+            hm[4][3] = Array(V)
+            hm[6][3] = Array(H)
             autolimits!(ax[1])
             autolimits!(ax[2])
-            autolimits!(ax[4])
             display(fig)
         end
     end
 
-    gradient_descent(J, ∇J!, As0, 4e3, 2000; callback, reg_params)
-
-    display(fig)
+    gradient_descent(model, objective, As0, γ, niter; regularisation, callback, momentum)
 
     return
 end
 
-time_dependent_inversion()
+time_dependent_inversion("datasets/synthetic/synthetic_setup.jld2";
+                         As_init=1e-20, E=1.0, β_reg=1.0e-2, γ=1e3, niter=2000, momentum=0.5, α=0.5√2)
+
+time_dependent_inversion("datasets/aletsch/aletsch_setup.jld2";
+                         As_init=1e-20, E=2.0e-1, β_reg=1.0e-3, γ=2e3, niter=2000, momentum=0.5, α=0.5√2)

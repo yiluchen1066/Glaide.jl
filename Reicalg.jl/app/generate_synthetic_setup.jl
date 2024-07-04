@@ -8,79 +8,73 @@ const SECONDS_IN_YEAR = 3600 * 24 * 365
 @views av1(a) = @. 0.5 * (a[1:end-1] + a[2:end])
 
 function generate_synthetic_data(nx, ny; vis=true)
-    # set CUDA device
-    CUDA.device!(1)
+    # sliding parameter background value
+    As0 = 1e-20
 
-    # ice flow parameters
-    npow = 3                 # glen's power law exponent
-    A    = 2.5e-24           # ice flow parameter
-    As0  = 1e-21             # sliding flow parameter
-    ρgn  = (910 * 9.81)^npow # gravity (pre-exponentiated)
+    # sliding parameter variation amplitude
+    As_amp = 2.0
 
     # synthetic geometry parameters
-    lx, ly = 200e3, 200e3
-    B0     = 3500.0
+    lx, ly = 20e3, 20e3
+    B0     = 1000.0
+    B_amp  = 3000.0
 
-    # synthetic mass balance parameters
+    # equilibrium line altitude
     β     = 0.01 / SECONDS_IN_YEAR
     b_max = 2.0 / SECONDS_IN_YEAR
-    ELA0  = 2150.0
+    ela   = 2000.0
 
-    # time step (infinte since we want steady state)
-    dt = Inf
-
-    # numerics
-    cfl     = 1 / 6.1
-    maxiter = 100 * max(nx, ny)
-    ncheck  = 5nx
-    ϵtol    = 1e-6
+    # default scalar parameters for a steady state (dt = ∞)
+    scalars = TimeDependentScalars(; lx, ly, dt=Inf, β, b_max, ela)
 
     # preprocessing
     dx, dy = lx / nx, ly / ny
     xc = LinRange(-lx / 2 + dx / 2, lx / 2 - dx / 2, nx)
-    yc = LinRange(-ly / 2 + dx / 2, ly / 2 - dx / 2, ny)
+    yc = LinRange(-ly / 2 + dy / 2, ly / 2 - dy / 2, ny)
+
+    # default solver parameters
+    numerics = TimeDependentNumerics(xc, yc)
 
     xv, yv = av1(xc), av1(yc)
 
     # arrays
-    fields = SIA_fields(nx, ny)
+    model = TimeDependentSIA(scalars, numerics)
 
-    (; B, H, H_old, V, As, ELA, mb_mask) = fields
+    (; B, H, H_old, V, As, mb_mask) = model.fields
 
     # initialise
 
     # two bumps as in (Visnjevic et al., 2018)
-    copy!(B, @. B0 * (exp(-xc^2 / 1e10 - yc'^2 / 1e9) +
-                      exp(-xc^2 / 1e9 - (yc' - ly / 8)^2 / 1e10)))
+    copy!(B, @. B0 + B_amp * (0.5 * exp(-xc^2 / 1e8 - yc'^2 / 1e7) +
+                              0.5 * exp(-xc^2 / 1e7 - yc'^2 / 1e8)))
 
-    copy!(As, @. exp(log(As0) * (0.15 * cos(5π * xv / lx) * sin(5π * yv' / ly) + 1.0)))
-    copy!(ELA, @. ELA0 + 900 * atan(0 * xc[2:end-1] + yc[2:end-1]' / ly))
+    #  initialise As with a background value
+    fill!(As, As0)
 
+    # accumulation allowed everywhere
     fill!(mb_mask, 1.0)
 
-    # pack solver parameters into named tuples
-    scalars  = (; ρgn, A, npow, β, b_max, dt)
-    numerics = (; nx, ny, dx, dy, cfl, maxiter, ncheck, ϵtol)
-
     # solve for a steady state to get initial synthetic geometry
-    solve_sia!((; fields, scalars, numerics); debug_vis=false)
+    solve!(model; debug_vis=false)
 
     # save geometry and surface velocity
     H_old .= H
     V_old = copy(V)
 
-    # step change in mass balance (ELA and β +20%)
-    ELA .*= 1.2
-    β *= 1.2
+    # step change in mass balance (ELA +20%)
+    scalars.ela *= 1.2
 
-    # finite time step (50y)
-    dt = 50 * SECONDS_IN_YEAR
+    # sliding parameter variation
+    copy!(As, @. exp(log(As0) + As_amp * cos(3π * xv / lx) * sin(3π * yv' / ly)))
 
-    # scalars are copied by value, need to override
-    scalars = merge(scalars, (; β, dt))
+    # finite time step (10y)
+    scalars.dt = 10 * SECONDS_IN_YEAR
+
+    # update scalar parameters
+    (; npow, A, ρgn, ela, dt) = scalars
 
     # solve again
-    solve_sia!((; fields, scalars, numerics); debug_vis=false)
+    solve!(model; debug_vis=false)
 
     # transfer arrays to CPU
     H       = Array(H)
@@ -89,11 +83,12 @@ function generate_synthetic_data(nx, ny; vis=true)
     As      = Array(As)
     V       = Array(V)
     V_old   = Array(V_old)
-    ELA     = Array(ELA)
     mb_mask = Array(mb_mask)
 
-    fields   = (; B, H, H_old, V, V_old, As, ELA, mb_mask)
-    numerics = (; nx, ny, dx, dy, xc, yc, xv, yv)
+    # pack everything into named tuples for saving
+    fields   = (; B, H, H_old, V, V_old, As, mb_mask)
+    numerics = (; nx, ny, dx, dy, xc, yc)
+    scalars  = (; lx, ly, β, b_max, ela, dt, npow, A, ρgn)
 
     # remove existing data
     outdir = joinpath(pwd(), "datasets", "synthetic")
@@ -122,15 +117,16 @@ function generate_synthetic_data(nx, ny; vis=true)
                V_old = Axis(fig[1, 3][1, 1]; aspect=DataAspect(), title="V_old"),
                V     = Axis(fig[2, 3][1, 1]; aspect=DataAspect(), title="V"))
 
+        # convert to km for plotting
         xc_km, yc_km = xc / 1e3, yc / 1e3
 
         #! format: off
         hms = (B     = heatmap!(axs.B    , xc_km, yc_km, B                       ; colormap=:terrain),
                As    = heatmap!(axs.As   , xc_km, yc_km, log10.(As)              ; colormap=:roma),
-               H_old = heatmap!(axs.H_old, xc_km, yc_km, H_old                   ; colormap=:turbo, colorrange=(0, 450)),
-               H     = heatmap!(axs.H    , xc_km, yc_km, H                       ; colormap=:turbo, colorrange=(0, 450)),
-               V_old = heatmap!(axs.V_old, xc_km, yc_km, V_old .* SECONDS_IN_YEAR; colormap=:vik  , colorrange=(0, 600)),
-               V     = heatmap!(axs.V    , xc_km, yc_km, V     .* SECONDS_IN_YEAR; colormap=:vik  , colorrange=(0, 600)))
+               H_old = heatmap!(axs.H_old, xc_km, yc_km, H_old                   ; colormap=:turbo, colorrange=(0, 250)),
+               H     = heatmap!(axs.H    , xc_km, yc_km, H                       ; colormap=:turbo, colorrange=(0, 250)),
+               V_old = heatmap!(axs.V_old, xc_km, yc_km, V_old .* SECONDS_IN_YEAR; colormap=:vik  , colorrange=(0, 300)),
+               V     = heatmap!(axs.V    , xc_km, yc_km, V     .* SECONDS_IN_YEAR; colormap=:vik  , colorrange=(0, 300)))
         #! format: on
 
         cbs = (B     = Colorbar(fig[1, 1][1, 2], hms.B),
