@@ -9,10 +9,10 @@ const SECONDS_IN_YEAR = 3600 * 24 * 365
 
 function generate_synthetic_data(nx, ny; vis=true)
     # sliding parameter background value
-    As0 = 1e-20
+    As0 = 1e-22
 
     # sliding parameter variation amplitude
-    As_amp = 2.0
+    As_amp = 4.0
 
     # synthetic geometry parameters
     lx, ly = 20e3, 20e3
@@ -22,7 +22,7 @@ function generate_synthetic_data(nx, ny; vis=true)
     # equilibrium line altitude
     β     = 0.01 / SECONDS_IN_YEAR
     b_max = 2.0 / SECONDS_IN_YEAR
-    ela   = 2000.0
+    ela   = 1800.0
 
     # default scalar parameters for a steady state (dt = ∞)
     scalars = TimeDependentScalars(; lx, ly, dt=Inf, β, b_max, ela)
@@ -66,6 +66,8 @@ function generate_synthetic_data(nx, ny; vis=true)
 
     # sliding parameter variation
     copy!(As, @. exp(log(As0) + As_amp * cos(3π * xv / lx) * sin(3π * yv' / ly)))
+
+    @show extrema(As)
 
     # finite time step (10y)
     scalars.dt = 10 * SECONDS_IN_YEAR

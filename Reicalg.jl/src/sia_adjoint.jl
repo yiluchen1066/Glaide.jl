@@ -5,16 +5,16 @@ function _update_adjoint_state!(ψ, dψ_dτ, H̄, H, dτ, dmp)
         # residual damping improves convergence
         dψ_dτ[ix, iy] = dψ_dτ[ix, iy] * dmp + H̄[ix+1, iy+1]
 
-        if H[ix+1, iy+1] < eps() ||
-           H[ix+0, iy+1] < eps() ||
-           H[ix+2, iy+1] < eps() ||
-           H[ix+1, iy+0] < eps() ||
-           H[ix+1, iy+2] < eps()
-            ψ[ix, iy] = 0.0
-            H̄[ix+1, iy+1] = 0.0
-        else
+        # if H[ix+1, iy+1] < eps() ||
+        #    H[ix+0, iy+1] < eps() ||
+        #    H[ix+2, iy+1] < eps() ||
+        #    H[ix+1, iy+0] < eps() ||
+        #    H[ix+1, iy+2] < eps()
+        #     ψ[ix, iy] = 0.0
+        #     H̄[ix+1, iy+1] = 0.0
+        # else
             ψ[ix, iy] = ψ[ix, iy] + dτ * dψ_dτ[ix, iy]
-        end
+        # end
     end
     return
 end

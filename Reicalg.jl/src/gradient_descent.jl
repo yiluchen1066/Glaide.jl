@@ -29,13 +29,13 @@ function gradient_descent(model, objective, X0, γ, niter; momentum=0.0, regular
         @. X = exp(log(X) + γ * P)
 
         # TODO: refactor this
-        @. X = clamp(X, 1e-22, 1e-17)
+        @. X = min(X, 1e-18)
 
         # regularise
         regularise!(X, γ, regularisation)
 
         # report intermediate results if needed
-        J1 = J(X, objective, model)
+        J1 = J(X, objective, model; kwargs...)
         isnothing(callback) || callback(iter, γ, J1, X, X̄)
     end
 

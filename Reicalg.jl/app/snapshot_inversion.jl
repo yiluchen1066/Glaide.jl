@@ -4,10 +4,21 @@ using CairoMakie
 using Printf
 
 function snapshot_inversion(filepath; As_init, E, β_reg, γ, niter, momentum)
+    # model = TimeDependentSIA(filepath)
+    # fill!(model.fields.As, As_init)
+    # model.scalars.A *= E
+    # model.scalars.dt = 1.0 * SECONDS_IN_YEAR
+
+    # solve!(model)
+
+    # H_spinup = copy(model.fields.H)
+
     model = SnapshotSIA(filepath)
 
     (; dx, dy, xc, yc) = model.numerics
     (; As, V)          = model.fields
+
+    # copy!(model.fields.H, H_spinup)
 
     As0 = As
 
@@ -64,7 +75,7 @@ function snapshot_inversion(filepath; As_init, E, β_reg, γ, niter, momentum)
 end
 
 snapshot_inversion("datasets/synthetic/synthetic_setup.jld2";
-                   As_init=1e-20, E=1.0, β_reg=1.0e-2, γ=2e3, niter=2000, momentum=0.8)
+                   As_init=1e-22, E=1.0, β_reg=1.0e-3, γ=2e3, niter=2000, momentum=0.8)
 
 snapshot_inversion("datasets/aletsch/aletsch_setup.jld2";
-                   As_init=1e-20, E=2.0e-1, β_reg=1.0e-3, γ=2e3, niter=2000, momentum=0.8)
+                   As_init=1e-22, E=1e-2, β_reg=1.0e-3, γ=1e3, niter=2000, momentum=0.8)

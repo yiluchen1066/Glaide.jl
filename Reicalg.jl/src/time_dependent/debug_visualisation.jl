@@ -27,7 +27,7 @@ function create_debug_visualisation(model)
 
     # make heatmaps
     hms = (heatmap!(axs[1], xc, yc, vis_fields.H; colormap=:turbo),
-           heatmap!(axs[2], xc, yc, vis_fields.V; colormap=:turbo),
+           heatmap!(axs[2], xc, yc, vis_fields.V; colormap=:turbo, colorrange=(0, 1e-5)),
            heatmap!(axs[3], xc, yc, vis_fields.As; colormap=:turbo))
 
     # make line plots

@@ -3,11 +3,25 @@ using CUDA
 using CairoMakie
 using Printf
 
-function time_dependent_inversion(filepath; As_init, E, β_reg, γ, niter, momentum, ωᵥ, ωₕ)
+Base.@kwdef struct TimeDependentParams{T,I}
+    As_init::T  = 1e-22
+    E::T        = 1.0
+    β_reg::T    = 1.0e-2
+    γ::T        = 1e3
+    niter::I    = 2000
+    momentum::T = 0.5
+    ωᵥ::T       = 1.0
+    ωₕ::T       = 1.0
+end
+
+function time_dependent_inversion(filepath, params::TimeDependentParams)
     model = TimeDependentSIA(filepath)
 
     (; dx, dy, xc, yc) = model.numerics
     (; As, V, H)       = model.fields
+
+    # unpack params
+    (; As_init, E, β_reg, γ, niter, momentum, ωᵥ, ωₕ) = params
 
     As0 = As
 
@@ -16,8 +30,10 @@ function time_dependent_inversion(filepath; As_init, E, β_reg, γ, niter, momen
     V_obs = copy(V)
     H_obs = copy(H)
 
-    ωᵥ *= inv(sum(V_obs .^ 2))
-    ωₕ *= inv(sum(H_obs .^ 2))
+    ωn = sqrt(ωᵥ^2 + ωₕ^2)
+
+    ωᵥ *= inv(ωn * sum(V_obs .^ 2))
+    ωₕ *= inv(ωn * sum(H_obs .^ 2))
 
     fill!(As0, As_init)
     solve!(model)
@@ -67,13 +83,11 @@ function time_dependent_inversion(filepath; As_init, E, β_reg, γ, niter, momen
         end
     end
 
-    gradient_descent(model, objective, As0, γ, niter; regularisation, callback, momentum)
+    gradient_descent(model, objective, As0, γ, niter; regularisation, callback, momentum, report=false)
 
     return
 end
 
-time_dependent_inversion("datasets/synthetic/synthetic_setup.jld2";
-                         As_init=1e-20, E=1.0, β_reg=1.0e-2, γ=1e3, niter=2000, momentum=0.5, ωᵥ=1.0, ωₕ=1.0)
+time_dependent_inversion("datasets/synthetic/synthetic_setup.jld2", TimeDependentParams(; As_init=1e-22, β_reg=1e-2, ωᵥ=1.0, γ=1e3, momentum=0.5))
 
-time_dependent_inversion("datasets/aletsch/aletsch_setup.jld2";
-                         As_init=1e-20, E=2.0e-1, β_reg=1.0e-3, γ=2e3, niter=2000, momentum=0.5, ωᵥ=1.0, ωₕ=1.0)
+time_dependent_inversion("datasets/aletsch/aletsch_setup.jld2", TimeDependentParams(; As_init=1e-22, β_reg=1e-2, E=0.01, γ=2e2, momentum=0.2, ωₕ=1.0, ωᵥ=1.0))
