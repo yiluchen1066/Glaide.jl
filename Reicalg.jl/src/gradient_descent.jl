@@ -5,14 +5,14 @@ function gradient_descent(model, objective, X0, γ, niter; momentum=0.0, regular
     X̄ = similar(X)
     P = similar(X)
 
-    J1 = J(X, objective, model)
+    J1 = J(X, objective, model; kwargs...)
     fill!(X̄, 0.0)
     isnothing(callback) || callback(0, γ, J1, X, X̄)
 
     # gradient descent loop
     for iter in 1:niter
         # compute gradient
-        ∇J!(X̄, X, objective, model)
+        ∇J!(X̄, X, objective, model; kwargs...)
 
         # convert gradient to log-space
         @. X̄ *= X
