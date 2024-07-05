@@ -3,7 +3,7 @@ using CUDA
 using CairoMakie
 using Printf
 
-function time_dependent_inversion(filepath; As_init, E, β_reg, γ, niter, momentum, α)
+function time_dependent_inversion(filepath; As_init, E, β_reg, γ, niter, momentum, ωᵥ, ωₕ)
     model = TimeDependentSIA(filepath)
 
     (; dx, dy, xc, yc) = model.numerics
@@ -16,8 +16,8 @@ function time_dependent_inversion(filepath; As_init, E, β_reg, γ, niter, momen
     V_obs = copy(V)
     H_obs = copy(H)
 
-    ωᵥ = α * inv(sum(V_obs .^ 2))
-    ωₕ = √(1 - α^2) * inv(sum(H_obs .^ 2))
+    ωᵥ *= inv(sum(V_obs .^ 2))
+    ωₕ *= inv(sum(H_obs .^ 2))
 
     fill!(As0, As_init)
     solve!(model)
@@ -73,7 +73,7 @@ function time_dependent_inversion(filepath; As_init, E, β_reg, γ, niter, momen
 end
 
 time_dependent_inversion("datasets/synthetic/synthetic_setup.jld2";
-                         As_init=1e-20, E=1.0, β_reg=1.0e-2, γ=1e3, niter=2000, momentum=0.5, α=0.5√2)
+                         As_init=1e-20, E=1.0, β_reg=1.0e-2, γ=1e3, niter=2000, momentum=0.5, ωᵥ=1.0, ωₕ=1.0)
 
 time_dependent_inversion("datasets/aletsch/aletsch_setup.jld2";
-                         As_init=1e-20, E=2.0e-1, β_reg=1.0e-3, γ=2e3, niter=2000, momentum=0.5, α=0.5√2)
+                         As_init=1e-20, E=2.0e-1, β_reg=1.0e-3, γ=2e3, niter=2000, momentum=0.5, ωᵥ=1.0, ωₕ=1.0)
