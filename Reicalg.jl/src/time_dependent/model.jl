@@ -68,7 +68,7 @@ The surface velocity is also computed.
 - `debug_vis`: Whether to create a debug visualization.
 - `report`: Whether to print convergence status.
 """
-function solve!(model::TimeDependentSIA; debug_vis=false, report=true)
+function solve!(model::TimeDependentSIA; debug_vis=false, report=false)
     # unpack SIA parameters
     (; B, H, H_old, V, D, As, r_H, d_H, dH_dτ, mb_mask) = model.fields
     (; ρgn, A, npow, β, b_max, ela, dt)                 = model.scalars
@@ -156,7 +156,7 @@ function solve!(model::TimeDependentSIA; debug_vis=false, report=true)
     return
 end
 
-function solve_adjoint!(Ās, model::TimeDependentSIA; debug_vis=false, report=true)
+function solve_adjoint!(Ās, model::TimeDependentSIA; debug_vis=false, report=false)
     # unpack forward parameters
     (; B, H, H_old, D, V, As, mb_mask, r_H, d_H, dH_dτ) = model.fields
     (; ρgn, A, npow, β, b_max, ela, dt)                 = model.scalars
