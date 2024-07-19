@@ -95,7 +95,7 @@ end
 function TimeDependentAdjointNumerics(xc, yc;
                                       cfl     = 1 / 6.1,
                                       εtol    = 1e-4,
-                                      dmp     = 0.6,
+                                      dmp     = 0.7,
                                       maxiter = 50max(length(xc), length(yc)),
                                       ncheck  = ceil(Int, 0.5 * max(length(xc), length(yc))))
     return TimeDependentAdjointNumerics(cfl, εtol, dmp, maxiter, ncheck)
