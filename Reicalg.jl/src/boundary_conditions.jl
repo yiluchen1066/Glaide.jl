@@ -1,4 +1,5 @@
 #! format: off
+# homogeneous Neumann for ice surface (∇S⋅n = 0)
 function _bc_x!(H, B)
     @get_index_1d
     @inbounds if i <= size(H, 2)
@@ -17,8 +18,7 @@ function _bc_y!(H, B)
     return
 end
 
-# homogeneous Nemann
-
+# homogeneous Neumann for H (needed for interpolation)
 function _bc_x!(H)
     @get_index_1d
     @inbounds if i <= size(H, 2)
@@ -58,6 +58,30 @@ function bc!(H)
     # bc in y
     nthreads, nblocks = launch_config(size(H, 1))
     @cuda threads = nthreads blocks = nblocks _bc_y!(H)
+
+    return
+end
+
+function ∇bc!(H, B)
+    # bc in y
+    nthreads, nblocks = launch_config(size(H.val, 1))
+    @cuda threads = nthreads blocks = nblocks ∇(_bc_y!, H, B)
+
+    # bc in x
+    nthreads, nblocks = launch_config(size(H.val, 2))
+    @cuda threads = nthreads blocks = nblocks ∇(_bc_x!, H, B)
+
+    return
+end
+
+function ∇bc!(H)
+    # bc in y
+    nthreads, nblocks = launch_config(size(H.val, 1))
+    @cuda threads = nthreads blocks = nblocks ∇(_bc_y!, H)
+
+    # bc in x
+    nthreads, nblocks = launch_config(size(H.val, 2))
+    @cuda threads = nthreads blocks = nblocks ∇(_bc_x!, H)
 
     return
 end
