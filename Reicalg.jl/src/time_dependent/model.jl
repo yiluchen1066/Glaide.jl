@@ -1,18 +1,20 @@
 """
-    struct TimeDependentSIA{F,S,N}
+    TimeDependentSIA
 
 A struct representing a time-dependent forward solver state for the Shallow Ice Approximation (SIA) method.
 """
-struct TimeDependentSIA{F<:TimeDependentFields,
-                        S<:TimeDependentScalars,
-                        N<:TimeDependentNumerics,
-                        AF<:TimeDependentAdjointFields,
-                        AN<:TimeDependentAdjointNumerics}
+mutable struct TimeDependentSIA{F<:TimeDependentFields,
+                                S<:TimeDependentScalars,
+                                N<:TimeDependentNumerics,
+                                AF<:TimeDependentAdjointFields,
+                                AN<:TimeDependentAdjointNumerics}
     fields::F
     scalars::S
     numerics::N
     adjoint_fields::AF
     adjoint_numerics::AN
+    report::Bool
+    debug_vis::Bool
 end
 
 """
@@ -20,7 +22,7 @@ end
 
 Constructs a time-dependent forward solver object.
 """
-function TimeDependentSIA(scalars, numerics, adjoint_numerics=nothing)
+function TimeDependentSIA(scalars, numerics, adjoint_numerics=nothing; report=false, debug_vis=false)
     if isnothing(adjoint_numerics)
         adjoint_numerics = TimeDependentAdjointNumerics(numerics.xc, numerics.yc)
     end
@@ -28,10 +30,10 @@ function TimeDependentSIA(scalars, numerics, adjoint_numerics=nothing)
     fields         = TimeDependentFields(numerics.nx, numerics.ny)
     adjoint_fields = TimeDependentAdjointFields(numerics.nx, numerics.ny)
 
-    return TimeDependentSIA(fields, scalars, numerics, adjoint_fields, adjoint_numerics)
+    return TimeDependentSIA(fields, scalars, numerics, adjoint_fields, adjoint_numerics, report, debug_vis)
 end
 
-function TimeDependentSIA(path::AbstractString, adjoint_numerics=nothing; numeric_overrides...)
+function TimeDependentSIA(path::AbstractString, adjoint_numerics=nothing; report=false, debug_vis=false, numeric_overrides...)
     data = load(path)
 
     dfields = data["fields"]
@@ -55,20 +57,16 @@ function TimeDependentSIA(path::AbstractString, adjoint_numerics=nothing; numeri
     copy!(fields.H_old, dfields.H_old)
     copy!(fields.mb_mask, dfields.mb_mask)
 
-    return TimeDependentSIA(fields, scalars, numerics, adjoint_fields, adjoint_numerics)
+    return TimeDependentSIA(fields, scalars, numerics, adjoint_fields, adjoint_numerics, report, debug_vis)
 end
 
 """
-    solve!(solver; debug_vis=false, report=true)
+    solve!(solver)
 
 Iteratively solves the time-dependent forward problem using the SIA (Shallow Ice Approximation) method.
 The surface velocity is also computed.
-
-## Keyword arguments
-- `debug_vis`: Whether to create a debug visualization.
-- `report`: Whether to print convergence status.
 """
-function solve!(model::TimeDependentSIA; debug_vis=false, report=false)
+function solve!(model::TimeDependentSIA)
     # unpack SIA parameters
     (; B, H, H_old, V, D, As, r_H, d_H, dH_dτ, mb_mask) = model.fields
     (; ρgn, A, npow, β, b_max, ela, dt)                 = model.scalars
@@ -79,7 +77,7 @@ function solve!(model::TimeDependentSIA; debug_vis=false, report=false)
     N = max(nx, ny)
 
     # create debug visualisation
-    if debug_vis
+    if model.debug_vis
         vis = create_debug_visualisation(model)
     end
 
@@ -124,14 +122,14 @@ function solve!(model::TimeDependentSIA; debug_vis=false, report=false)
             err_rel = maximum(abs.(d_H)) / lsc
 
             # print convergence status
-            report && @printf("    iter = %.2f × N, error: [abs = %1.3e, rel = %1.3e]\n", iter / N, err_abs, err_rel)
+            model.report && @printf("    iter = %.2f × N, error: [abs = %1.3e, rel = %1.3e]\n", iter / N, err_abs, err_rel)
 
             # check if simulation has failed
             if !isfinite(err_abs) || !isfinite(err_rel)
                 error("forward solver failed: detected NaNs")
             end
 
-            debug_vis && update_debug_visualisation!(vis, model, iter / N, (; err_abs, err_rel))
+            model.debug_vis && update_debug_visualisation!(vis, model, iter / N, (; err_abs, err_rel))
 
             converged = (err_rel < εtol)
         end
@@ -142,13 +140,13 @@ function solve!(model::TimeDependentSIA; debug_vis=false, report=false)
     end
 
     if converged
-        report && println("forward solver converged")
+        model.report && println("forward solver converged")
     else
         @warn("forward solver not converged: iter > maxiter")
     end
 
     # apply boundary conditions for consistency
-    bc!(H, B)
+    bc!(H)
 
     # compute surface velocity
     surface_velocity!(V, H, B, As, A, ρgn, npow, dx, dy)
@@ -156,7 +154,7 @@ function solve!(model::TimeDependentSIA; debug_vis=false, report=false)
     return
 end
 
-function solve_adjoint!(Ās, model::TimeDependentSIA; debug_vis=false, report=false)
+function solve_adjoint!(Ās, model::TimeDependentSIA)
     # unpack forward parameters
     (; B, H, H_old, D, V, As, mb_mask, r_H, d_H, dH_dτ) = model.fields
     (; ρgn, A, npow, β, b_max, ela, dt)                 = model.scalars
@@ -171,7 +169,7 @@ function solve_adjoint!(Ās, model::TimeDependentSIA; debug_vis=false, report=f
     N = max(nx, ny)
 
     # create debug visualisation
-    if debug_vis
+    if model.debug_vis
         vis = create_adjoint_debug_visualisation(model)
     end
 
@@ -185,9 +183,12 @@ function solve_adjoint!(Ās, model::TimeDependentSIA; debug_vis=false, report=f
     # pseudo-time step (constant beteween iterations, depends only on D)
     dτ = compute_pt_time_step(cfl, D, β, dt, dx, dy)
 
+    # Enzyme accumulates results in-place, initialise with zeros
+    fill!(Ās, 0.0)
+
     # first propagate partial velocity derivatives
     ∇surface_velocity!(DupNN(V, V̄), DupNN(H, H̄),
-                       Const(B), Const(As), Const(A),
+                       Const(B), DupNN(As, Ās), Const(A),
                        Const(ρgn), Const(npow),
                        Const(dx), Const(dy))
 
@@ -215,30 +216,35 @@ function solve_adjoint!(Ās, model::TimeDependentSIA; debug_vis=false, report=f
                    Const(β), Const(ela), Const(b_max), Const(mb_mask),
                    Const(dt), Const(dx), Const(dy))
 
+        ∇bc!(Duplicated(H, H̄), Const(B))
+
         ∇diffusivity!(DupNN(D, D̄),
                       DupNN(H, H̄),
                       Const(B), Const(As), Const(A),
                       Const(ρgn), Const(npow),
                       Const(dx), Const(dy))
 
+        ∇bc!(Duplicated(H, H̄))
+
         update_adjoint_state!(ψ, dψ_dτ, H̄, H, dτ, dmp)
 
         if iter % ncheck == 0
-            # difference in adjoint state between iterations
+            # difference in the adjoint state between iterations
             d_ψ .-= ψ
 
             # compute L∞ norm of adjoint state increment
+            err_abs = maximum(abs.(H̄))
             err_rel = maximum(abs.(d_ψ)) / (maximum(abs.(ψ)) + eps())
 
             # print convergence status
-            report && @printf("    iter = %.2f × N, error: [rel = %1.3e]\n", iter / N, err_rel)
+            model.report && @printf("    iter = %.2f × N, error: [abs = %1.3e, rel = %1.3e]\n", iter / N, err_abs, err_rel)
 
             # check if simulation has failed
             if !isfinite(err_rel)
                 error("adjoint solver failed: detected NaNs")
             end
 
-            debug_vis && update_adjoint_debug_visualisation!(vis, model, iter / N, (; err_rel))
+            model.debug_vis && update_adjoint_debug_visualisation!(vis, model, iter / N, (; err_rel))
 
             converged = (err_rel < εtol)
         end
@@ -249,13 +255,12 @@ function solve_adjoint!(Ās, model::TimeDependentSIA; debug_vis=false, report=f
     end
 
     if converged
-        report && println("adjoint solver converged")
+        model.report && println("adjoint solver converged")
     else
         @warn("adjoint solver not converged: iter > maxiter")
     end
 
     # Enzyme accumulates results in-place, initialise with zeros
-    fill!(Ās, 0.0)
     fill!(D̄, 0.0)
 
     # propagate derivatives w.r.t. sliding parameter
