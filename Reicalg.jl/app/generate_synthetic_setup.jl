@@ -3,11 +3,9 @@ using CUDA
 using CairoMakie
 using JLD2
 
-const SECONDS_IN_YEAR = 3600 * 24 * 365
-
 @views av1(a) = @. 0.5 * (a[1:end-1] + a[2:end])
 
-function generate_synthetic_data(nx, ny; vis=true)
+function generate_synthetic_data(dst_dir, res_m; vis=true)
     # sliding parameter background value
     As0 = 1e-22
 
@@ -24,11 +22,14 @@ function generate_synthetic_data(nx, ny; vis=true)
     b_max = 2.0 / SECONDS_IN_YEAR
     ela   = 1800.0
 
+    # preprocessing
+    dx, dy = res_m, res_m
+    nx, ny = ceil(Int, lx / dx), ceil(Int, ly / dy)
+    lx, ly = nx * dx, ny * dy
+
     # default scalar parameters for a steady state (dt = ∞)
     scalars = TimeDependentScalars(; lx, ly, dt=Inf, β, b_max, ela)
 
-    # preprocessing
-    dx, dy = lx / nx, ly / ny
     xc = LinRange(-lx / 2 + dx / 2, lx / 2 - dx / 2, nx)
     yc = LinRange(-ly / 2 + dy / 2, ly / 2 - dy / 2, ny)
 
@@ -44,7 +45,7 @@ function generate_synthetic_data(nx, ny; vis=true)
 
     # initialise
 
-    # two bumps as in (Visnjevic et al., 2018)
+    # two bumps similar to (Visnjevic et al., 2018)
     copy!(B, @. B0 + B_amp * (0.5 * exp(-xc^2 / 1e8 - yc'^2 / 1e7) +
                               0.5 * exp(-xc^2 / 1e7 - yc'^2 / 1e8)))
 
@@ -55,7 +56,7 @@ function generate_synthetic_data(nx, ny; vis=true)
     fill!(mb_mask, 1.0)
 
     # solve for a steady state to get initial synthetic geometry
-    solve!(model; debug_vis=false)
+    solve!(model)
 
     # save geometry and surface velocity
     H_old .= H
@@ -67,8 +68,6 @@ function generate_synthetic_data(nx, ny; vis=true)
     # sliding parameter variation
     copy!(As, @. exp(log(As0) + As_amp * cos(3π * xv / lx) * sin(3π * yv' / ly)))
 
-    @show extrema(As)
-
     # finite time step (10y)
     scalars.dt = 10 * SECONDS_IN_YEAR
 
@@ -76,7 +75,7 @@ function generate_synthetic_data(nx, ny; vis=true)
     (; npow, A, ρgn, ela, dt) = scalars
 
     # solve again
-    solve!(model; debug_vis=false)
+    solve!(model)
 
     # transfer arrays to CPU
     H       = Array(H)
@@ -92,12 +91,8 @@ function generate_synthetic_data(nx, ny; vis=true)
     numerics = (; nx, ny, dx, dy, xc, yc)
     scalars  = (; lx, ly, β, b_max, ela, dt, npow, A, ρgn)
 
-    # remove existing data
-    outdir = joinpath(pwd(), "datasets", "synthetic")
-    ispath(outdir) && rm(outdir; recursive=true)
-    mkpath(outdir)
-
-    jldsave(joinpath(outdir, "synthetic_setup.jld2"); fields, scalars, numerics)
+    mkpath(dst_dir)
+    jldsave(joinpath(dst_dir, "synthetic_setup.jld2"); fields, scalars, numerics)
 
     if vis
         # generate ice mask and mask all data
@@ -143,5 +138,3 @@ function generate_synthetic_data(nx, ny; vis=true)
 
     return
 end
-
-generate_synthetic_data(256, 256)
