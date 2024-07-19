@@ -8,7 +8,7 @@ export TimeDependentScalars, TimeDependentNumerics, TimeDependentAdjointNumerics
 
 export Regularisation
 
-export BacktrackingLineSearch, OptimisationOptions
+export BacktrackingLineSearch, OptimisationOptions, OptmisationState
 export solve!, optimise
 
 export SECONDS_IN_YEAR
