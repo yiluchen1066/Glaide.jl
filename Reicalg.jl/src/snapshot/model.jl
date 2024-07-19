@@ -50,7 +50,7 @@ function solve_adjoint!(Ās, model::SnapshotSIA; kwargs...)
     (; H, B, As, V)  = model.fields
     (; A, ρgn, npow) = model.scalars
     (; dx, dy)       = model.numerics
-    (; V̄)           = model.adjoint_fields
+    (; V̄)            = model.adjoint_fields
 
     ∇surface_velocity!(DupNN(V, V̄), Const(H),
                        Const(B), DupNN(As, Ās), Const(A),
