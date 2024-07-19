@@ -1,37 +1,21 @@
 using Downloads
 using ZipArchives
 using Rasters, ArchGDAL, NCDatasets, Extents
+using ImageMorphology
 using CairoMakie
 using DelimitedFiles
 using JLD2
-
-# define consntants
-const SECONDS_IN_YEAR = 3600 * 24 * 365
-
-# source directory
-const SOURCES_DIR = joinpath(pwd(), "datasets", "_sources")
+using Reicalg
 
 # URLs for downloading bed and surface elevation from Grab et al. 2020
 const ALPS_BEDROCK_URL = "https://www.research-collection.ethz.ch/bitstream/handle/20.500.11850/434697/07_GlacierBed_SwissAlps.zip"
 const ALPS_SURFACE_URL = "https://www.research-collection.ethz.ch/bitstream/handle/20.500.11850/434697/08_SurfaceElevation_SwissAlps.zip"
 
+const ALPS_VELOCITY_FILENAME = "ALPES_wFLAG_wKT_ANNUALv2016-2021.nc"
+
 # paths to the target GeoTIFF files in the ZIP archives
 const ALPS_BEDROCK_ZIP_PATH = "07_GlacierBed_SwissAlps/GlacierBed.tif"
 const ALPS_SURFACE_ZIP_PATH = "08_SurfaceElevation_SwissAlps/SwissALTI3D_r2019.tif"
-
-# paths to the GeoTIFF files in the filesystem
-const ALPS_BEDROCK_TIF_PATH = joinpath(SOURCES_DIR, "elevation", ALPS_BEDROCK_ZIP_PATH)
-const ALPS_SURFACE_TIF_PATH = joinpath(SOURCES_DIR, "elevation", ALPS_SURFACE_ZIP_PATH)
-
-# unfortunately, it is impossible to automatically download the dataset for ice velocities from Rabatel et al.
-# so it needs to be downloaded manually using the following link:
-# https://entrepot.recherche.data.gouv.fr/file.xhtml?persistentId=doi:10.57745/VJYARH&version=1.1
-const ALPS_VELOCITY_NC_PATH = joinpath(SOURCES_DIR, "velocity", "ALPES_wFLAG_wKT_ANNUALv2016-2021.nc")
-
-# this is internal data that we distribute along with the publication
-const ALETSCH_SURFACE_2009_PATH = joinpath(SOURCES_DIR, "elevation", "aletsch2009.asc")
-const ALETSCH_SURFACE_2017_PATH = joinpath(SOURCES_DIR, "elevation", "aletsch2017.asc")
-const ALETSCH_MASS_BALANCE_PATH = joinpath(SOURCES_DIR, "mass_balance", "aletsch_fix.dat")
 
 # the extents covering the Aletsch glacier in the Swiss coordinate system LV95
 const ALETSCH_EXTENT = Extent(; X=(2.637e6, 2.651e6), Y=(1.1385e6, 1.158e6))
@@ -154,7 +138,39 @@ function create_mass_balance(data_path)
     return β, ela, b_max
 end
 
-function generate_aletsch_data(res_m)
+"""
+    generate_aletsch_data(dst_dir, res_m; vis=true)
+
+Generate the Aletsch glacier setup data for the Reicalg.jl model.
+The generated files will be saved to `<dst_dir>/aletsch`.
+The source data will be downloaded from the ETH research collection and processed to create the setup files.
+
+Unfortunately, it is impossible to automatically download the dataset for ice velocities from Rabatel et al.
+so it needs to be downloaded manually using the following link:
+https://entrepot.recherche.data.gouv.fr/file.xhtml?persistentId=doi:10.57745/VJYARH&version=1.1
+and saved to the `<dst_dir>/_sources` directory as `ALPES_wFLAG_wKT_ANNUALv2016-2021.nc`.
+
+The data for the elevation models and mass balance are not available online, so they need to be saved to the
+`<dst_dir>/_sources` directory as `aletsch2009.asc`, `aletsch2017.asc`, and `aletsch_fix.dat` respectively.
+
+These files are distributed along with the publication.
+"""
+function generate_aletsch_data(dst_dir, res_m; vis=true)
+    # source directory
+    SOURCES_DIR = joinpath(dst_dir, "_sources")
+    mkpath(SOURCES_DIR)
+
+    # paths to the GeoTIFF files in the filesystem
+    ALPS_BEDROCK_TIF_PATH = joinpath(SOURCES_DIR, ALPS_BEDROCK_ZIP_PATH)
+    ALPS_SURFACE_TIF_PATH = joinpath(SOURCES_DIR, ALPS_SURFACE_ZIP_PATH)
+
+    ALPS_VELOCITY_NC_PATH = joinpath(SOURCES_DIR, ALPS_VELOCITY_FILENAME)
+
+    # this is internal data that we distribute along with the publication
+    ALETSCH_SURFACE_2009_PATH = joinpath(SOURCES_DIR, "aletsch2009.asc")
+    ALETSCH_SURFACE_2017_PATH = joinpath(SOURCES_DIR, "aletsch2017.asc")
+    ALETSCH_MASS_BALANCE_PATH = joinpath(SOURCES_DIR, "aletsch_fix.dat")
+
     # download datasets from ETH research collection
     download_raster(ALPS_BEDROCK_URL, ALPS_BEDROCK_ZIP_PATH, ALPS_BEDROCK_TIF_PATH)
     download_raster(ALPS_SURFACE_URL, ALPS_SURFACE_ZIP_PATH, ALPS_SURFACE_TIF_PATH)
@@ -164,7 +180,6 @@ function generate_aletsch_data(res_m)
 
     # create mosaic to replace missing points with surface elevation from ALTI3D
     bedrock = mosaic(first, bedrock, surface)
-
     bedrock = resample(bedrock; to=ALETSCH_EXTENT, res=res_m, method=:cubicspline)
 
     # load raster for ice surface elevation model from 2009 and create ice thickness consistent with the bedrock topogaphy
@@ -190,6 +205,52 @@ function generate_aletsch_data(res_m)
     # create mass balance model using the data from VAW
     β, ela, b_max = create_mass_balance(ALETSCH_MASS_BALANCE_PATH)
 
+    function remove_components!(A; threshold=0.0, min_length=1)
+        L    = label_components(A .> threshold)
+        Ll   = component_lengths(L)
+        L_rm = findall(Ll .<= min_length)
+        Li   = component_indices(L)[L_rm]
+        for I in Li
+            A[I] .= 0.0
+        end
+        return
+    end
+
+    remove_components!(thickness_2016; min_length=16)
+    remove_components!(thickness_2017; min_length=16)
+
+    function maskwith!(A, M)
+        #! format: off
+        A[M .< eps()] .= 0.0
+        #! format: on
+        return
+    end
+
+    maskwith!(velocity, thickness_2016)
+    maskwith!(velocity, thickness_2017)
+
+    function smooth_lap!(A)
+        #! format: off
+        @. A[2:end-1, 2:end-1] += 1 / 8 * (A[1:end-2, 2:end-1] +
+                                           A[3:end  , 2:end-1] +
+                                           A[2:end-1, 1:end-2] +
+                                           A[2:end-1, 3:end  ] -
+                                           4 * A[2:end-1, 2:end-1])
+        @. A[1  , :] .= A[2    , :]
+        @. A[end, :] .= A[end-1, :]
+        @. A[:  , 1] .= A[:    , 2]
+        @. A[:, end] .= A[:, end-1]
+        #! format: on
+        return
+    end
+
+    for nsm in 1:4
+        smooth_lap!(thickness_2016)
+        smooth_lap!(thickness_2017)
+        smooth_lap!(bedrock)
+        smooth_lap!(velocity)
+    end
+
     # save the data as JLD2
     H_old = Array{Float64}(thickness_2016)
     H     = Array{Float64}(thickness_2017)
@@ -204,34 +265,6 @@ function generate_aletsch_data(res_m)
     #! format: on
 
     V = Array{Float64}(velocity) |> av4
-
-    function maskwith!(A, M)
-        A[M[1:end-1, 1:end-1].<eps()] .= 0.0
-        A[M[2:end, 1:end-1].<eps()]   .= 0.0
-        A[M[2:end, 2:end].<eps()]     .= 0.0
-        A[M[1:end-1, 2:end].<eps()]   .= 0.0
-        return
-    end
-
-    maskwith!(V, H)
-    maskwith!(V, H_old)
-
-    function smooth_lap!(A)
-        @. A[2:end-1, 2:end-1] += 1 / 4.1 * (A[1:end-2, 2:end-1] + A[3:end, 2:end-1] + A[2:end-1, 1:end-2] + A[2:end-1, 3:end] -
-                                             4 * A[2:end-1, 2:end-1])
-        @. A[1, :] .= A[2, :]
-        @. A[end, :] .= A[end-1, :]
-        @. A[:, 1] .= A[:, 2]
-        @. A[:, end] .= A[:, end-1]
-        return
-    end
-
-    for nsm in 1:5
-        smooth_lap!(H_old)
-        smooth_lap!(H)
-        smooth_lap!(B)
-        smooth_lap!(V)
-    end
 
     S_old = B .+ H_old
 
@@ -248,6 +281,7 @@ function generate_aletsch_data(res_m)
 
     @views av1(a) = @. 0.5 * (a[1:end-1] + a[2:end])
 
+    # mass balance mask excludes areas where ice thickness is 0 and mass balance is positive
     mb_mask = @. !((H_old[2:end-1, 2:end-1] == 0) && (S_old[2:end-1, 2:end-1] - ela > 0))
     mb_mask = convert(Matrix{Float64}, mb_mask)
 
@@ -269,46 +303,45 @@ function generate_aletsch_data(res_m)
                ela)
     numerics = (; nx, ny, dx, dy, xc, yc)
 
-    ALETSCH_SETUP_DIR  = joinpath(pwd(), "datasets", "aletsch")
-    ALETSCH_SETUP_PATH = joinpath(ALETSCH_SETUP_DIR, "aletsch_setup.jld2")
-
-    mkpath(ALETSCH_SETUP_DIR)
+    ALETSCH_SETUP_PATH = joinpath(dst_dir, "aletsch_setup.jld2")
 
     jldsave(ALETSCH_SETUP_PATH; fields, scalars, numerics)
 
-    fig = Figure(; size=(1000, 650))
+    if vis
+        fig = Figure(; size=(1000, 650))
 
-    ax = (Axis(fig[1, 1][1, 1]; aspect=DataAspect(), title="bedrock (Grab et al. 2020)"),
-          Axis(fig[1, 2][1, 1]; aspect=DataAspect(), title="ALTI3D surface (SwissTopo, from Grab et al. 2020)"),
-          Axis(fig[1, 3][1, 1]; aspect=DataAspect(), title="velocity 2016-2017 (Rabatel et al. 2023)"),
-          Axis(fig[2, 1][1, 1]; aspect=DataAspect(), title="ice thickness 2009 (VAW)"),
-          Axis(fig[2, 2][1, 1]; aspect=DataAspect(), title="ice thickness 2016 (interpolated)"),
-          Axis(fig[2, 3][1, 1]; aspect=DataAspect(), title="ice thickness 2017 (VAW)"),
-          Axis(fig[3, 1][1, 1]; aspect=DataAspect(), title="mass balance mask"),
-          Axis(fig[3, 2][1, 1]; aspect=DataAspect(), title="H"),
-          Axis(fig[3, 3][1, 1]; aspect=DataAspect(), title="V"))
+        ax = (Axis(fig[1, 1][1, 1]; aspect=DataAspect(), title="bedrock (Grab et al. 2020)"),
+              Axis(fig[1, 2][1, 1]; aspect=DataAspect(), title="ALTI3D surface (SwissTopo, from Grab et al. 2020)"),
+              Axis(fig[1, 3][1, 1]; aspect=DataAspect(), title="velocity 2016-2017 (Rabatel et al. 2023)"),
+              Axis(fig[2, 1][1, 1]; aspect=DataAspect(), title="ice thickness 2009 (VAW)"),
+              Axis(fig[2, 2][1, 1]; aspect=DataAspect(), title="ice thickness 2016 (interpolated)"),
+              Axis(fig[2, 3][1, 1]; aspect=DataAspect(), title="ice thickness 2017 (VAW)"),
+              Axis(fig[3, 1][1, 1]; aspect=DataAspect(), title="mass balance mask"),
+              Axis(fig[3, 2][1, 1]; aspect=DataAspect(), title="H"),
+              Axis(fig[3, 3][1, 1]; aspect=DataAspect(), title="V"))
 
-    hm = (heatmap!(ax[1], bedrock; colormap=:terrain, colorrange=(1000, 4000)),
-          heatmap!(ax[2], surface; colormap=:terrain, colorrange=(1000, 4000)),
-          heatmap!(ax[3], velocity; colormap=:turbo),
-          heatmap!(ax[4], thickness_2009; colormap=:turbo, colorrange=(0, 800)),
-          heatmap!(ax[5], thickness_2016; colormap=:turbo, colorrange=(0, 800)),
-          heatmap!(ax[6], thickness_2017; colormap=:turbo, colorrange=(0, 800)),
-          heatmap!(ax[7], xc, yc, mb_mask; colormap=:grays),
-          heatmap!(ax[8], xc, yc, H; colormap=:turbo, colorrange=(0, 800)),
-          heatmap!(ax[9], xc, yc, V; colormap=:turbo))
+        hm = (heatmap!(ax[1], bedrock; colormap=:terrain, colorrange=(1000, 4000)),
+              heatmap!(ax[2], surface; colormap=:terrain, colorrange=(1000, 4000)),
+              heatmap!(ax[3], velocity; colormap=:turbo),
+              heatmap!(ax[4], thickness_2009; colormap=:turbo, colorrange=(0, 800)),
+              heatmap!(ax[5], thickness_2016; colormap=:turbo, colorrange=(0, 800)),
+              heatmap!(ax[6], thickness_2017; colormap=:turbo, colorrange=(0, 800)),
+              heatmap!(ax[7], xc, yc, mb_mask; colormap=:grays),
+              heatmap!(ax[8], xc, yc, H; colormap=:turbo, colorrange=(0, 800)),
+              heatmap!(ax[9], xc, yc, V; colormap=:turbo))
 
-    cb = (Colorbar(fig[1, 1][1, 2], hm[1]),
-          Colorbar(fig[1, 2][1, 2], hm[2]),
-          Colorbar(fig[1, 3][1, 2], hm[3]),
-          Colorbar(fig[2, 1][1, 2], hm[4]),
-          Colorbar(fig[2, 2][1, 2], hm[5]),
-          Colorbar(fig[2, 3][1, 2], hm[6]),
-          Colorbar(fig[3, 1][1, 2], hm[7]),
-          Colorbar(fig[3, 2][1, 2], hm[8]),
-          Colorbar(fig[3, 3][1, 2], hm[9]))
+        cb = (Colorbar(fig[1, 1][1, 2], hm[1]),
+              Colorbar(fig[1, 2][1, 2], hm[2]),
+              Colorbar(fig[1, 3][1, 2], hm[3]),
+              Colorbar(fig[2, 1][1, 2], hm[4]),
+              Colorbar(fig[2, 2][1, 2], hm[5]),
+              Colorbar(fig[2, 3][1, 2], hm[6]),
+              Colorbar(fig[3, 1][1, 2], hm[7]),
+              Colorbar(fig[3, 2][1, 2], hm[8]),
+              Colorbar(fig[3, 3][1, 2], hm[9]))
 
-    display(fig)
+        display(fig)
+    end
 
     return
 end
