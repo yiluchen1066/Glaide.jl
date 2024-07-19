@@ -1,46 +1,56 @@
 struct SnapshotObjective{T<:Real,A<:AbstractMatrix{T}}
     ωᵥ::T
     V_obs::A
+    β_reg::T
 end
 
-function J(As, objective::SnapshotObjective, model::SnapshotSIA; kwargs...)
+function J(logAs, objective::SnapshotObjective, model::SnapshotSIA)
     # unpack
-    (; ωᵥ, V_obs) = objective
-    (; V)         = model.fields
+    (; ωᵥ, V_obs, β_reg) = objective
+    (; V)                = model.fields
+    (; dx, dy)           = model.numerics
 
-    # set the parameter in the model state (not necessary for the snapshot inversion)
-    if As !== model.fields.As
-        copy!(model.fields.As, As)
-    end
+    # set the parameter in the model state
+    @. model.fields.As = exp(logAs)
 
     # forward model run
     solve!(model)
+
+    # Tikhonov regularisation term
+    J_reg = sum(@. ((logAs[2:end, :] - logAs[1:end-1, :]) / dx)^2) +
+            sum(@. ((logAs[:, 2:end] - logAs[:, 1:end-1]) / dy)^2)
 
     # normalise and weight misfit
-    return ωᵥ * 0.5 * sum((V .- V_obs) .^ 2)
+    return ωᵥ * 0.5 * sum((V .- V_obs) .^ 2) + β_reg * 0.5 * J_reg
 end
 
-function ∇J!(Ās, As, objective::SnapshotObjective, model::SnapshotSIA; kwargs...)
+function ∇J!(logĀs, logAs, objective::SnapshotObjective, model::SnapshotSIA)
     # unpack
-    (; ωᵥ, V_obs) = objective
-    (; V)         = model.fields
-    (; V̄)        = model.adjoint_fields
+    (; ωᵥ, V_obs, β_reg) = objective
+    (; V)                = model.fields
+    (; V̄)                = model.adjoint_fields
+    (; dx, dy)           = model.numerics
 
-    # set the parameter in the model state (not necessary for the snapshot inversion)
-    if As !== model.fields.As
-        copy!(model.fields.As, As)
-    end
+    # set the parameter in the model state
+    @. model.fields.As = exp(logAs)
 
     # forward model run
     solve!(model)
 
-    # partial derivative easily computed analytically for least-squares type objectives
+    # partial derivative can be computed analytically for least-squares type objectives
     @. V̄ = ωᵥ * (V - V_obs)
 
     # Enzyme accumulates results in-place, initialise with zeros
-    fill!(Ās, 0.0)
+    fill!(logĀs, 0.0)
 
-    solve_adjoint!(Ās, model)
+    solve_adjoint!(logĀs, model)
+
+    # convert gradient to log-space
+    @. logĀs *= model.fields.As
+
+    # Tikhonov regularisation term
+    @. logĀs[2:end-1, :] -= β_reg * (logAs[1:end-2, :] - 2.0 * logAs[2:end-1, :] + logAs[3:end, :]) / dx^2
+    @. logĀs[:, 2:end-1] -= β_reg * (logAs[:, 1:end-2] - 2.0 * logAs[:, 2:end-1] + logAs[:, 3:end]) / dy^2
 
     return
 end

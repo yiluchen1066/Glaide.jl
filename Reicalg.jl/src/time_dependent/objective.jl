@@ -3,45 +3,55 @@ struct TimeDependentObjective{T<:Real,A<:AbstractMatrix{T}}
     ωₕ::T
     V_obs::A
     H_obs::A
+    β_reg::T
 end
 
-function J(As, objective::TimeDependentObjective, model::TimeDependentSIA; kwargs...)
+function J(logAs, objective::TimeDependentObjective, model::TimeDependentSIA)
     # unpack
-    (; ωₕ, ωᵥ, H_obs, V_obs) = objective
-    (; H, V)                 = model.fields
+    (; ωₕ, ωᵥ, H_obs, V_obs, β_reg) = objective
+    (; H, V)                        = model.fields
+    (; dx, dy)                      = model.numerics
 
     # copy the field to the model state
-    if As !== model.fields.As
-        copy!(model.fields.As, As)
-    end
+    @. model.fields.As = exp(logAs)
 
     # solve forward problem
-    solve!(model; kwargs...)
+    solve!(model)
+
+    # Tikhonov regularisation term
+    J_reg = sum(@. ((logAs[2:end, :] - logAs[1:end-1, :]) / dx)^2) +
+            sum(@. ((logAs[:, 2:end] - logAs[:, 1:end-1]) / dy)^2)
 
     # normalise and weight misfit
     return ωₕ * 0.5 * sum((H .- H_obs) .^ 2) +
-           ωᵥ * 0.5 * sum((V .- V_obs) .^ 2)
+           ωᵥ * 0.5 * sum((V .- V_obs) .^ 2) + β_reg * 0.5 * J_reg
 end
 
-function ∇J!(Ās, As, objective::TimeDependentObjective, model::TimeDependentSIA; kwargs...)
+function ∇J!(logĀs, logAs, objective::TimeDependentObjective, model::TimeDependentSIA)
     # unpack
-    (; ωₕ, ωᵥ, H_obs, V_obs) = objective
-    (; H, V)                 = model.fields
-    (; H̄, V̄)               = model.adjoint_fields
+    (; ωₕ, ωᵥ, H_obs, V_obs, β_reg) = objective
+    (; H, V)                        = model.fields
+    (; H̄, V̄)                        = model.adjoint_fields
+    (; dx, dy)                      = model.numerics
 
     # copy the field to the model state
-    if As !== model.fields.As
-        copy!(model.fields.As, As)
-    end
+    @. model.fields.As = exp(logAs)
 
     # solve forward problem
-    solve!(model; kwargs...)
+    solve!(model)
 
     # compute partial derivatives
-    @. V̄ = -ωᵥ * (V - V_obs) # I have no idea why there is a minus sign here
+    @. V̄ = ωᵥ * (V - V_obs)
     @. H̄ = ωₕ * (H - H_obs)
 
-    solve_adjoint!(Ās, model; kwargs...)
+    solve_adjoint!(logĀs, model)
+
+    # convert gradient to log-space
+    @. logĀs *= model.fields.As
+
+    # Tikhonov regularisation term
+    @. logĀs[2:end-1, :] -= β_reg * (logAs[1:end-2, :] - 2.0 * logAs[2:end-1, :] + logAs[3:end, :]) / dx^2
+    @. logĀs[:, 2:end-1] -= β_reg * (logAs[:, 1:end-2] - 2.0 * logAs[:, 2:end-1] + logAs[:, 3:end]) / dy^2
 
     return
 end
