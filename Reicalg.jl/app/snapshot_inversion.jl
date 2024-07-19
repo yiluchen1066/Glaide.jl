@@ -2,23 +2,29 @@ using Reicalg
 using CUDA
 using CairoMakie
 using Printf
+using JLD2
 
-function snapshot_inversion(filepath; As_init, E, β_reg, γ, niter, momentum)
-    # model = TimeDependentSIA(filepath)
-    # fill!(model.fields.As, As_init)
-    # model.scalars.A *= E
-    # model.scalars.dt = 1.0 * SECONDS_IN_YEAR
+Base.@kwdef struct SnapshotInversionParams{T,I,LS}
+    # initial sliding parameter value
+    As_init::T = 1e-22
+    # ice flow enhancement factor
+    E::T = 1.0
+    # regularisation parameter
+    β_reg::T = 1.0e-3
+    # maximum number of iterations in the optimisation algorithm
+    maxiter::I = 1000
+    # line search algorithm
+    line_search::LS
+end
 
-    # solve!(model)
-
-    # H_spinup = copy(model.fields.H)
+function snapshot_inversion(filepath, params::SnapshotInversionParams)
+    # unpack params
+    (; As_init, E, β_reg, maxiter, line_search) = params
 
     model = SnapshotSIA(filepath)
 
-    (; dx, dy, xc, yc) = model.numerics
-    (; As, V)          = model.fields
-
-    # copy!(model.fields.H, H_spinup)
+    (; xc, yc) = model.numerics
+    (; As, V)  = model.fields
 
     As0 = As
 
@@ -30,8 +36,7 @@ function snapshot_inversion(filepath; As_init, E, β_reg, γ, niter, momentum)
     fill!(model.fields.As, As_init)
     solve!(model)
 
-    objective = SnapshotObjective(ωᵥ, V_obs)
-    regularisation = Regularisation(β_reg, dx, dy, As)
+    objective = SnapshotObjective(ωᵥ, V_obs, β_reg)
 
     xc_km = xc ./ 1e3
     yc_km = yc ./ 1e3
@@ -40,7 +45,7 @@ function snapshot_inversion(filepath; As_init, E, β_reg, γ, niter, momentum)
 
     #! format:off
     ax = (Axis(fig[1, 1][1, 1]; aspect=DataAspect(), title="log10(As)"),
-          Axis(fig[1, 2][1, 1]; aspect=DataAspect(), title="Ās"),
+          Axis(fig[1, 2][1, 1]; aspect=DataAspect(), title="dJ/d(logAs)"),
           Axis(fig[2, 1][1, 1]; aspect=DataAspect(), title="V_obs"),
           Axis(fig[2, 2][1, 1]; aspect=DataAspect(), title="V"))
 
@@ -55,12 +60,11 @@ function snapshot_inversion(filepath; As_init, E, β_reg, γ, niter, momentum)
           Colorbar(fig[2, 2][1, 2], hm[4]))
     #! format:on
 
-    function callback(iter, γ, J1, As, Ās)
+    function callback(iter, α, J1, logAs, logĀs)
         if iter % 100 == 0
-            @printf("  iter = %d, J = %1.3e\n", iter, J1)
-
-            hm[1][3] = Array(log10.(As))
-            hm[2][3] = Array(Ās)
+            @printf("  iter = %-4d, J = %1.3e, α = %1.3e\n", iter, J1, α)
+            hm[1][3] = Array(logAs .* log10(ℯ))
+            hm[2][3] = Array(logĀs ./ log10(ℯ))
             hm[4][3] = Array(V)
             autolimits!(ax[1])
             autolimits!(ax[2])
@@ -69,13 +73,19 @@ function snapshot_inversion(filepath; As_init, E, β_reg, γ, niter, momentum)
         end
     end
 
-    gradient_descent(model, objective, As0, γ, niter; regularisation, callback, momentum)
+    options = OptimisationOptions(line_search, callback, maxiter)
+
+    logAs = optimise(model, objective, log.(As0), options)
 
     return
 end
 
-snapshot_inversion("datasets/synthetic/synthetic_setup.jld2";
-                   As_init=1e-22, E=1.0, β_reg=1.0e-3, γ=2e3, niter=2000, momentum=0.8)
+synthetic_params = SnapshotInversionParams(; line_search=BacktrackingLineSearch(; α_min=1e0, α_max=1e5))
 
-snapshot_inversion("datasets/aletsch/aletsch_setup.jld2";
-                   As_init=1e-22, E=1e-2, β_reg=1.0e-3, γ=1e3, niter=2000, momentum=0.8)
+snapshot_inversion("datasets/synthetic_setup.jld2", synthetic_params)
+
+aletsch_params = SnapshotInversionParams(;
+                                         E           = 2.5e-1,
+                                         line_search = BacktrackingLineSearch(; α_min=1e0, α_max=1e5))
+
+snapshot_inversion("datasets/aletsch_setup.jld2", aletsch_params)
