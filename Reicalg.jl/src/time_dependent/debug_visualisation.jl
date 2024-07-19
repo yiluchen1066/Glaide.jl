@@ -83,7 +83,7 @@ end
 
 function create_adjoint_debug_visualisation(model)
     # unpack
-    (; ψ, H̄)  = model.adjoint_fields
+    (; ψ, H̄)   = model.adjoint_fields
     (; xc, yc) = model.numerics
 
     vis_fields = (ψ=Array(ψ),
