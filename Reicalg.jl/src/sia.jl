@@ -63,15 +63,11 @@ function _residual!(r_H, B, H, H_old, D, β, ela, b_max, mb_mask, dt, dx, dy)
 end
 
 # update ice thickness with constraint H > 0
-function _update_ice_thickness!(H, dH_dτ, r_H, D, dmp, β, dt, cfl, dx, dy)
+function _update_ice_thickness!(H, dH_dτ, r_H, dτ, dmp)
     @get_indices
     @inbounds if ix <= size(H, 1) - 2 && iy <= size(H, 2) - 2
         # residual damping improves convergence
         dH_dτ[ix, iy] = dH_dτ[ix, iy] * dmp + r_H[ix, iy]
-
-        # local timestep
-        D_av = @av_xy(D)
-        dτ   = inv((D_av + 1e-2) / min(dx, dy)^2 / cfl + β + inv(dt))
 
         # update ice thickness
         H[ix+1, iy+1] = max(0.0, H[ix+1, iy+1] + dτ * dH_dτ[ix, iy])
@@ -110,9 +106,9 @@ function residual!(r_H, B, H, H_old, D, β, ela, b_max, mb_mask, dt, dx, dy)
     return
 end
 
-function update_ice_thickness!(H, dH_dτ, r_H, D, dmp, β, dt, cfl, dx, dy)
+function update_ice_thickness!(H, dH_dτ, r_H, dτ, dmp)
     nthreads, nblocks = launch_config(size(H))
-    @cuda threads = nthreads blocks = nblocks _update_ice_thickness!(H, dH_dτ, r_H, D, dmp, β, dt, cfl, dx, dy)
+    @cuda threads = nthreads blocks = nblocks _update_ice_thickness!(H, dH_dτ, r_H, dτ, dmp)
     return
 end
 

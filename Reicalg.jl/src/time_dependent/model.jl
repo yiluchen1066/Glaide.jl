@@ -102,9 +102,12 @@ function solve!(model::TimeDependentSIA)
         bc!(H, B)
         residual!(r_H, B, H, H_old, D, β, ela, b_max, mb_mask, dt, dx, dy)
 
+        # compute the pseudo-time step
+        dτ = compute_pt_time_step(cfl, D, β, dt, dx, dy)
+
         # empirically calibrated damping coefficient to accelerate convergence
         dmp = iter < dmpswitch ? dmp1 : dmp2
-        update_ice_thickness!(H, dH_dτ, r_H, D, dmp, β, dt, cfl, dx, dy)
+        update_ice_thickness!(H, dH_dτ, r_H, dτ, dmp)
 
         if iter % ncheck == 0
             # difference in thickness between iterations
@@ -220,7 +223,7 @@ function solve_adjoint!(Ās, model::TimeDependentSIA)
 
         ∇bc!(Duplicated(H, H̄))
 
-        update_adjoint_state!(ψ, dψ_dτ, H̄, D, dmp, β, dt, cfl, dx, dy)
+        update_adjoint_state!(ψ, dψ_dτ, H̄, D, dmp, cfl, β, dt, dx, dy)
 
         if iter % ncheck == 0
             # difference in the adjoint state between iterations
@@ -271,4 +274,9 @@ function solve_adjoint!(Ās, model::TimeDependentSIA)
                   Const(dx), Const(dy))
 
     return
+end
+
+# compute admissible pseudo-time step based on the von Neumann stability criterion
+function compute_pt_time_step(cfl, D, β, dt, dx, dy)
+    return inv(maximum(D) / min(dx, dy)^2 / cfl + β + inv(dt))
 end
