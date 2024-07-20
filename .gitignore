@@ -2,14 +2,5 @@
 Manifest.toml
 
 # Project-specific
-output/
 datasets/
-datasets_vel
-figs/
-scripts_flux/output_snapshot
-scripts_flux/output_steadystate
-*.jld2
-*.mp4
-*.png
-*.tif 
-*.nc
+figures/
