@@ -75,9 +75,9 @@ end
 function TimeDependentNumerics(xc, yc;
                                cfl       = 1 / 6.1,
                                εtol      = 1e-6,
-                               dmp1      = 0.6,
+                               dmp1      = 0.5,
                                dmp2      = 0.8,
-                               dmpswitch = 10max(length(xc), length(yc)),
+                               dmpswitch = 6max(length(xc), length(yc)),
                                maxiter   = 100max(length(xc), length(yc)),
                                ncheck    = 1max(length(xc), length(yc)))
     nx, ny = length(xc), length(yc)
@@ -93,8 +93,8 @@ mutable struct TimeDependentAdjointNumerics{T<:Real,I<:Integer}
     ncheck::I
 end
 function TimeDependentAdjointNumerics(xc, yc;
-                                      cfl     = 1 / 6.1,
-                                      εtol    = 1e-4,
+                                      cfl     = 1 / 4.1,
+                                      εtol    = 1e-6,
                                       dmp     = 0.7,
                                       maxiter = 50max(length(xc), length(yc)),
                                       ncheck  = ceil(Int, 0.5 * max(length(xc), length(yc))))

@@ -34,7 +34,7 @@ function generate_synthetic_data(dst_dir, res_m; vis=true)
     yc = LinRange(-ly / 2 + dy / 2, ly / 2 - dy / 2, ny)
 
     # default solver parameters
-    numerics = TimeDependentNumerics(xc, yc)
+    numerics = TimeDependentNumerics(xc, yc; dmp1=0.9, dmp2=0.95)
 
     xv, yv = av1(xc), av1(yc)
 

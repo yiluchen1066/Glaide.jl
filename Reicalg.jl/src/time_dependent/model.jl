@@ -97,9 +97,6 @@ function solve!(model::TimeDependentSIA)
         bc!(H)
         diffusivity!(D, H, B, As, A, ρgn, npow, dx, dy)
 
-        # compute pseudo-time step
-        dτ = compute_pt_time_step(cfl, D, β, dt, dx, dy)
-
         # apply Neumann boundary conditions before computing residual
         # to set zero flux on boundaries
         bc!(H, B)
@@ -107,7 +104,7 @@ function solve!(model::TimeDependentSIA)
 
         # empirically calibrated damping coefficient to accelerate convergence
         dmp = iter < dmpswitch ? dmp1 : dmp2
-        update_ice_thickness!(H, dH_dτ, r_H, dτ, dmp)
+        update_ice_thickness!(H, dH_dτ, r_H, D, dmp, β, dt, cfl, dx, dy)
 
         if iter % ncheck == 0
             # difference in thickness between iterations
@@ -126,7 +123,7 @@ function solve!(model::TimeDependentSIA)
 
             # check if simulation has failed
             if !isfinite(err_abs) || !isfinite(err_rel)
-                error("forward solver failed: detected NaNs")
+                error("forward solver failed: detected NaNs at iter #$iter")
             end
 
             model.debug_vis && update_debug_visualisation!(vis, model, iter / N, (; err_abs, err_rel))
@@ -180,9 +177,6 @@ function solve_adjoint!(Ās, model::TimeDependentSIA)
     d_ψ   = d_H
     dψ_dτ = @view(dH_dτ[2:end-1, 2:end-1])
 
-    # pseudo-time step (constant beteween iterations, depends only on D)
-    dτ = compute_pt_time_step(cfl, D, β, dt, dx, dy)
-
     # Enzyme accumulates results in-place, initialise with zeros
     fill!(Ās, 0.0)
 
@@ -226,7 +220,7 @@ function solve_adjoint!(Ās, model::TimeDependentSIA)
 
         ∇bc!(Duplicated(H, H̄))
 
-        update_adjoint_state!(ψ, dψ_dτ, H̄, H, dτ, dmp)
+        update_adjoint_state!(ψ, dψ_dτ, H̄, D, dmp, β, dt, cfl, dx, dy)
 
         if iter % ncheck == 0
             # difference in the adjoint state between iterations
@@ -241,7 +235,7 @@ function solve_adjoint!(Ās, model::TimeDependentSIA)
 
             # check if simulation has failed
             if !isfinite(err_rel)
-                error("adjoint solver failed: detected NaNs")
+                error("adjoint solver failed: detected NaNs at iter #$iter")
             end
 
             model.debug_vis && update_adjoint_debug_visualisation!(vis, model, iter / N, (; err_rel))
@@ -277,9 +271,4 @@ function solve_adjoint!(Ās, model::TimeDependentSIA)
                   Const(dx), Const(dy))
 
     return
-end
-
-# compute admissible pseudo-time step based on the von Neumann stability criterion
-function compute_pt_time_step(cfl, D, β, dt, dx, dy)
-    return inv(maximum(D) / min(dx, dy)^2 / cfl + β + inv(dt))
 end
