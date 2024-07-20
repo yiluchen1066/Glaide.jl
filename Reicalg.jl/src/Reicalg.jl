@@ -1,17 +1,31 @@
 module Reicalg
 
+# main solver function
+export solve!
+
+# snapshot model
 export SnapshotSIA, SnapshotObjective
 export SnapshotScalars, SnapshotNumerics
 
+# time-dependent model
 export TimeDependentSIA, TimeDependentObjective
 export TimeDependentScalars, TimeDependentNumerics, TimeDependentAdjointNumerics
 
-export Regularisation
-
+# optimisation
 export BacktrackingLineSearch, OptimisationOptions, OptmisationState, OptimisationResult
-export solve!, optimise
+export optimise
 
-export SECONDS_IN_YEAR
+# utils
+export lerp
+export download_raster
+export coords_as_ranges
+export av1, av4
+export lsq_fit
+export remove_components!
+export smooth_lap!
+
+# constants
+export SECONDS_IN_YEAR, GLEN_A, GLEN_N, RHOG_N
 
 using LinearAlgebra
 using Printf
@@ -19,9 +33,16 @@ using CairoMakie
 using CUDA
 using Enzyme
 using JLD2
+using ZipArchives
+using Downloads
+using Rasters
+using ImageMorphology
 
 # define consntants
 const SECONDS_IN_YEAR = 3600 * 24 * 365
+const GLEN_A          = 2.5e-24
+const GLEN_N          = 3
+const RHOG_N          = (910 * 9.81)^3
 
 # surface mass balance model
 ela_mass_balance(z, β, ela, b_max) = min(β * (z - ela), b_max)
@@ -43,6 +64,9 @@ end
 # Enzyme utils
 @inline ∇(fun, args...) = (Enzyme.autodiff_deferred(Enzyme.Reverse, fun, Const, args...); return)
 const DupNN = DuplicatedNoNeed
+
+# helper functions to simplify the data processing
+include("utils.jl")
 
 # helper macros for calculating finite differences
 include("macros.jl")

@@ -23,7 +23,7 @@ mutable struct SnapshotScalars{T<:Real,NP<:Real}
     A::T
     ρgn::T
 end
-function SnapshotScalars(; lx, ly, npow=3, A0=2.5e-24, E=1.0, ρgn=(910.0 * 9.81)^npow)
+function SnapshotScalars(; lx, ly, npow=GLEN_N, A0=GLEN_A, E=1.0, ρgn=RHOG_N)
     return SnapshotScalars(lx, ly, npow, A0 * E, ρgn)
 end
 

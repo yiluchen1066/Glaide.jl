@@ -52,7 +52,7 @@ mutable struct TimeDependentScalars{T<:Real,NP<:Real}
     ela::T
     dt::T
 end
-function TimeDependentScalars(; lx, ly, npow=3, A0=2.5e-24, E=1.0, ρgn=(910.0 * 9.81)^npow, β, b_max, ela, dt)
+function TimeDependentScalars(; lx, ly, npow=GLEN_N, A0=GLEN_A, E=1.0, ρgn=RHOG_N, β, b_max, ela, dt)
     return TimeDependentScalars(lx, ly, npow, A0 * E, ρgn, β, b_max, ela, dt)
 end
 
