@@ -16,7 +16,7 @@ Base.@kwdef struct TimeDependentInversionParams{T,I,LS}
     # weight for ice thickness matching
     ωₕ::T = 1.0
     # maximum number of iterations in the optimisation algorithm
-    maxiter::I = 1000
+    maxiter::I = 2000
     # line search algorithm
     line_search::LS
 end
@@ -50,7 +50,7 @@ function time_dependent_inversion(filepath, params::TimeDependentInversionParams
     xc_km = xc / 1e3
     yc_km = yc / 1e3
 
-    fig = Figure(; size=(650, 750))
+    fig = Figure(; size=(650, 800))
 
     #! format:off
     ax = (Axis(fig[1, 1][1, 1]; aspect=DataAspect(), title="log10(As)"),
@@ -73,22 +73,36 @@ function time_dependent_inversion(filepath, params::TimeDependentInversionParams
           Colorbar(fig[2, 2][1, 2], hm[4]),
           Colorbar(fig[3, 1][1, 2], hm[5]),
           Colorbar(fig[3, 2][1, 2], hm[6]))
+
+    conv_ax = Axis(fig[4, :]; title="Convergence", xlabel="Iteration", ylabel="J", yscale=log10)
+    conv    = lines!(conv_ax, Point2{Float64}[])
     #! format:on
 
-    function callback(iter, α, J1, logAs, logĀs)
-        if iter % 10 == 0
-            @printf("  iter = %-4d, J = %1.3e, α = %1.3e\n", iter, J1, α)
-            hm[1][3] = Array(logAs .* log10(ℯ))
-            hm[2][3] = Array(logĀs ./ log10(ℯ))
+    j_hist = Point2{Float64}[]
+    function callback(state::OptmisationState)
+        push!(j_hist, Point2(state.iter, state.j_value))
+
+        if state.iter % 25 == 0
+            @printf("  iter = %-4d, J = %1.3e, ΔJ/J = %1.3e, ΔX/X = %1.3e, α = %1.3e\n",
+                    state.iter,
+                    state.j_value,
+                    state.j_change,
+                    state.x_change,
+                    state.α)
+
+            hm[1][3] = Array(state.X .* log10(ℯ))
+            hm[2][3] = Array(state.X̄ ./ log10(ℯ))
             hm[4][3] = Array(V)
             hm[6][3] = Array(H)
+            conv[1]  = j_hist
             autolimits!(ax[1])
             autolimits!(ax[2])
+            autolimits!(conv_ax)
             display(fig)
         end
     end
 
-    options = OptimisationOptions(line_search, callback, maxiter)
+    options = OptimisationOptions(; line_search, callback, maxiter)
 
     optimise(model, objective, log.(As0), options)
 

@@ -5,25 +5,36 @@ Base.@kwdef struct BacktrackingLineSearch
     α_max::Float64
 end
 
-struct OptimisationOptions{LS,CB}
+Base.@kwdef struct OptimisationOptions{LS,CB}
     line_search::LS
-    callback::CB
-    maxiter::Int
-    f_tol::Float64
-    x_tol::Float64
+    callback::CB   = nothing
+    maxiter::Int   = 1000
+    j_tol::Float64 = 0.0
+    x_tol::Float64 = 1e-5
 end
 
 struct OptmisationState{T,I,A}
     iter::I
     α::T
-    J::T
+    j_value::T
+    j_change::T
+    x_change::T
     X::A
     X̄::A
 end
 
+struct OptimisationResult{T,I,A}
+    iter::I
+    j_value::T
+    X::A
+end
+
+"""
+    optimise(model, objective, X0, options)
+"""
 function optimise(model, objective, X0, options)
     # unpack options
-    (; line_search, callback, maxiter, f_tol, x_tol) = options
+    (; line_search, callback, maxiter, j_tol, x_tol) = options
 
     # copy the initial solution, needed for the line search
     X = copy(X0)
@@ -52,19 +63,25 @@ function optimise(model, objective, X0, options)
     # initial step size
     α = line_search.α_min
 
+    # convergence flags
+    x_converged = false
+    j_converged = false
+
     # report initial results if needed
-    isnothing(callback) || callback(0, α, J0, X, X̄)
+    if !isnothing(callback)
+        callback(OptmisationState(0, α, J0, NaN, NaN, X, X̄))
+    end
 
     # gradient descent loop
-    for iter in 1:maxiter
+    iter = 1
+    while iter <= maxiter
         # find a suitable step size
         α = find_step_line_search(model, objective, line_search, α, X, X0, X̄, P, J0)
 
         # update the solution
         @. X = X0 + α * P
 
-        # save the current solution and gradient
-        copy!(X0, X)
+        # save the previous gradient
         copy!(X̄p, X̄)
 
         # compute gradient
@@ -79,11 +96,31 @@ function optimise(model, objective, X0, options)
         @. P = P * β - X̄
 
         # report intermediate results if needed
-        J0 = J(X, objective, model)
-        isnothing(callback) || callback(iter, α, J0, X, X̄)
+        J1 = J(X, objective, model)
+
+        j_change = abs(J1 - J0) / J1
+        x_change = mapreduce((a, b) -> abs(a - b), max, X, X0) / mapreduce(abs, max, X)
+
+        j_converged = j_change < j_tol
+        x_converged = x_change < x_tol
+
+        if j_converged || x_converged
+            break
+        end
+
+        # save the previous solution and objective value
+        copy!(X0, X)
+        J0 = J1
+
+        # report intermediate results
+        if !isnothing(callback)
+            callback(OptmisationState(iter, α, J0, j_change, x_change, X, X̄))
+        end
+
+        iter += 1
     end
 
-    return X
+    return OptimisationResult(iter, J0, X)
 end
 
 """
