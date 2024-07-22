@@ -53,7 +53,7 @@ Next, define the path where the resulting input file will be saved:
 """
 
 # ╔═╡ 31a712cb-756c-4b03-b4ba-a081c3a7f762
-output_path = "../../datasets/aletsch_setup.jld2"; mkpath(dirname(output_path));
+output_path = "../../datasets/aletsch_25m.jld2"; mkpath(dirname(output_path));
 
 # ╔═╡ a5871e66-3688-499d-b251-99b0f23e6726
 md"""
@@ -65,7 +65,7 @@ glacier_extent = Extent(; X=(2.637e6, 2.651e6), Y=(1.1385e6, 1.158e6));
 
 # ╔═╡ d4ef10ab-fde9-43cc-96fc-6f31785ab85b
 md"""
-!!! note
+!!! note "What if I want to change the extents?"
 	By changing the extents, you can generate input files for other Swiss glaciers than Aletsch. However, only the bedrock and velocity datasets covers entire Swiss Alps. You will need to provide elevation data and mass balance data separately.
 """
 
@@ -75,15 +75,31 @@ Define the resolution in meters of the final input data:
 """
 
 # ╔═╡ 7d181fae-f5c5-4b6d-93d3-9cdb5139c1d3
-resolution_meters = 50.0;
+resolution_meters = 25.0;
+
+# ╔═╡ ee1916bf-d3b4-41b8-b507-57b57a324bce
+md"""
+Small isolated ice patches might hinder convergence of the numerical model, so we remove them. We define the threshold area below which the connected ice-covered area is treated as small ice patch:
+"""
+
+# ╔═╡ 055bd14d-a02f-4610-8212-3ea52ce4d7c0
+small_patch_area = 200.0^2;
+
+# ╔═╡ 375feb17-9d84-42c8-b5b0-c7da73a17462
+md"""
+The source data might be noisy, and we apply a low-pass filter to the data to remove this noise. Define the (resolution-independent) amount of smoothing:
+"""
+
+# ╔═╡ 8d1acf5a-4ada-43ed-a081-c7a4766c0219
+smooth_amount = 1e3;
 
 # ╔═╡ 4af27194-4ebe-41a9-a716-142b3f4817e0
- md"""
+ Markdown.parse("""
  ### Prerequisites
 
 Unfortunately, it is impossible to automatically download the dataset for ice velocities from [Rabatel et al.](https://doi.org/10.3390/data8040066) so it needs to be downloaded manually using [this link](https://entrepot.recherche.data.gouv.fr/file.xhtml?persistentId=doi:10.57745/VJYARH&version=1.1) 
-and saved to the `<sources_dir>/_sources` directory. The file path should be the same as this variable:
-"""
+and saved to the directory `"$sources_dir"`. The file path should be the same as this variable:
+""")
 
 # ╔═╡ 24930db6-f893-4cc6-ad30-58e8bac0ee1c
 velocity_path = joinpath(sources_dir, "ALPES_wFLAG_wKT_ANNUALv2016-2021.nc");
@@ -172,14 +188,14 @@ begin
 end;
 
 # ╔═╡ 0b99796a-6edb-4a53-a875-bd5d329643d7
-md"""
+Markdown.parse("""
 We define a helper function to create ice thickness data raster from known surface and bed elevation. In this function, we perform three steps:
 
 1. Resample the surface data to match the extent and resolution of the bed elevation model using cubic spline interpolation;
 2. Clamp the values to prevent negative ice thickness;
 3. Replace missing values with zeros, as the numerical model expects zero ice thickness in ice-free regions;
-4. Remove the small patches of ice by setting the ice thickness of all connected regions of length 16 pixels or less to zero. This step is needed as small ice patches might hinder convergence of the numerical model.
-"""
+4. Remove the small patches of ice by setting the ice thickness of all connected regions covering area smaller then `small_patch_area = $small_patch_area m²`.
+""")
 
 # ╔═╡ aca29b01-114a-492b-9598-84be41452183
 function create_ice_thickness_raster(surface, bedrock)
@@ -192,8 +208,11 @@ function create_ice_thickness_raster(surface, bedrock)
     # where elevation data is missing, we assume that there is no ice: thickness is 0
     thickness = replace_missing(thickness, 0.0)
 
+	# number of cells covering the area
+	min_length = ceil(Int, small_patch_area / resolution_meters^2)
+	
     # remove small ice patches
-    remove_components!(thickness, min_length=16)
+    remove_components!(thickness; min_length)
 
     return thickness
 end;
@@ -267,9 +286,6 @@ As a final pre-processing step, we apply several steps of laplacian smoothing to
 We use the function `laplacian_smoothing`, provided by Reicalg.jl. Note that we cannot update the rasters in-place or re-use the variable names due to constraints posed by reactivity of Pluto.jl notebooks.
 """
 
-# ╔═╡ 8d1acf5a-4ada-43ed-a081-c7a4766c0219
-smooth_amount = 1e3;
-
 # ╔═╡ cd1d503e-5c0a-4168-bb1e-002ce3b0c53b
 bedrock_2 = laplacian_smoothing(bedrock,
                                 smooth_amount,
@@ -323,7 +339,7 @@ begin
 	local mb_rng    = (13+26):(13+2*26-1)
 	local rho_w_i   = 1000 / 910
 
-	# convert from mm w.e. / a to m/s
+	# convert from mm w.e./a to m/s
     mass_balance    = data[mb_rng] * 1e-3 * rho_w_i / SECONDS_IN_YEAR
     
     # remove NaNs from the mass balance data
@@ -569,6 +585,10 @@ end
 # ╟─d4ef10ab-fde9-43cc-96fc-6f31785ab85b
 # ╟─5d84eab3-5eed-4a7a-b1b4-7d7708dedee1
 # ╠═7d181fae-f5c5-4b6d-93d3-9cdb5139c1d3
+# ╟─ee1916bf-d3b4-41b8-b507-57b57a324bce
+# ╠═055bd14d-a02f-4610-8212-3ea52ce4d7c0
+# ╟─375feb17-9d84-42c8-b5b0-c7da73a17462
+# ╠═8d1acf5a-4ada-43ed-a081-c7a4766c0219
 # ╟─4af27194-4ebe-41a9-a716-142b3f4817e0
 # ╠═24930db6-f893-4cc6-ad30-58e8bac0ee1c
 # ╟─b0969b25-551f-4e72-b08c-63881e05f359
@@ -592,7 +612,6 @@ end
 # ╟─1262ffa4-1233-451a-82b0-f4c666e36bac
 # ╠═578dbf49-b433-4cb3-8e94-6388beb3f68a
 # ╟─137a9311-f5ed-4ce0-8493-c212ed161434
-# ╠═8d1acf5a-4ada-43ed-a081-c7a4766c0219
 # ╠═cd1d503e-5c0a-4168-bb1e-002ce3b0c53b
 # ╠═18e56cd7-ba06-46f0-9f1a-cd45b3dd7a91
 # ╠═4f996f90-2850-48d7-8b05-fe26db56621e

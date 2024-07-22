@@ -1,104 +1,260 @@
-using Reicalg
-using CairoMakie
-using Printf
-using JLD2
+### A Pluto.jl notebook ###
+# v0.19.45
 
-Base.@kwdef struct SnapshotInversionParams{T,I,LS}
-    # initial sliding parameter value
-    As_init::T = 1e-22
-    # ice flow enhancement factor
-    E::T = 1.0
-    # regularisation parameter
-    β_reg::T = 1.0e-3
-    # maximum number of iterations in the optimisation algorithm
-    maxiter::I = 2000
-    # line search algorithm
-    line_search::LS
+using Markdown
+using InteractiveUtils
+
+# ╔═╡ 40661bea-47ac-11ef-1a58-f5deede4bf68
+# ╠═╡ show_logs = false
+begin
+	import Pkg
+	Pkg.activate(Base.current_project())
+    Pkg.instantiate()
+	
+	using Reicalg
+	using CairoMakie
+	using Printf
+	using JLD2
+	using CUDA
+
+	using PlutoUI
+    TableOfContents()
 end
 
-function snapshot_inversion(filepath, params::SnapshotInversionParams)
-    # unpack params
-    (; As_init, E, β_reg, maxiter, line_search) = params
+# ╔═╡ add4b2c2-3c27-44be-a300-922b27606cf2
+md"""
+## Snapshot inversion
 
-    model = SnapshotSIA(filepath)
+In this notebook, we will use inverse modelling routine implemented in Reicalg.jl to reconstruct spatially variable sliding parameter $A_\mathrm{s}$. The inverse modelling problem is defined as a minimisation problem with the following objective functional:
 
-    (; xc, yc) = model.numerics
-    (; As, V)  = model.fields
+```math
+J(A_\mathrm{s}) = \frac{\omega_V}{2}\sum_i\left(V_i(A_\mathrm{s}) - V^\mathrm{obs}_i\right)^2 + \frac{\beta}{2}\sum_i\left(\nabla A_{\mathrm{s}_i}\right)^2~,
+```
+where $\omega_V$ is the normalisation factor and $\beta$ is the Tikhonov regularisation parameter.
 
-    As0 = As
+First, define the path to input file in JLD2 format:
+"""
 
-    model.scalars.A *= E
+# ╔═╡ f727116d-44c0-411e-b252-4374dd3ababc
+input_file = "../../datasets/synthetic_25m.jld2";
 
-    V_obs = copy(V)
-    ωᵥ    = inv(sum(V_obs .^ 2))
+# ╔═╡ 812269a3-dbc7-429c-9869-d96d15be34e9
+Markdown.parse("""
+!!! warning "Prerequisites"
+	Before running this notebook, make sure that the input file `$input_file` exists on your filesystem. To generate the input files for the synthetic setup, run the notebook [`generate_synthetic_setup.jl`](./open?path=Reicalg.jl/app/generate_synthetic_setup.jl).
+""")
 
-    fill!(model.fields.As, As_init)
-    solve!(model)
+# ╔═╡ 383e178a-1053-48a3-b6ab-ab60ce0df19b
+md"""
+Define the initial guess for the sliding parameter:
+"""
 
-    objective = SnapshotObjective(ωᵥ, V_obs, β_reg)
+# ╔═╡ 416951d7-4dae-4bda-8b4d-590f61e3200b
+As_init = 1e-22;
 
-    xc_km = xc ./ 1e3
-    yc_km = yc ./ 1e3
+# ╔═╡ f9966148-388d-4e6c-8792-5e24d59db83a
+E = 1.0;
 
-    fig = Figure(; size=(650, 600))
+# ╔═╡ 5885cdb4-aa0d-40b3-b01b-070f83aec0c7
+md"""
+Define the regularisation parameter:
+"""
 
-    #! format:off
-    ax = (Axis(fig[1, 1][1, 1]; aspect=DataAspect(), title="log10(As)"),
-          Axis(fig[1, 2][1, 1]; aspect=DataAspect(), title="dJ/d(logAs)"),
-          Axis(fig[2, 1][1, 1]; aspect=DataAspect(), title="V_obs"),
-          Axis(fig[2, 2][1, 1]; aspect=DataAspect(), title="V"))
+# ╔═╡ 703d7708-4668-466b-b733-70da37f7feb6
+β_reg = 1e-3;
 
-    hm = (heatmap!(ax[1], xc_km, yc_km, Array(log10.(As0)); colormap=:turbo),
-          heatmap!(ax[2], xc_km, yc_km, Array(log10.(As0)); colormap=:turbo),
-          heatmap!(ax[3], xc_km, yc_km, Array(V_obs)      ; colormap=:turbo, colorrange=(0, 1e-5)),
-          heatmap!(ax[4], xc_km, yc_km, Array(V)          ; colormap=:turbo, colorrange=(0, 1e-5)))
+# ╔═╡ 9cfcc489-4964-4b68-9558-6a661948c608
+md"""
+The normalisation constant is defined as the inverse of the $L_2$-norm of the observed velocity field:
 
-    cb = (Colorbar(fig[1, 1][1, 2], hm[1]),
-          Colorbar(fig[1, 2][1, 2], hm[2]),
-          Colorbar(fig[2, 1][1, 2], hm[3]),
-          Colorbar(fig[2, 2][1, 2], hm[4]))
+```math
+\omega_V = \left[\sum_i\left(V^\mathrm{obs}_i\right)^2\right]^{-1}
+```
+"""
 
-    conv_ax = Axis(fig[3, :]; title="Convergence", xlabel="Iteration", ylabel="J", yscale=log10)
-    conv    = lines!(conv_ax, Point2{Float64}[])
-    #! format:on
+# ╔═╡ a9568707-3936-47f8-ac48-9a3ade80917f
+md"""
+Define the maximum number of iterations in the optimisation algorithm:
+"""
 
-    j_hist = Point2{Float64}[]
-    function callback(state::OptmisationState)
-        push!(j_hist, Point2(state.iter, state.j_value))
+# ╔═╡ 4ba99ac3-6e91-4d03-95a9-45507d0939a5
+maxiter = 5000;
 
-        if state.iter % 25 == 0
-            @printf("  iter = %-4d, J = %1.3e, ΔJ/J = %1.3e, ΔX/X = %1.3e, α = %1.3e\n",
-                    state.iter,
-                    state.j_value,
-                    state.j_change,
-                    state.x_change,
-                    state.α)
+# ╔═╡ 725a0a00-e07d-44b1-9a4d-ed0feb16b9aa
+md"""
+Define the parameters of the line search. Here, we only configure the minimal and maximal step size. In Reicalg, the two-way backtracking line search based on Armijo-Goldstein condition is implemented. If in the line search loop the step size decreases below $\alpha_\min$, the optimisation stops with an error. If the step size increases above $\alpha_\max$, line search accepts $\alpha_\max$ as the step size. Increasing $\alpha_\max$ might improve convergence rate in some cases, but can also lead to instabilities and convergence issues in the forward solver.
+"""
 
-            hm[1][3] = Array(state.X .* log10(ℯ))
-            hm[2][3] = Array(state.X̄ ./ log10(ℯ))
-            hm[4][3] = Array(V)
-            conv[1]  = j_hist
-            autolimits!(ax[1])
-            autolimits!(ax[2])
-            autolimits!(ax[4])
-            autolimits!(conv_ax)
-            display(fig)
-        end
-    end
+# ╔═╡ 70056cde-df6f-4ca0-bd45-eb574acfa21f
+line_search = BacktrackingLineSearch(; α_min=1e0, α_max=1e6);
 
-    options = OptimisationOptions(; line_search, callback, maxiter)
+# ╔═╡ fa564469-61b7-475a-9276-d0bb8be3104c
+md"""
+Create the model object for the snapshot SIA formulation:
+"""
 
-    optimise(model, objective, log.(As0), options)
+# ╔═╡ a9bc7adb-bd57-45ab-8fe1-becdc967379f
+model = SnapshotSIA(input_file); model.scalars.A *= E;
 
-    return
+# ╔═╡ 97bcae72-f6a8-4cc7-99d4-e383069085e1
+md"""
+Initialise the observed velocity field. The synthetic velocity is stored in the model's field `V`, as implemented in the notebook [`generate_synthetic_setup.jl`](./open?path=Reicalg.jl/app/generate_synthetic_setup.jl).
+"""
+
+# ╔═╡ 524e2615-8f7d-4a06-bad0-74c473851c58
+V_obs = copy(model.fields.V);
+
+# ╔═╡ 0feaedc3-4d6b-4409-97a7-5510bce75cf9
+ωᵥ = inv(sum(V_obs .^ 2));
+
+# ╔═╡ 2dcf4323-3bdf-4c26-ae38-30cd96734572
+md"""
+Create the objective functional object:
+"""
+
+# ╔═╡ 2fb25317-925a-4698-b77b-a3da69433cfd
+objective = SnapshotObjective(ωᵥ, V_obs, β_reg);
+
+# ╔═╡ c38d1717-c4ee-49da-98b6-f31257a9a4b4
+md"""
+### Extras
+"""
+
+# ╔═╡ 70286306-748d-4362-9f64-bcd102392c3e
+begin
+	mutable struct Callback{M,JH}
+		model::M
+		j_hist::JH
+		fig::Figure
+		axs
+		hms
+		lns
+		cbs
+		video_stream
+		
+		function Callback(model, V_obs)
+			j_hist = Point2{Float64}[]
+	
+			fig = Figure(; size=(800, 850))
+	
+		    axs = (Axis(fig[1, 1][1, 1]; aspect=DataAspect()),
+		           Axis(fig[1, 2][1, 1]; aspect=DataAspect()),
+		           Axis(fig[2, 1][1, 1]; aspect=DataAspect()),
+		           Axis(fig[2, 2][1, 1]; aspect=DataAspect()),
+				   Axis(fig[3, :]; yscale=log10))
+
+			axs[1].title = "log10(As)"
+			axs[2].title = "dJ/d(logAs)"
+			axs[3].title = "V_obs"
+			axs[4].title = "V"
+			axs[5].title = "Convergence"
+
+			axs[5].xlabel = "Iteration";
+			axs[5].ylabel = "J"
+
+			xc_km, yc_km = model.numerics.xc ./ 1e3, model.numerics.yc ./ 1e3;
+	
+		    hms = (heatmap!(axs[1], xc_km, yc_km, Array(log10.(model.fields.As))),
+		           heatmap!(axs[2], xc_km, yc_km, Array(log10.(model.fields.As))),
+		           heatmap!(axs[3], xc_km, yc_km, Array(V_obs)),
+		           heatmap!(axs[4], xc_km, yc_km, Array(model.fields.V)))
+	
+			hms[1].colormap = Reverse(:roma)
+			hms[2].colormap = Reverse(:roma)
+			hms[3].colormap = :turbo
+			hms[4].colormap = :turbo
+		
+			hms[1].colorrange = (-24, -20)
+			hms[2].colorrange = (-1e-8, 1e-8)
+			hms[3].colorrange = (0, 1e-5)
+			hms[4].colorrange = (0, 1e-5)
+	
+			lns = (lines!(axs[5], Point2{Float64}[]), )
+		
+		    cbs = (Colorbar(fig[1, 1][1, 2], hms[1]),
+		           Colorbar(fig[1, 2][1, 2], hms[2]),
+		           Colorbar(fig[2, 1][1, 2], hms[3]),
+		           Colorbar(fig[2, 2][1, 2], hms[4]))
+			
+			new{typeof(model), typeof(j_hist)}(model,
+											   j_hist,
+											   fig,
+				                               axs,
+				                               hms,
+				                               lns,
+				                               cbs,
+			                                   nothing)
+		end
+	end
+
+	function (cb::Callback)(state::OptmisationState)
+		if state.iter == 0
+			empty!(cb.j_hist)
+			cb.video_stream = VideoStream(cb.fig; framerate=10)
+		end
+
+		push!(cb.j_hist, Point2(state.iter, state.j_value))
+	
+		if state.iter % 20 == 0
+			@info @sprintf("iter #%-4d, J = %1.3e, ΔJ/J = %1.3e, ΔX/X = %1.3e, α = %1.3e\n", state.iter,
+						state.j_value,
+					    state.j_change,
+				        state.x_change,
+				        state.α)
+	
+			cb.hms[1][3] = Array(state.X .* log10(ℯ))
+			cb.hms[2][3] = Array(state.X̄ ./ log10(ℯ))
+			cb.hms[4][3] = Array(model.fields.V)
+			cb.lns[1][1] = cb.j_hist
+			autolimits!(cb.axs[5])
+			recordframe!(cb.video_stream)
+		end
+		return
+	end
+
+	md"""
+	⬅️ Show the contents of this cell to see the definition of `Callback` and the visualisation code.
+	"""
 end
 
-synthetic_params = SnapshotInversionParams(; line_search=BacktrackingLineSearch(; α_min=1e0, α_max=1e5))
+# ╔═╡ cdfca633-8f6b-42c9-a865-df36469c3d11
+let
+	# see cells below for details on how the callback is implemented
+	callback = Callback(model, V_obs)
+	options  = OptimisationOptions(; line_search, callback, maxiter)
 
-snapshot_inversion("datasets/synthetic_setup.jld2", synthetic_params)
+	# initial guess
+	logAs0 = CUDA.fill(log(As_init), size(V_obs))
+	
+	# inversion
+	optimise(model, objective, logAs0, options)
 
-aletsch_params = SnapshotInversionParams(;
-                                         E           = 2.5e-1,
-                                         line_search = BacktrackingLineSearch(; α_min=1e0, α_max=1e5))
+	# show animation
+	callback.video_stream
+end
 
-snapshot_inversion("datasets/aletsch_setup.jld2", aletsch_params)
+# ╔═╡ Cell order:
+# ╟─40661bea-47ac-11ef-1a58-f5deede4bf68
+# ╟─add4b2c2-3c27-44be-a300-922b27606cf2
+# ╠═f727116d-44c0-411e-b252-4374dd3ababc
+# ╟─812269a3-dbc7-429c-9869-d96d15be34e9
+# ╟─383e178a-1053-48a3-b6ab-ab60ce0df19b
+# ╠═416951d7-4dae-4bda-8b4d-590f61e3200b
+# ╠═f9966148-388d-4e6c-8792-5e24d59db83a
+# ╟─5885cdb4-aa0d-40b3-b01b-070f83aec0c7
+# ╠═703d7708-4668-466b-b733-70da37f7feb6
+# ╟─9cfcc489-4964-4b68-9558-6a661948c608
+# ╠═0feaedc3-4d6b-4409-97a7-5510bce75cf9
+# ╟─a9568707-3936-47f8-ac48-9a3ade80917f
+# ╠═4ba99ac3-6e91-4d03-95a9-45507d0939a5
+# ╟─725a0a00-e07d-44b1-9a4d-ed0feb16b9aa
+# ╠═70056cde-df6f-4ca0-bd45-eb574acfa21f
+# ╟─fa564469-61b7-475a-9276-d0bb8be3104c
+# ╠═a9bc7adb-bd57-45ab-8fe1-becdc967379f
+# ╟─97bcae72-f6a8-4cc7-99d4-e383069085e1
+# ╠═524e2615-8f7d-4a06-bad0-74c473851c58
+# ╟─2dcf4323-3bdf-4c26-ae38-30cd96734572
+# ╠═2fb25317-925a-4698-b77b-a3da69433cfd
+# ╠═cdfca633-8f6b-42c9-a865-df36469c3d11
+# ╟─c38d1717-c4ee-49da-98b6-f31257a9a4b4
+# ╟─70286306-748d-4362-9f64-bcd102392c3e

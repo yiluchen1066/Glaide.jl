@@ -33,7 +33,7 @@ Define the path where the resulting input file will be saved, relative to the lo
 """
 
 # ╔═╡ 0969205b-2d11-4ba2-b43a-f10fcd0dd85d
-output_path = "../../datasets/synthetic_setup.jld2"; mkpath(dirname(output_path));
+output_path = "../../datasets/synthetic_25m.jld2"; mkpath(dirname(output_path));
 
 # ╔═╡ cef6480e-d715-42a8-93d7-fa676fad09c1
 md"""
@@ -49,11 +49,11 @@ Define the resolution of the computational grid in meters, note that the smaller
 """
 
 # ╔═╡ 62605691-13c4-4ed1-ba76-933f2aa8b9ba
-resolution_meters = 50.0;
+resolution_meters = 25.0;
 
 # ╔═╡ ea677e88-1ab2-47b4-89dc-bb9049658931
 md"""
-!!! warn "Changing the resolution"
+!!! note "Changing the resolution"
 	The forward solver is based on the pseudo-transient method. While very efficient on GPUs, for strongly non-linear problems like SIA it might require resolution-dependent tuning of the iteration parameters. For much lower resolutions than 50m it is recommended reducing the damping parameters `dmp1` and `dmp2` to values < 0.1. These values can be passed to the `TimeDependentNumerics` constructor as keywords.
 """
 
@@ -330,7 +330,7 @@ with_theme(theme_latexfonts()) do
     end
 	
 	hms[1].colormap = :terrain
-	hms[2].colormap = :roma
+	hms[2].colormap = Reverse(:roma)
 	hms[3].colormap = :vik
 	hms[4].colormap = :vik
 	hms[5].colormap = :turbo
