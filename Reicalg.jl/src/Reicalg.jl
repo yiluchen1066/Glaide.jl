@@ -21,8 +21,8 @@ export download_raster
 export coords_as_ranges
 export av1, av4
 export lsq_fit
-export remove_components!
-export smooth_lap!
+export laplacian_smoothing, laplacian_smoothing!
+export remove_components, remove_components!
 
 # constants
 export SECONDS_IN_YEAR, GLEN_A, GLEN_N, RHOG_N

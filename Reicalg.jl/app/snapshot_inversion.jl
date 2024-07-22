@@ -1,5 +1,4 @@
 using Reicalg
-using CUDA
 using CairoMakie
 using Printf
 using JLD2

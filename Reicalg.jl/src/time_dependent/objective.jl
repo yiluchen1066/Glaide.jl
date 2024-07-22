@@ -49,9 +49,7 @@ function ∇J!(logĀs, logAs, objective::TimeDependentObjective, model::TimeDep
     # convert gradient to log-space
     @. logĀs *= model.fields.As
 
-    # Tikhonov regularisation term
-    @. logĀs[2:end-1, :] -= β_reg * (logAs[1:end-2, :] - 2.0 * logAs[2:end-1, :] + logAs[3:end, :]) / dx^2
-    @. logĀs[:, 2:end-1] -= β_reg * (logAs[:, 1:end-2] - 2.0 * logAs[:, 2:end-1] + logAs[:, 3:end]) / dy^2
+    tikhonov_regularisation!(logĀs, logAs, β_reg, dx, dy)
 
     return
 end
