@@ -23,7 +23,7 @@ end
 
 # ╔═╡ add4b2c2-3c27-44be-a300-922b27606cf2
 md"""
-## Snapshot inversion
+# Snapshot inversion
 
 In this notebook, we will use inverse modelling routine implemented in Reicalg.jl to reconstruct spatially variable sliding parameter $A_\mathrm{s}$. The inverse modelling problem is defined as a minimisation problem with the following objective functional:
 
@@ -32,17 +32,31 @@ J(A_\mathrm{s}) = \frac{\omega_V}{2}\sum_i\left(V_i(A_\mathrm{s}) - V^\mathrm{ob
 ```
 where $\omega_V$ is the normalisation factor and $\beta$ is the Tikhonov regularisation parameter.
 
-First, define the path to input file in JLD2 format:
+The normalisation constant is defined as the inverse of the $L_2$-norm of the observed velocity field:
+
+```math
+\omega_V = \left[\sum_i\left(V^\mathrm{obs}_i\right)^2\right]^{-1}
+```
 """
 
-# ╔═╡ f727116d-44c0-411e-b252-4374dd3ababc
-input_file = "../../datasets/synthetic_25m.jld2";
+# ╔═╡ 5dfb85d7-54ca-4322-ab0a-c64af54dc436
+md"""
+## Configuration
+
+Define the type encapsulating the properties of the inversion that might be different between cases. In this study, these are the path to the input file and the enhancement factor $E$, which is needed to reduce the influence of the ice deformation in the Aletsch case:
+"""
+
+# ╔═╡ 4a40c5c0-4e5e-4c7c-a4c7-2d8e67f5e60e
+Base.@kwdef struct InversionScenario
+	input_file::String
+	E::Float64
+end;
 
 # ╔═╡ 812269a3-dbc7-429c-9869-d96d15be34e9
-Markdown.parse("""
+md"""
 !!! warning "Prerequisites"
-	Before running this notebook, make sure that the input file `$input_file` exists on your filesystem. To generate the input files for the synthetic setup, run the notebook [`generate_synthetic_setup.jl`](./open?path=Reicalg.jl/app/generate_synthetic_setup.jl).
-""")
+	Before running this notebook, make sure input files exist on your filesystem. To generate the input files for the synthetic setup, run the notebook [`generate_synthetic_setup.jl`](./open?path=Reicalg.jl/app/generate_synthetic_setup.jl).
+"""
 
 # ╔═╡ 383e178a-1053-48a3-b6ab-ab60ce0df19b
 md"""
@@ -52,9 +66,6 @@ Define the initial guess for the sliding parameter:
 # ╔═╡ 416951d7-4dae-4bda-8b4d-590f61e3200b
 As_init = 1e-22;
 
-# ╔═╡ f9966148-388d-4e6c-8792-5e24d59db83a
-E = 1.0;
-
 # ╔═╡ 5885cdb4-aa0d-40b3-b01b-070f83aec0c7
 md"""
 Define the regularisation parameter:
@@ -62,15 +73,6 @@ Define the regularisation parameter:
 
 # ╔═╡ 703d7708-4668-466b-b733-70da37f7feb6
 β_reg = 1e-3;
-
-# ╔═╡ 9cfcc489-4964-4b68-9558-6a661948c608
-md"""
-The normalisation constant is defined as the inverse of the $L_2$-norm of the observed velocity field:
-
-```math
-\omega_V = \left[\sum_i\left(V^\mathrm{obs}_i\right)^2\right]^{-1}
-```
-"""
 
 # ╔═╡ a9568707-3936-47f8-ac48-9a3ade80917f
 md"""
@@ -90,34 +92,52 @@ line_search = BacktrackingLineSearch(; α_min=1e0, α_max=1e6);
 
 # ╔═╡ fa564469-61b7-475a-9276-d0bb8be3104c
 md"""
-Create the model object for the snapshot SIA formulation:
-"""
+## Inversion function
 
-# ╔═╡ a9bc7adb-bd57-45ab-8fe1-becdc967379f
-model = SnapshotSIA(input_file); model.scalars.A *= E;
+Here, we create a funciton that executes the inversion scenario:
+"""
 
 # ╔═╡ 97bcae72-f6a8-4cc7-99d4-e383069085e1
 md"""
-Initialise the observed velocity field. The synthetic velocity is stored in the model's field `V`, as implemented in the notebook [`generate_synthetic_setup.jl`](./open?path=Reicalg.jl/app/generate_synthetic_setup.jl).
+Some comments on the above code: 
+
+- We initialise the observed velocity field `V_obs` with `model.fields.V`. This is because th synthetic velocity is stored in the model's field `V`, as implemented in the notebook [`generate_synthetic_setup.jl`](./open?path=Reicalg.jl/app/generate_synthetic_setup.jl);
+- We create the callback object `callback = Callback(model, obs)`. The definition of `Callback` is a bit convoluted, but in short, it handles the debug visualisation, keeping track of the convergence history, and saving the intermediate results of the optimisation. For implementation details, see the __Extras__ section at the end of the notebook.
 """
-
-# ╔═╡ 524e2615-8f7d-4a06-bad0-74c473851c58
-V_obs = copy(model.fields.V);
-
-# ╔═╡ 0feaedc3-4d6b-4409-97a7-5510bce75cf9
-ωᵥ = inv(sum(V_obs .^ 2));
 
 # ╔═╡ 2dcf4323-3bdf-4c26-ae38-30cd96734572
 md"""
-Create the objective functional object:
+## Synthetic inversion
+
+First, we define the inversion scenario for the synthetic glacier. Since the input data was generated using the standard physical parameters, we set the enhancement factor $E = 1$:
 """
 
-# ╔═╡ 2fb25317-925a-4698-b77b-a3da69433cfd
-objective = SnapshotObjective(ωᵥ, V_obs, β_reg);
+# ╔═╡ bcff8e89-e6c0-4a7a-a6b6-3617000bc721
+synthetic_scenario = InversionScenario("../../datasets/synthetic_25m.jld2", 1.0);
+
+# ╔═╡ 13ee7e08-64cb-47cb-a3bc-614396cef169
+md"""
+Run the inversion:
+"""
+
+# ╔═╡ dd93c5e2-1278-4503-8654-89eac2cd518c
+md"""
+### Aletsch inversion
+
+Then, we create the inversion scenarion to reconstruct sliding parameter at the base of the Aletsch glacier. There, using the standard parameters for the flow parameter $A = 2.5\times10^{-24} \text{Pa}\,\text{s}^{-3}$ result in the surface velocity values much higher than the observed ones even without any sliding. This is likely due to using the SIA model that doesn't account for longitudinal stresses and non-hydrostatic pressure variations. We correct this by introducing a flow enhancement factor $E = 0.25$:
+"""
+
+# ╔═╡ f95355fd-86f2-4320-bac3-a3301fb73394
+aletsch_scenario = InversionScenario("../../datasets/aletsch_25m.jld2", 0.25);
+
+# ╔═╡ 506d30a1-588e-496b-a4da-50888b21c393
+md"""
+Run the inversion:
+"""
 
 # ╔═╡ c38d1717-c4ee-49da-98b6-f31257a9a4b4
 md"""
-### Extras
+## Extras
 """
 
 # ╔═╡ 70286306-748d-4362-9f64-bcd102392c3e
@@ -204,7 +224,7 @@ begin
 	
 			cb.hms[1][3] = Array(state.X .* log10(ℯ))
 			cb.hms[2][3] = Array(state.X̄ ./ log10(ℯ))
-			cb.hms[4][3] = Array(model.fields.V)
+			cb.hms[4][3] = Array(cb.model.fields.V)
 			cb.lns[1][1] = cb.j_hist
 			autolimits!(cb.axs[5])
 			recordframe!(cb.video_stream)
@@ -217,8 +237,18 @@ begin
 	"""
 end
 
-# ╔═╡ cdfca633-8f6b-42c9-a865-df36469c3d11
-let
+# ╔═╡ 700749e5-5028-4ec3-ab64-92f80a283745
+function run_inversion(scenario::InversionScenario)
+	model = SnapshotSIA(scenario.input_file)
+	
+	model.scalars.A *= scenario.E
+
+	V_obs = copy(model.fields.V)
+
+	ωᵥ = inv(sum(V_obs .^ 2))
+
+	objective = SnapshotObjective(ωᵥ, V_obs, β_reg)
+
 	# see cells below for details on how the callback is implemented
 	callback = Callback(model, V_obs)
 	options  = OptimisationOptions(; line_search, callback, maxiter)
@@ -230,31 +260,46 @@ let
 	optimise(model, objective, logAs0, options)
 
 	# show animation
-	callback.video_stream
-end
+	return callback.video_stream
+end;
+
+# ╔═╡ 776fccde-8268-4b4c-bb98-f73b0bc02eb4
+# ╠═╡ show_logs = false
+run_inversion(synthetic_scenario)
+
+# ╔═╡ 6726a19f-99fa-4a05-a90b-b10079e152f9
+# ╠═╡ show_logs = false
+run_inversion(aletsch_scenario)
+
+# ╔═╡ 45dacb6d-de79-476e-84fc-c394644c9e00
+# ╠═╡ show_logs = false
+run_inversion(InversionScenario("../../datasets/aletsch_200m.jld2", 0.25))
 
 # ╔═╡ Cell order:
 # ╟─40661bea-47ac-11ef-1a58-f5deede4bf68
 # ╟─add4b2c2-3c27-44be-a300-922b27606cf2
-# ╠═f727116d-44c0-411e-b252-4374dd3ababc
+# ╟─5dfb85d7-54ca-4322-ab0a-c64af54dc436
+# ╠═4a40c5c0-4e5e-4c7c-a4c7-2d8e67f5e60e
 # ╟─812269a3-dbc7-429c-9869-d96d15be34e9
 # ╟─383e178a-1053-48a3-b6ab-ab60ce0df19b
 # ╠═416951d7-4dae-4bda-8b4d-590f61e3200b
-# ╠═f9966148-388d-4e6c-8792-5e24d59db83a
 # ╟─5885cdb4-aa0d-40b3-b01b-070f83aec0c7
 # ╠═703d7708-4668-466b-b733-70da37f7feb6
-# ╟─9cfcc489-4964-4b68-9558-6a661948c608
-# ╠═0feaedc3-4d6b-4409-97a7-5510bce75cf9
 # ╟─a9568707-3936-47f8-ac48-9a3ade80917f
 # ╠═4ba99ac3-6e91-4d03-95a9-45507d0939a5
 # ╟─725a0a00-e07d-44b1-9a4d-ed0feb16b9aa
 # ╠═70056cde-df6f-4ca0-bd45-eb574acfa21f
 # ╟─fa564469-61b7-475a-9276-d0bb8be3104c
-# ╠═a9bc7adb-bd57-45ab-8fe1-becdc967379f
+# ╠═700749e5-5028-4ec3-ab64-92f80a283745
 # ╟─97bcae72-f6a8-4cc7-99d4-e383069085e1
-# ╠═524e2615-8f7d-4a06-bad0-74c473851c58
 # ╟─2dcf4323-3bdf-4c26-ae38-30cd96734572
-# ╠═2fb25317-925a-4698-b77b-a3da69433cfd
-# ╠═cdfca633-8f6b-42c9-a865-df36469c3d11
+# ╠═bcff8e89-e6c0-4a7a-a6b6-3617000bc721
+# ╟─13ee7e08-64cb-47cb-a3bc-614396cef169
+# ╠═776fccde-8268-4b4c-bb98-f73b0bc02eb4
+# ╟─dd93c5e2-1278-4503-8654-89eac2cd518c
+# ╠═f95355fd-86f2-4320-bac3-a3301fb73394
+# ╟─506d30a1-588e-496b-a4da-50888b21c393
+# ╠═6726a19f-99fa-4a05-a90b-b10079e152f9
+# ╠═45dacb6d-de79-476e-84fc-c394644c9e00
 # ╟─c38d1717-c4ee-49da-98b6-f31257a9a4b4
 # ╟─70286306-748d-4362-9f64-bcd102392c3e
