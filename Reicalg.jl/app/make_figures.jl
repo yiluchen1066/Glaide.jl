@@ -16,7 +16,7 @@ begin
 	using Printf
 	using JLD2
 
-	CairoMakie.activate!(type="png", px_per_unit=4)
+	CairoMakie.activate!(type="svg", pt_per_unit=2)
 	
 	using PlutoUI
     TableOfContents()
@@ -565,6 +565,18 @@ with_theme(makie_theme) do
 	fig
 end
 
+# ╔═╡ 3d2bea48-6f61-433d-97a8-8ac76137ff75
+md"""
+## Iversion summary for Aletsch inversions
+"""
+
+# ╔═╡ 62c22e3d-fbc1-4925-ad36-6225dbbe78e5
+md"""
+"""
+
+# ╔═╡ 9515f730-94a4-4262-8bc4-f3511aa797ad
+
+
 # ╔═╡ Cell order:
 # ╟─cc163f70-4dac-11ef-3e26-7366ab19d20e
 # ╠═63512265-bbc4-49ba-b460-2e69c98f1228
@@ -580,7 +592,7 @@ end
 # ╟─9902e887-1496-4686-9c27-04b73d751ef6
 # ╟─a785cc48-5386-49b5-901c-780568d7301b
 # ╟─b0844542-8f1f-4691-9777-23ce34675e19
-# ╠═e3c678e8-d43a-4a3c-a26e-ccbc15d89501
+# ╟─e3c678e8-d43a-4a3c-a26e-ccbc15d89501
 # ╠═2f8c5e86-c904-4710-96dc-5375864d3166
 # ╟─a35b1524-48d3-404e-b727-2ebef5c8b2c2
 # ╠═a2be1579-5cf4-4763-8529-abf3beb08b76
@@ -589,3 +601,6 @@ end
 # ╟─5dc29e4b-f572-4b46-8ccf-f65cd94b0433
 # ╠═db859254-b076-4b88-bae8-cffc82f863f9
 # ╟─eb90e0e4-95b3-4e1a-8239-fa891517a1c4
+# ╟─3d2bea48-6f61-433d-97a8-8ac76137ff75
+# ╠═62c22e3d-fbc1-4925-ad36-6225dbbe78e5
+# ╠═9515f730-94a4-4262-8bc4-f3511aa797ad
