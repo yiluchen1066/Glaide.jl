@@ -25,7 +25,7 @@ end
 md"""
 # Generating the input data for the Aletsch glacier
 
-In this notebook, we will prepare the inputs for the Reicalg.jl model.
+In this notebook, we will prepare the inputs for the Glaide.jl model.
 
 We will perform the following steps:
 
@@ -89,7 +89,7 @@ smooth_amount = 1e3;
 md"""
 ## Prerequisites
 
-Bed and some surface elevation data can be downloaded automatically, but other data needs to be downloaded manually and saved in the correct places in the filesystem to reproduce the results. The source files will be places into the `datasets/_sources` directory:
+Bed and some surface elevation data can be downloaded automatically from their original sources, while other data needs to be downloaded from a Zenodo repository (as it woule else need to be manually handled). The source files will be places into the `datasets/_sources` directory:
 """
 
 # ╔═╡ 37042783-bafe-444f-85ff-bc9f17d4ff53
@@ -97,61 +97,60 @@ sources_dir = joinpath(datasets_dir, "_sources"); mkpath(sources_dir);
 
 # ╔═╡ 4af27194-4ebe-41a9-a716-142b3f4817e0
  Markdown.parse("""
-Unfortunately, it is impossible to automatically download the dataset for ice velocities from [Rabatel et al. (2023)](https://doi.org/10.3390/data8040066) so it needs to be downloaded manually using [this link](https://entrepot.recherche.data.gouv.fr/file.xhtml?persistentId=doi:10.57745/VJYARH&version=1.1) 
-and saved to the directory `"$sources_dir"`. The file path should be the same as this variable:
+The Zenodo repository provides the dataset for ice velocities from [Rabatel et al. (2023)](https://doi.org/10.3390/data8040066), elevation data from [swissALTI3D](https://www.swisstopo.admin.ch/en/height-model-swissalti3d), and mass balance data from [GLAMOS](https://glamos.ch/#/A10g-05). We define the Zenodo URL from which we can access the files:
 """)
 
 # ╔═╡ 24930db6-f893-4cc6-ad30-58e8bac0ee1c
-velocity_path = joinpath(sources_dir, "ALPES_wFLAG_wKT_ANNUALv2016-2021.nc");
+zenodo_url = "https://zenodo.org/api/records/13133070/draft/files-archive";
 
 # ╔═╡ b0969b25-551f-4e72-b08c-63881e05f359
 md"""
-The elevation and mass balance data are distributed as the datasets accompanying the paper, they need to be downloaded manually and also stored at the sources directory:
+Besides the Zenodo URL, we also need to define the URLs for downloading bed and surface elevation data from [Grab et al. (2020)](https://doi.org/10.1017/jog.2021.55):
 """
 
 # ╔═╡ 77e4a6bc-8502-4328-a08f-c28796b3d55d
 begin
-    surface_2009_path = joinpath(sources_dir, "aletsch2009.asc")
-    surface_2017_path = joinpath(sources_dir, "aletsch2017.asc")
-    mass_balance_path = joinpath(sources_dir, "aletsch_fix.dat")
+    bed_url = "https://www.research-collection.ethz.ch/bitstream/handle/20.500.11850/434697/07_GlacierBed_SwissAlps.zip"
+    surface_url = "https://www.research-collection.ethz.ch/bitstream/handle/20.500.11850/434697/08_SurfaceElevation_SwissAlps.zip"
 end;
 
 # ╔═╡ 20b667e7-2adf-428a-b7b2-fb684fb401b1
 md"""
 ## Processing the raster data
 
-### Downloading the elevation data
+### Downloading the required data
 """
-
-# ╔═╡ f370b133-c07d-431b-a7ba-2252d16ded53
-md"""
-First, we define the URLs for downloading bed and surface elevation from [Grab et al. (2020)](https://doi.org/10.1017/jog.2021.55):
-"""
-
-# ╔═╡ 9f5a6312-04c6-4881-81e0-4003f865828d
-begin
-    bed_url = "https://www.research-collection.ethz.ch/bitstream/handle/20.500.11850/434697/07_GlacierBed_SwissAlps.zip"
-    surface_url = "https://www.research-collection.ethz.ch/bitstream/handle/20.500.11850/434697/08_SurfaceElevation_SwissAlps.zip"
-end;
 
 # ╔═╡ 0faf7da5-464b-4943-821b-5259714d8f87
 md"""
-Then we define which files we need from the datasets, and download these files using the `download_raster` function provided by Reicalg.jl. If the files already exist in the filesystem, they won't be downloaded.
+We here define which files we need from the datasets, and download these files using the `download_raster` function provided by Glaide.jl. If the files already exist in the filesystem, they won't be downloaded.
 """
 
 # ╔═╡ 6c93121b-90e8-4a3b-adcd-d4ed118466f6
 begin
-    # paths to the target GeoTIFF files in the ZIP archives:
-    bed_zip_path     = "07_GlacierBed_SwissAlps/GlacierBed.tif"
-    surface_zip_path = "08_SurfaceElevation_SwissAlps/SwissALTI3D_r2019.tif"
+    # paths to the target asc, dat, nc and GeoTIFF files in the ZIP archives:
+    surface_2009_zip_path = "aletsch2009.asc"
+    surface_2017_zip_path = "aletsch2017.asc"
+    mass_balance_zip_path = "aletsch_fix.dat"
+    velocity_zip_path     = "ALPES_wFLAG_wKT_ANNUALv2016-2021.nc"
+	bed_zip_path          = "07_GlacierBed_SwissAlps/GlacierBed.tif"
+    surface_zip_path      = "08_SurfaceElevation_SwissAlps/SwissALTI3D_r2019.tif"
 
-    # paths to the GeoTIFF files in the filesystem
-    bed_tif_path     = joinpath(sources_dir, bed_zip_path)
-    surface_tif_path = joinpath(sources_dir, surface_zip_path)
+    # paths to the asc, dat, nc and GeoTIFF files in the filesystem
+	surface_2009_path = joinpath(sources_dir, surface_2009_zip_path)
+    surface_2017_path = joinpath(sources_dir, surface_2017_zip_path)
+    mass_balance_path = joinpath(sources_dir, mass_balance_zip_path)
+    velocity_path     = joinpath(sources_dir, velocity_zip_path)
+    bed_tif_path      = joinpath(sources_dir, bed_zip_path)
+    surface_tif_path  = joinpath(sources_dir, surface_zip_path)
 
-    # download datasets from ETH research collection
-    download_raster(bed_url, bed_zip_path, bed_tif_path)
-    download_raster(surface_url, surface_zip_path, surface_tif_path)
+    # download datasets
+	download_raster(zenodo_url , surface_2009_zip_path, surface_2009_path)
+    download_raster(zenodo_url , surface_2017_zip_path, surface_2017_path)
+    download_raster(zenodo_url , mass_balance_zip_path, mass_balance_path)
+    download_raster(zenodo_url , velocity_zip_path    , velocity_path)
+    download_raster(bed_url    , bed_zip_path         , bed_tif_path)
+    download_raster(surface_url, surface_zip_path     , surface_tif_path)
 end;
 
 # ╔═╡ b55c88fd-ef10-42a4-92ad-83ca671bd96a
@@ -562,9 +561,7 @@ end
 # ╟─b0969b25-551f-4e72-b08c-63881e05f359
 # ╠═77e4a6bc-8502-4328-a08f-c28796b3d55d
 # ╟─20b667e7-2adf-428a-b7b2-fb684fb401b1
-# ╟─f370b133-c07d-431b-a7ba-2252d16ded53
-# ╠═9f5a6312-04c6-4881-81e0-4003f865828d
-# ╟─0faf7da5-464b-4943-821b-5259714d8f87
+# ╠═0faf7da5-464b-4943-821b-5259714d8f87
 # ╠═6c93121b-90e8-4a3b-adcd-d4ed118466f6
 # ╟─b55c88fd-ef10-42a4-92ad-83ca671bd96a
 # ╟─4b6fa9b4-4528-4e28-aaff-e13825a26037
