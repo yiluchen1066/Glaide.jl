@@ -101,7 +101,7 @@ The Zenodo repository provides the dataset for ice velocities from [Rabatel et a
 """)
 
 # ╔═╡ 24930db6-f893-4cc6-ad30-58e8bac0ee1c
-zenodo_url = "https://zenodo.org/api/records/13133070/draft/files-archive";
+zenodo_url = "https://zenodo.org/api/records/13133070/files-archive";
 
 # ╔═╡ b0969b25-551f-4e72-b08c-63881e05f359
 md"""
@@ -561,7 +561,7 @@ end
 # ╟─b0969b25-551f-4e72-b08c-63881e05f359
 # ╠═77e4a6bc-8502-4328-a08f-c28796b3d55d
 # ╟─20b667e7-2adf-428a-b7b2-fb684fb401b1
-# ╠═0faf7da5-464b-4943-821b-5259714d8f87
+# ╟─0faf7da5-464b-4943-821b-5259714d8f87
 # ╠═6c93121b-90e8-4a3b-adcd-d4ed118466f6
 # ╟─b55c88fd-ef10-42a4-92ad-83ca671bd96a
 # ╟─4b6fa9b4-4528-4e28-aaff-e13825a26037
