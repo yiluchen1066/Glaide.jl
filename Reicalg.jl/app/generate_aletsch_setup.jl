@@ -1,5 +1,5 @@
 ### A Pluto.jl notebook ###
-# v0.19.45
+# v0.19.43
 
 using Markdown
 using InteractiveUtils
@@ -45,7 +45,7 @@ First, define the path where the datasets will be stored. The path is relative t
 """
 
 # ╔═╡ 0f9575cb-b4b6-4d3a-97d4-dc5db7c23c12
-datasets_dir = "../../datasets";
+datasets_dir = "../datasets";
 
 # ╔═╡ 72db902c-10f3-4446-99d5-4eb0f810662b
 md"""
@@ -71,7 +71,7 @@ md"""
 
 # ╔═╡ ee1916bf-d3b4-41b8-b507-57b57a324bce
 md"""
-Small isolated ice patches might hinder convergence of the numerical model, so we remove them. We define the threshold area below which the connected ice-covered area is treated as small ice patch:
+Small isolated ice patches might hinder convergence of the numerical model, so we remove them. We define the threshold area (in $m^2$) below which the connected ice-covered area is treated as small ice patch:
 """
 
 # ╔═╡ 055bd14d-a02f-4610-8212-3ea52ce4d7c0
@@ -89,7 +89,7 @@ smooth_amount = 1e3;
 md"""
 ## Prerequisites
 
-Bed and some surface elevation data can be downloaded automatically, but the rest needs to be downloaded manually in the correct places in the filesystem to reproduce the results. The source files will be places into this directory:
+Bed and some surface elevation data can be downloaded automatically, but other data needs to be downloaded manually and saved in the correct places in the filesystem to reproduce the results. The source files will be places into the `datasets/_sources` directory:
 """
 
 # ╔═╡ 37042783-bafe-444f-85ff-bc9f17d4ff53
@@ -97,7 +97,7 @@ sources_dir = joinpath(datasets_dir, "_sources"); mkpath(sources_dir);
 
 # ╔═╡ 4af27194-4ebe-41a9-a716-142b3f4817e0
  Markdown.parse("""
-Unfortunately, it is impossible to automatically download the dataset for ice velocities from [Rabatel et al.](https://doi.org/10.3390/data8040066) so it needs to be downloaded manually using [this link](https://entrepot.recherche.data.gouv.fr/file.xhtml?persistentId=doi:10.57745/VJYARH&version=1.1) 
+Unfortunately, it is impossible to automatically download the dataset for ice velocities from [Rabatel et al. (2023)](https://doi.org/10.3390/data8040066) so it needs to be downloaded manually using [this link](https://entrepot.recherche.data.gouv.fr/file.xhtml?persistentId=doi:10.57745/VJYARH&version=1.1) 
 and saved to the directory `"$sources_dir"`. The file path should be the same as this variable:
 """)
 
@@ -106,7 +106,7 @@ velocity_path = joinpath(sources_dir, "ALPES_wFLAG_wKT_ANNUALv2016-2021.nc");
 
 # ╔═╡ b0969b25-551f-4e72-b08c-63881e05f359
 md"""
-The elevation data and mass balance data are distributed as the datasets accompanying the paper, they need to be downloaded manually and also stored at the sources directory:
+The elevation and mass balance data are distributed as the datasets accompanying the paper, they need to be downloaded manually and also stored at the sources directory:
 """
 
 # ╔═╡ 77e4a6bc-8502-4328-a08f-c28796b3d55d
@@ -125,7 +125,7 @@ md"""
 
 # ╔═╡ f370b133-c07d-431b-a7ba-2252d16ded53
 md"""
-First, we define the URLs for downloading bed and surface elevation from [Grab et al. 2020](https://doi.org/10.1017/jog.2021.55):
+First, we define the URLs for downloading bed and surface elevation from [Grab et al. (2020)](https://doi.org/10.1017/jog.2021.55):
 """
 
 # ╔═╡ 9f5a6312-04c6-4881-81e0-4003f865828d
@@ -161,9 +161,9 @@ md"""
 
 # ╔═╡ 4b6fa9b4-4528-4e28-aaff-e13825a26037
 md"""
-Bed elevation data from [Grab et al. 2020](https://doi.org/10.1017/jog.2021.55) is only defined at ice-covered regions. In our model, we need the bedrock to be defined everywhere in the computational domain. To achieve this, we combine the bedrock dataset with the surface elevation model at the ice-free regions.
+Bed elevation data from [Grab et al. (2020)](https://doi.org/10.1017/jog.2021.55) is only defined at ice-covered regions. In our model, we need the bedrock to be defined everywhere in the computational domain. To achieve this, we combine the bedrock dataset with the surface elevation model at the ice-free regions.
 
-We crop the bed and the surface data to match the provided extent. Then we replace the missing data points in the bedrock dataset with the corresponding values in the surface elevation dataset from ALTI3D. Finally, we resample the bedrock raster to target spatial resolution using cubic spline interpolation:
+We crop the bed and the surface data to match the provided extent. Then we replace the missing data points in the bedrock dataset with the corresponding values in the surface elevation dataset from [swissALTI3D](https://www.swisstopo.admin.ch/en/height-model-swissalti3d). Finally, we resample the bedrock raster to target spatial resolution using cubic spline interpolation:
 """
 
 # ╔═╡ 9c0af9c4-cb6a-46e8-b222-9e4a75eeb4c7
@@ -213,7 +213,7 @@ end;
 md"""
 ### Processing the velocity data
 
-In this section, we load and process the velocity data from the dataset from [Rabatel et al. 2023](https://doi.org/10.3390/data8040066). The processing includes the following steps:
+In this section, we load and process the velocity data from the dataset from [Rabatel et al. (2023)](https://doi.org/10.3390/data8040066). The processing includes the following steps:
 
 1. Load the data, georeferenced using the WGS 84 corrdinate system;
 2. Flip the data array for consistency with the elevation data;
@@ -254,7 +254,7 @@ end;
 md"""
 ### Smoothing the raster data
 
-As a final pre-processing step, we apply several steps of laplacian smoothing to all the rasters that constitute the input data, i.e. the bed elevation, the ice thickness, and the velocity. This is needed to reduce the noise in the data. Note that the laplacian filter preserves monotonicity, no new local extrema can be created in the data.
+As a final pre-processing step, we apply several steps of Laplacian smoothing to all the rasters that constitute the input data, i.e. the bed elevation, the ice thickness, and the velocity. This is needed to reduce the noise in the data. Note that the Laplacian filter preserves monotonicity, no new local extrema can be created in the data.
 
 We use the function `laplacian_smoothing`, provided by Reicalg.jl. Note that we cannot update the rasters in-place or re-use the variable names due to constraints posed by reactivity of Pluto.jl notebooks.
 """
@@ -274,10 +274,10 @@ md"""
 The surface mass balance (SMB) data is provided in the form of annual mass balance per elevation band. In Reicalg.jl, the SMB model is based on the simple altitude-dependent parametrisation:
 
 ```math
-\dot{b}(z) = \min\left\{\beta (z - ELA),\ \dot{b}_\mathrm{max}\right\}~,
+\dot{b}(z) = \min\left\{\beta (z - \mathrm{ELA}),\ \dot{b}_\mathrm{max}\right\}~,
 ```
 
-where $z$ is the altitude, $\beta$ is the rate of change of mass balance, $ELA$ is the equilibrium line altitude where $\dot{b}=0$, and $\dot{b}_\mathrm{max}$ is the maximum accumulation rate.
+where $z$ is the altitude, $\beta$ is the rate of change of mass balance, $\mathrm{ELA}$ is the equilibrium line altitude where $\dot{b}=0$, and $\dot{b}_\mathrm{max}$ is the maximum accumulation rate.
 
 
 The data set covers time period from 1914 to 2022. In this section, we extract the SMB data for 2016-2017 hydrological year, and fit the parameters of the simple model:
@@ -409,11 +409,10 @@ end;
 
 # ╔═╡ ac8a9b9c-b0a5-42c3-96e0-de5b68abf66e
 md"""
-Some comments on the code:
-
-- Ice velocity data from [Rabatel et al. 2023](https://doi.org/10.3390/data8040066) is given on an annual basis. We create the intermediate ice thickness to match the velocity in years 2016--2017 by assuming linear variation between snapshots. Since the linear interpolation preserves monotonicity, no clamping is needed after this step.
-- The altitude-dependent SMB model that we use doesn't account for lateral variations of the mass balance. Therefore, in the numerical simulation the forward model might create non-zero ice thickness in the regions where the observed surface is ice-free. This is inconsistent with both the observed surface changes and velocity data that is used for the inversion. Here, we use the simple distributed correction for the mass balance: we introduce a mass balance mask, which remove ice accumulation in the regions where the observed ice thickness is zero.
-- We pack the input data into named tuples. The raster data is stored in the flipped order in the underlying array. We fix this by reversing all the arrays along the second dimension before saving as JLD2.
+!!! note "Some comments on the code"
+	- Ice velocity data from [Rabatel et al. (2023)](https://doi.org/10.3390/data8040066) is given on an annual basis. We create the intermediate ice thickness to match the velocity in years 2016--2017 by assuming linear variation between snapshots. Since the linear interpolation preserves monotonicity, no clamping is needed after this step.
+	- The altitude-dependent SMB model that we use doesn't account for lateral variations of the mass balance. Therefore, in the numerical simulation the forward model might create non-zero ice thickness in the regions where the observed surface is ice-free. This is inconsistent with both the observed surface changes and velocity data that is used for the inversion. Here, we use the simple distributed correction for the mass balance: we introduce a mass balance mask, which remove ice accumulation in the regions where the observed ice thickness is zero.
+	- We pack the input data into named tuples. The raster data is stored in the flipped order in the underlying array. We fix this by reversing all the arrays along the second dimension before saving as JLD2.
 
 With all preparations done, let's generate the input files:
 """
