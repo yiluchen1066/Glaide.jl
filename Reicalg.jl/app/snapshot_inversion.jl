@@ -1,5 +1,5 @@
 ### A Pluto.jl notebook ###
-# v0.19.43
+# v0.19.45
 
 using Markdown
 using InteractiveUtils
@@ -114,8 +114,8 @@ First, we define the inversion scenario for the synthetic glacier. Since the inp
 """
 
 # ╔═╡ bcff8e89-e6c0-4a7a-a6b6-3617000bc721
-synthetic_scenario = InversionScenario(; input_file="../../datasets/synthetic_25m.jld2",
-output_dir="../../output/snapshot_synthetic_25m");
+synthetic_scenario = InversionScenario(; input_file="../datasets/synthetic_25m.jld2",
+output_dir="../output/snapshot_synthetic_25m");
 
 # ╔═╡ 13ee7e08-64cb-47cb-a3bc-614396cef169
 md"""
@@ -130,7 +130,7 @@ Then, we create the inversion scenarion to reconstruct sliding parameter at the 
 """
 
 # ╔═╡ f95355fd-86f2-4320-bac3-a3301fb73394
-aletsch_scenario = InversionScenario(; input_file="../../datasets/aletsch_25m.jld2", output_dir="../../output/snapshot_aletsch_25m", E=0.25);
+aletsch_scenario = InversionScenario(; input_file="../datasets/aletsch_25m.jld2", output_dir="../output/snapshot_aletsch_25m", E=0.25);
 
 # ╔═╡ 506d30a1-588e-496b-a4da-50888b21c393
 md"""
@@ -293,15 +293,15 @@ run_inversion(aletsch_scenario)
 
 # ╔═╡ 45dacb6d-de79-476e-84fc-c394644c9e00
 # ╠═╡ show_logs = false
-run_inversion(InversionScenario(; input_file="../../datasets/aletsch_200m.jld2", output_dir="../../output/snapshot_aletsch_200m", E=0.25))
+run_inversion(InversionScenario(; input_file="../datasets/aletsch_200m.jld2", output_dir="../output/snapshot_aletsch_200m", E=0.25))
 
 # ╔═╡ 2a6367e7-6521-4188-8a40-11748cf11ffc
 # ╠═╡ show_logs = false
-run_inversion(InversionScenario(; input_file="../../datasets/aletsch_100m.jld2", output_dir="../../output/snapshot_aletsch_100m", E=0.25))
+run_inversion(InversionScenario(; input_file="../datasets/aletsch_100m.jld2", output_dir="../output/snapshot_aletsch_100m", E=0.25))
 
 # ╔═╡ 6c6d30ae-63b0-421a-8061-c4bb73d95f91
 # ╠═╡ show_logs = false
-run_inversion(InversionScenario(; input_file="../../datasets/aletsch_50m.jld2", output_dir="../../output/snapshot_aletsch_50m", E=0.25))
+run_inversion(InversionScenario(; input_file="../datasets/aletsch_50m.jld2", output_dir="../output/snapshot_aletsch_50m", E=0.25))
 
 # ╔═╡ Cell order:
 # ╟─40661bea-47ac-11ef-1a58-f5deede4bf68
@@ -332,4 +332,4 @@ run_inversion(InversionScenario(; input_file="../../datasets/aletsch_50m.jld2", 
 # ╠═2a6367e7-6521-4188-8a40-11748cf11ffc
 # ╠═6c6d30ae-63b0-421a-8061-c4bb73d95f91
 # ╟─c38d1717-c4ee-49da-98b6-f31257a9a4b4
-# ╠═70286306-748d-4362-9f64-bcd102392c3e
+# ╟─70286306-748d-4362-9f64-bcd102392c3e
