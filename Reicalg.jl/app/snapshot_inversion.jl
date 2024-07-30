@@ -1,5 +1,5 @@
 ### A Pluto.jl notebook ###
-# v0.19.45
+# v0.19.43
 
 using Markdown
 using InteractiveUtils
@@ -10,7 +10,7 @@ begin
 	import Pkg
 	Pkg.activate(Base.current_project())
     Pkg.instantiate()
-	
+
 	using Reicalg
 	using CairoMakie
 	using Printf
@@ -100,9 +100,9 @@ Here, we create a funciton that executes the inversion scenario:
 
 # ╔═╡ 97bcae72-f6a8-4cc7-99d4-e383069085e1
 md"""
-Some comments on the above code: 
+Some comments on the above code:
 
-- We initialise the observed velocity field `V_obs` with `model.fields.V`. This is because th synthetic velocity is stored in the model's field `V`, as implemented in the notebook [`generate_synthetic_setup.jl`](./open?path=Reicalg.jl/app/generate_synthetic_setup.jl);
+- We initialise the observed velocity field `V_obs` with `model.fields.V`. This is because the synthetic velocity is stored in the model's field `V`, as implemented in the notebook [`generate_synthetic_setup.jl`](./open?path=Reicalg.jl/app/generate_synthetic_setup.jl);
 - We create the callback object `callback = Callback(model, obs)`. The definition of `Callback` is a bit convoluted, but in short, it handles the debug visualisation, keeping track of the convergence history, and saving the intermediate results of the optimisation. For implementation details, see the __Extras__ section at the end of the notebook.
 """
 
@@ -155,12 +155,12 @@ begin
 		cbs
 		video_stream
 		step::Int
-		
+
 		function Callback(model, scenario, V_obs)
 			j_hist = Point2{Float64}[]
-	
+
 			fig = Figure(; size=(800, 850))
-	
+
 		    axs = (Axis(fig[1, 1][1, 1]; aspect=DataAspect()),
 		           Axis(fig[1, 2][1, 1]; aspect=DataAspect()),
 		           Axis(fig[2, 1][1, 1]; aspect=DataAspect()),
@@ -177,29 +177,29 @@ begin
 			axs[5].ylabel = "J"
 
 			xc_km, yc_km = model.numerics.xc ./ 1e3, model.numerics.yc ./ 1e3;
-	
+
 		    hms = (heatmap!(axs[1], xc_km, yc_km, Array(log10.(model.fields.As))),
 		           heatmap!(axs[2], xc_km, yc_km, Array(log10.(model.fields.As))),
 		           heatmap!(axs[3], xc_km, yc_km, Array(V_obs)),
 		           heatmap!(axs[4], xc_km, yc_km, Array(model.fields.V)))
-	
+
 			hms[1].colormap = Reverse(:roma)
 			hms[2].colormap = Reverse(:roma)
 			hms[3].colormap = :turbo
 			hms[4].colormap = :turbo
-		
+
 			hms[1].colorrange = (-24, -20)
 			hms[2].colorrange = (-1e-8, 1e-8)
 			hms[3].colorrange = (0, 1e-5)
 			hms[4].colorrange = (0, 1e-5)
-	
+
 			lns = (lines!(axs[5], Point2{Float64}[]), )
-		
+
 		    cbs = (Colorbar(fig[1, 1][1, 2], hms[1]),
 		           Colorbar(fig[1, 2][1, 2], hms[2]),
 		           Colorbar(fig[2, 1][1, 2], hms[3]),
 		           Colorbar(fig[2, 2][1, 2], hms[4]))
-			
+
 			new{typeof(model), typeof(scenario), typeof(j_hist)}(model,
 																				 scenario,
 											   					 j_hist,
@@ -222,14 +222,14 @@ begin
 		end
 
 		push!(cb.j_hist, Point2(state.iter, state.j_value))
-	
+
 		if state.iter % 10 == 0
 			@info @sprintf("iter #%-4d, J = %1.3e, ΔJ/J = %1.3e, ΔX/X = %1.3e, α = %1.3e\n", state.iter,
 					  state.j_value,
 					  state.j_change,
 				      state.x_change,
 				      state.α)
-	
+
 			cb.hms[1][3] = Array(state.X .* log10(ℯ))
 			cb.hms[2][3] = Array(state.X̄ ./ log10(ℯ))
 			cb.hms[4][3] = Array(cb.model.fields.V)
@@ -246,7 +246,7 @@ begin
 	                H=Array(cb.model.fields.H),
 	                iter=state.iter,
 	                j_hist=cb.j_hist,)
-	
+
 	        cb.step += 1
 		end
 		return
@@ -260,7 +260,7 @@ end
 # ╔═╡ 700749e5-5028-4ec3-ab64-92f80a283745
 function run_inversion(scenario::InversionScenario)
 	model = SnapshotSIA(scenario.input_file)
-	
+
 	model.scalars.A *= scenario.E
 
 	V_obs = copy(model.fields.V)
@@ -275,7 +275,7 @@ function run_inversion(scenario::InversionScenario)
 
 	# initial guess
 	logAs0 = CUDA.fill(log(As_init), size(V_obs))
-	
+
 	# inversion
 	optimise(model, objective, logAs0, options)
 
