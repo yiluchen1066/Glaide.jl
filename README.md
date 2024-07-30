@@ -1,3 +1,7 @@
-### Snapshot and time-dependent inversion of basal sliding using automatic generation of adjoint code on graphics processing units
+# Glaide.jl
+**Gla**cier sl**ide** - Snapshot and time-dependent inversions of glacier basal sliding using automatic generation of adjoint code on graphics processing units
 
-:construction: Readme under construction.
+> [!WARNING]
+> :construction: README under construction.
+
+## Getting started
