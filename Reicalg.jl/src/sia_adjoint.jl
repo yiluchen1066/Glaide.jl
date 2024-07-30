@@ -6,7 +6,7 @@ function _update_adjoint_state!(ψ, dψ_dτ, H̄, D, dmp, cfl, β, dt, dx, dy)
         dψ_dτ[ix, iy] = dψ_dτ[ix, iy] * dmp + H̄[ix+1, iy+1]
 
         # compute the pseudo-time step
-        D_av = @av_xy(D) + 1e-3 # add small value
+        D_av = @av_xy(D) + 2e-6 * min(dx, dy)^2 # add small value
         dτ   = inv(D_av / min(dx, dy)^2 / cfl + β + inv(dt))
 
         # update adjoint state

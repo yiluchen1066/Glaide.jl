@@ -213,7 +213,7 @@ function solve_adjoint!(Ās, model::TimeDependentSIA)
                    Const(β), Const(ela), Const(b_max), Const(mb_mask),
                    Const(dt), Const(dx), Const(dy))
 
-        ∇bc!(Duplicated(H, H̄), Const(B))
+        ∇bc!(Duplicated(H, H̄))
 
         ∇diffusivity!(DupNN(D, D̄),
                       DupNN(H, H̄),
@@ -221,7 +221,7 @@ function solve_adjoint!(Ās, model::TimeDependentSIA)
                       Const(ρgn), Const(npow),
                       Const(dx), Const(dy))
 
-        ∇bc!(Duplicated(H, H̄))
+        ∇bc!(Duplicated(H, H̄), Const(B))
 
         update_adjoint_state!(ψ, dψ_dτ, H̄, D, dmp, cfl, β, dt, dx, dy)
 

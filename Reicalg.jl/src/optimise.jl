@@ -10,7 +10,7 @@ Base.@kwdef struct OptimisationOptions{LS,CB}
     callback::CB   = nothing
     maxiter::Int   = 1000
     j_tol::Float64 = 0.0
-    x_tol::Float64 = 1e-5
+    x_tol::Float64 = 0.0
 end
 
 struct OptmisationState{T,I,A}
@@ -57,9 +57,6 @@ function optimise(model, objective, X0, options)
     # initialise the search direction with the direction of the steepest descent
     @. P = -X̄
 
-    # store the norm of the gradient
-    rnorm0 = dot(X̄, X̄)
-
     # initial step size
     α = line_search.α_min
 
@@ -87,10 +84,11 @@ function optimise(model, objective, X0, options)
         # compute gradient
         ∇J!(X̄, X, objective, model)
 
-        # modified Polak-Ribière-Polyak (PRP+) rule
-        rnorm  = dot(X̄, X̄)
-        β      = max((rnorm - dot(X̄, X̄p)) / rnorm0, 0.0)
-        rnorm0 = rnorm
+        # Hager-Zhang rule
+        Y    = X̄ .- X̄p
+        dkyk = dot(P, Y)
+        ηk   = -inv(sqrt(dot(P, P)) * min(0.01, sqrt(dot(X̄, X̄))))
+        β    = max(dot(Y .- (2.0 * dot(Y, Y) / dkyk) .* P, X̄) / dkyk, ηk)
 
         # update search direction
         @. P = P * β - X̄
@@ -99,7 +97,7 @@ function optimise(model, objective, X0, options)
         J1 = J(X, objective, model)
 
         j_change = abs(J1 - J0) / J1
-        x_change = mapreduce((a, b) -> abs(a - b), max, X, X0) / mapreduce(abs, max, X)
+        x_change = mapreduce(abs, max, X̄)
 
         j_converged = j_change < j_tol
         x_converged = x_change < x_tol
@@ -182,7 +180,7 @@ function find_step_line_search(model, objective, line_search, α0, X, X0, X̄, P
     end
 
     if !accepted
-        error("line search failed to find a suitable step size.")
+        @warn "line search failed to find a suitable step size"
     end
 
     return α

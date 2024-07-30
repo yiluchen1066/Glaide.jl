@@ -428,7 +428,7 @@ end;
 md"""
 ## Visualisation
 
-Finally, we visualise the input data for the highest resolution (which is $(minimum(resolutions)) m) and save a nice figure for the publication:
+Finally, we visualise the input data for the highest resolution (which is $(minimum(resolutions)) m):
 """
 
 # ╔═╡ 4c80c4b5-0a66-48c2-8617-20e33501f5ec
@@ -538,16 +538,6 @@ with_theme(theme_latexfonts()) do
           Colorbar(fig[2, 1][1, 2], hms[3]),
           Colorbar(fig[2, 2][1, 2], hms[4]),
           Colorbar(fig[1, 3][1, 2], hms[5]))
-
-    for (label, idx) in zip(("A", "B", "C", "D", "E", "F"),
-                            ((1,1), (1,2), (1,3), (2,1), (2,2), (2,3)))
-        Label(fig[idx..., TopLeft()], label; fontsize = 20,
-											 font     = :bold,
-											 padding  = (0, 10, 5, 0))
-    end
-
-    mkpath("../../figures")
-    save("../../figures/aletsch_setup.pdf", fig)
 
     fig
 end

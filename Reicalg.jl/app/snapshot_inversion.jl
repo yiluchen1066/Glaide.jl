@@ -49,7 +49,8 @@ Define the type encapsulating the properties of the inversion that might be diff
 # ╔═╡ 4a40c5c0-4e5e-4c7c-a4c7-2d8e67f5e60e
 Base.@kwdef struct InversionScenario
 	input_file::String
-	E::Float64
+	output_dir::String
+	E::Float64 = 1.0
 end;
 
 # ╔═╡ 812269a3-dbc7-429c-9869-d96d15be34e9
@@ -72,7 +73,7 @@ Define the regularisation parameter:
 """
 
 # ╔═╡ 703d7708-4668-466b-b733-70da37f7feb6
-β_reg = 1e-3;
+β_reg = 1e-6;
 
 # ╔═╡ a9568707-3936-47f8-ac48-9a3ade80917f
 md"""
@@ -80,7 +81,7 @@ Define the maximum number of iterations in the optimisation algorithm:
 """
 
 # ╔═╡ 4ba99ac3-6e91-4d03-95a9-45507d0939a5
-maxiter = 5000;
+maxiter = 1000;
 
 # ╔═╡ 725a0a00-e07d-44b1-9a4d-ed0feb16b9aa
 md"""
@@ -88,7 +89,7 @@ Define the parameters of the line search. Here, we only configure the minimal an
 """
 
 # ╔═╡ 70056cde-df6f-4ca0-bd45-eb574acfa21f
-line_search = BacktrackingLineSearch(; α_min=1e0, α_max=1e6);
+line_search = BacktrackingLineSearch(; α_min=1e2, α_max=1e6);
 
 # ╔═╡ fa564469-61b7-475a-9276-d0bb8be3104c
 md"""
@@ -109,11 +110,12 @@ Some comments on the above code:
 md"""
 ## Synthetic inversion
 
-First, we define the inversion scenario for the synthetic glacier. Since the input data was generated using the standard physical parameters, we set the enhancement factor $E = 1$:
+First, we define the inversion scenario for the synthetic glacier. Since the input data was generated using the standard physical parameters, we leave the enhancement factor to the default value $E = 1$:
 """
 
 # ╔═╡ bcff8e89-e6c0-4a7a-a6b6-3617000bc721
-synthetic_scenario = InversionScenario("../../datasets/synthetic_25m.jld2", 1.0);
+synthetic_scenario = InversionScenario(; input_file="../../datasets/synthetic_25m.jld2",
+output_dir="../../output/snapshot_synthetic_25m");
 
 # ╔═╡ 13ee7e08-64cb-47cb-a3bc-614396cef169
 md"""
@@ -124,11 +126,11 @@ Run the inversion:
 md"""
 ### Aletsch inversion
 
-Then, we create the inversion scenarion to reconstruct sliding parameter at the base of the Aletsch glacier. There, using the standard parameters for the flow parameter $A = 2.5\times10^{-24} \text{Pa}\,\text{s}^{-3}$ result in the surface velocity values much higher than the observed ones even without any sliding. This is likely due to using the SIA model that doesn't account for longitudinal stresses and non-hydrostatic pressure variations. We correct this by introducing a flow enhancement factor $E = 0.25$:
+Then, we create the inversion scenarion to reconstruct sliding parameter at the base of the Aletsch glacier. There, using the standard parameters for the flow parameter $A = 2.5\times10^{-24}\,\text{Pa}\,\text{s}^{-3}$ result in the surface velocity values much higher than the observed ones even without any sliding. This is likely due to using the SIA model that doesn't account for longitudinal stresses and non-hydrostatic pressure variations. We correct this by introducing a flow enhancement factor $E = 0.25$:
 """
 
 # ╔═╡ f95355fd-86f2-4320-bac3-a3301fb73394
-aletsch_scenario = InversionScenario("../../datasets/aletsch_25m.jld2", 0.25);
+aletsch_scenario = InversionScenario(; input_file="../../datasets/aletsch_25m.jld2", output_dir="../../output/snapshot_aletsch_25m", E=0.25);
 
 # ╔═╡ 506d30a1-588e-496b-a4da-50888b21c393
 md"""
@@ -142,8 +144,9 @@ md"""
 
 # ╔═╡ 70286306-748d-4362-9f64-bcd102392c3e
 begin
-	mutable struct Callback{M,JH}
+	mutable struct Callback{M,S,JH}
 		model::M
+		scenario::S
 		j_hist::JH
 		fig::Figure
 		axs
@@ -151,8 +154,9 @@ begin
 		lns
 		cbs
 		video_stream
+		step::Int
 		
-		function Callback(model, V_obs)
+		function Callback(model, scenario, V_obs)
 			j_hist = Point2{Float64}[]
 	
 			fig = Figure(; size=(800, 850))
@@ -196,14 +200,15 @@ begin
 		           Colorbar(fig[2, 1][1, 2], hms[3]),
 		           Colorbar(fig[2, 2][1, 2], hms[4]))
 			
-			new{typeof(model), typeof(j_hist)}(model,
-											   j_hist,
-											   fig,
-				                               axs,
-				                               hms,
-				                               lns,
-				                               cbs,
-			                                   nothing)
+			new{typeof(model), typeof(scenario), typeof(j_hist)}(model,
+																				 scenario,
+											   					 j_hist,
+											   					 fig,
+				                               					 axs,
+				                               					 hms,
+				                               					 lns,
+				                               					 cbs,
+			                                   					 nothing, 0)
 		end
 	end
 
@@ -211,16 +216,19 @@ begin
 		if state.iter == 0
 			empty!(cb.j_hist)
 			cb.video_stream = VideoStream(cb.fig; framerate=10)
+			cb.step = 0
+
+			mkpath(cb.scenario.output_dir)
 		end
 
 		push!(cb.j_hist, Point2(state.iter, state.j_value))
 	
-		if state.iter % 20 == 0
+		if state.iter % 10 == 0
 			@info @sprintf("iter #%-4d, J = %1.3e, ΔJ/J = %1.3e, ΔX/X = %1.3e, α = %1.3e\n", state.iter,
-						state.j_value,
-					    state.j_change,
-				        state.x_change,
-				        state.α)
+					  state.j_value,
+					  state.j_change,
+				      state.x_change,
+				      state.α)
 	
 			cb.hms[1][3] = Array(state.X .* log10(ℯ))
 			cb.hms[2][3] = Array(state.X̄ ./ log10(ℯ))
@@ -228,6 +236,18 @@ begin
 			cb.lns[1][1] = cb.j_hist
 			autolimits!(cb.axs[5])
 			recordframe!(cb.video_stream)
+
+			output_path = joinpath(cb.scenario.output_dir, @sprintf("step_%04d.jld2", cb.step))
+
+	        jldsave(output_path;
+	                X=Array(state.X),
+	                X̄=Array(state.X̄),
+	                V=Array(cb.model.fields.V),
+	                H=Array(cb.model.fields.H),
+	                iter=state.iter,
+	                j_hist=cb.j_hist,)
+	
+	        cb.step += 1
 		end
 		return
 	end
@@ -250,7 +270,7 @@ function run_inversion(scenario::InversionScenario)
 	objective = SnapshotObjective(ωᵥ, V_obs, β_reg)
 
 	# see cells below for details on how the callback is implemented
-	callback = Callback(model, V_obs)
+	callback = Callback(model, scenario, V_obs)
 	options  = OptimisationOptions(; line_search, callback, maxiter)
 
 	# initial guess
@@ -273,7 +293,15 @@ run_inversion(aletsch_scenario)
 
 # ╔═╡ 45dacb6d-de79-476e-84fc-c394644c9e00
 # ╠═╡ show_logs = false
-run_inversion(InversionScenario("../../datasets/aletsch_200m.jld2", 0.25))
+run_inversion(InversionScenario(; input_file="../../datasets/aletsch_200m.jld2", output_dir="../../output/snapshot_aletsch_200m", E=0.25))
+
+# ╔═╡ 2a6367e7-6521-4188-8a40-11748cf11ffc
+# ╠═╡ show_logs = false
+run_inversion(InversionScenario(; input_file="../../datasets/aletsch_100m.jld2", output_dir="../../output/snapshot_aletsch_100m", E=0.25))
+
+# ╔═╡ 6c6d30ae-63b0-421a-8061-c4bb73d95f91
+# ╠═╡ show_logs = false
+run_inversion(InversionScenario(; input_file="../../datasets/aletsch_50m.jld2", output_dir="../../output/snapshot_aletsch_50m", E=0.25))
 
 # ╔═╡ Cell order:
 # ╟─40661bea-47ac-11ef-1a58-f5deede4bf68
@@ -301,5 +329,7 @@ run_inversion(InversionScenario("../../datasets/aletsch_200m.jld2", 0.25))
 # ╟─506d30a1-588e-496b-a4da-50888b21c393
 # ╠═6726a19f-99fa-4a05-a90b-b10079e152f9
 # ╠═45dacb6d-de79-476e-84fc-c394644c9e00
+# ╠═2a6367e7-6521-4188-8a40-11748cf11ffc
+# ╠═6c6d30ae-63b0-421a-8061-c4bb73d95f91
 # ╟─c38d1717-c4ee-49da-98b6-f31257a9a4b4
-# ╟─70286306-748d-4362-9f64-bcd102392c3e
+# ╠═70286306-748d-4362-9f64-bcd102392c3e

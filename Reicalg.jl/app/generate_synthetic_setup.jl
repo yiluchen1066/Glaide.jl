@@ -233,7 +233,7 @@ Then, we save the fields, scalars, and numerical parameters as a JLD2 file in a 
 
 # ╔═╡ a1cdae82-f33c-48a8-a10f-02bb55e2d93f
 let
-	fields = (; B, H, H_old, V, As, mb_mask)
+	fields = (; B, H, H_old, V, V_old, As, mb_mask)
 	
 	scalars = let
 		(; lx, ly, β, b_max, ela, dt, npow, A, ρgn) = model.scalars
@@ -250,7 +250,7 @@ end
 md"""
 ## Visualisation
 
-Finally, we visualise the input data and save a nice figure for the publication:
+Finally, we visualise the input data:
 """
 
 # ╔═╡ 6365ffea-405f-4941-9894-a566a1d0aa08
@@ -351,16 +351,6 @@ with_theme(theme_latexfonts()) do
 		   Colorbar(fig[2, 2][1, 2], hms[4]),
 		   Colorbar(fig[1, 3][1, 2], hms[5]),
 		   Colorbar(fig[2, 3][1, 2], hms[6]))
-
-	for (label, idx) in zip(("A", "B", "C", "D", "E", "F"),
-                            ((1,1), (1,2), (1,3), (2,1), (2,2), (2,3)))
-        Label(fig[idx..., TopLeft()], label; fontsize = 20,
-											 font     = :bold,
-											 padding  = (0, 10, 10, 0))
-    end
-
-	mkpath("../../figures")
-    save("../../figures/synthetic_setup.pdf", fig)
 
 	fig
 end
