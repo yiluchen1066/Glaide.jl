@@ -1,7 +1,8 @@
 # Glaide.jl
 | code | data |
 | :--- | :--- |
-| soon | [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.13133070.svg)](https://doi.org/10.5281/zenodo.13133070) |
+| Coming Soon | [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.13133070.svg)](https://doi.org/10.5281/zenodo.13133070) |
+
 **Gla**cier sl**ide** - Snapshot and time-dependent inversions of glacier basal sliding using automatic generation of adjoint code on graphics processing units
 
 Glaide.jl provides a collection of inversion tools to reconstruct spatially distributed glacier sliding coefficient at high-resolution on GPUs. The approach combines the adjoint state method, the pseudo-transient method and leverages the powerful automatic differentiation capabilities unique to the Julia language using [Enzyme.jl](https://github.com/EnzymeAD/Enzyme.jl) and [CUDA.jl](https://github.com/JuliaGPU/CUDA.jl) to target Nvidia GPUs.
