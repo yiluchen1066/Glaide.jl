@@ -56,7 +56,9 @@ end;
 # ╔═╡ 812269a3-dbc7-429c-9869-d96d15be34e9
 md"""
 !!! warning "Prerequisites"
-    Before running this notebook, make sure input files exist on your filesystem. To generate the input files for the synthetic setup, run the notebook [`generate_synthetic_setup.jl`](./open?path=Glaide.jl/app/generate_synthetic_setup.jl).
+    Before running this notebook, make sure input files exist on your filesystem.
+	- To generate the input files for the synthetic setup, run the notebook [`generate_synthetic_setup.jl`](./open?path=app/generate_synthetic_setup.jl).
+	- To generate the input files for the Aletsch setup, run the notebook [`generate_aletsch_setup.jl`](./open?path=app/generate_synthetic_setup.jl).
 """
 
 # ╔═╡ 383e178a-1053-48a3-b6ab-ab60ce0df19b
@@ -124,7 +126,7 @@ Run the inversion:
 
 # ╔═╡ dd93c5e2-1278-4503-8654-89eac2cd518c
 md"""
-### Aletsch inversion
+## Aletsch inversion
 
 Then, we create the inversion scenarion to reconstruct sliding parameter at the base of the Aletsch glacier. There, using the standard parameters for the flow parameter $A = 2.5\times10^{-24}\,\text{Pa}\,\text{s}^{-3}$ result in the surface velocity values much higher than the observed ones even without any sliding. This is likely due to using the SIA model that doesn't account for longitudinal stresses and non-hydrostatic pressure variations. We correct this by introducing a flow enhancement factor $E = 0.25$:
 """

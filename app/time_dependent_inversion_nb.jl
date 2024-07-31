@@ -201,7 +201,7 @@ run_inversion(synthetic_scenario)
 # ╠═e096dcf8-41df-47a3-b399-aed370ec1ab6
 # ╠═3ec533a0-3f7b-4add-be81-2aebb1d7c14a
 # ╠═20b21077-02a5-4840-853d-3dc2692e7acf
-# ╠═939d13a9-a08e-4614-a939-49440a024f3b
+# ╟─939d13a9-a08e-4614-a939-49440a024f3b
 # ╠═8a30e84f-0c2a-4dab-8311-266bd1b65320
 # ╠═3210e218-e632-4f37-ae24-b46aff3a7325
 # ╟─13bd69ce-057b-407d-a193-cc412c02f97a
