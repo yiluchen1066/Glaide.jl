@@ -15,7 +15,7 @@ begin
     using CairoMakie
     using DelimitedFiles
     using JLD2
-    using Reicalg
+    using Glaide
 
     using PlutoUI
     TableOfContents()
@@ -66,7 +66,7 @@ glacier_extent = Extent(; X=(2.637e6, 2.651e6), Y=(1.1385e6, 1.158e6));
 # ╔═╡ d4ef10ab-fde9-43cc-96fc-6f31785ab85b
 md"""
 !!! note "What if I want to change the extents?"
-	By changing the extents, you can generate input files for other Swiss glaciers than Aletsch. However, only the bedrock and velocity datasets covers entire Swiss Alps. You will need to provide elevation data and mass balance data separately.
+    By changing the extents, you can generate input files for other Swiss glaciers than Aletsch. However, only the bedrock and velocity datasets covers entire Swiss Alps. You will need to provide elevation data and mass balance data separately.
 """
 
 # ╔═╡ ee1916bf-d3b4-41b8-b507-57b57a324bce
@@ -133,11 +133,11 @@ begin
     surface_2017_zip_path = "aletsch2017.asc"
     mass_balance_zip_path = "aletsch_fix.dat"
     velocity_zip_path     = "ALPES_wFLAG_wKT_ANNUALv2016-2021.nc"
-	bed_zip_path          = "07_GlacierBed_SwissAlps/GlacierBed.tif"
+    bed_zip_path          = "07_GlacierBed_SwissAlps/GlacierBed.tif"
     surface_zip_path      = "08_SurfaceElevation_SwissAlps/SwissALTI3D_r2019.tif"
 
     # paths to the asc, dat, nc and GeoTIFF files in the filesystem
-	surface_2009_path = joinpath(sources_dir, surface_2009_zip_path)
+    surface_2009_path = joinpath(sources_dir, surface_2009_zip_path)
     surface_2017_path = joinpath(sources_dir, surface_2017_zip_path)
     mass_balance_path = joinpath(sources_dir, mass_balance_zip_path)
     velocity_path     = joinpath(sources_dir, velocity_zip_path)
@@ -145,7 +145,7 @@ begin
     surface_tif_path  = joinpath(sources_dir, surface_zip_path)
 
     # download datasets
-	download_raster(zenodo_url , surface_2009_zip_path, surface_2009_path)
+    download_raster(zenodo_url , surface_2009_zip_path, surface_2009_path)
     download_raster(zenodo_url , surface_2017_zip_path, surface_2017_path)
     download_raster(zenodo_url , mass_balance_zip_path, mass_balance_path)
     download_raster(zenodo_url , velocity_zip_path    , velocity_path)
@@ -169,13 +169,13 @@ We crop the bed and the surface data to match the provided extent. Then we repla
 function create_bedrock(bed_path, surface_path, extent, resolution)
     bedrock = crop(Raster(bed_path); to=extent)
     surface = crop(Raster(surface_path); to=extent)
-    
+
     # create mosaic to replace missing points with surface elevation from ALTI3D
     bedrock = mosaic(first, bedrock, surface)
     bedrock = resample(bedrock; to     = extent,
                                 res    = resolution,
                                 method = :cubicspline)
-	return bedrock
+    return bedrock
 end;
 
 # ╔═╡ 0b99796a-6edb-4a53-a875-bd5d329643d7
@@ -199,9 +199,9 @@ function create_ice_thickness(surface, bedrock, resolution)
     # where elevation data is missing, we assume that there is no ice: thickness is 0
     thickness = replace_missing(thickness, 0.0)
 
-	# number of cells covering the area
-	min_length = ceil(Int, small_patch_area / resolution^2)
-	
+    # number of cells covering the area
+    min_length = ceil(Int, small_patch_area / resolution^2)
+
     # remove small ice patches
     remove_components!(thickness; min_length)
 
@@ -246,7 +246,7 @@ function create_velocity(velocity_path, bedrock, thickness)
     # mask velocity to exclude areas where ice thickness is 0
     velocity = mask(velocity; with=thickness, missingval=0.0)
 
-	return velocity
+    return velocity
 end;
 
 # ╔═╡ 137a9311-f5ed-4ce0-8493-c212ed161434
@@ -255,22 +255,22 @@ md"""
 
 As a final pre-processing step, we apply several steps of Laplacian smoothing to all the rasters that constitute the input data, i.e. the bed elevation, the ice thickness, and the velocity. This is needed to reduce the noise in the data. Note that the Laplacian filter preserves monotonicity, no new local extrema can be created in the data.
 
-We use the function `laplacian_smoothing`, provided by Reicalg.jl. Note that we cannot update the rasters in-place or re-use the variable names due to constraints posed by reactivity of Pluto.jl notebooks.
+We use the function `laplacian_smoothing`, provided by Glaide.jl. Note that we cannot update the rasters in-place or re-use the variable names due to constraints posed by reactivity of Pluto.jl notebooks.
 """
 
 # ╔═╡ 926569d4-fdc7-491e-8759-437c0f6c588e
 function smooth_rasters!(amount, resolution, rasters...)
-	for raster in rasters
-		laplacian_smoothing!(raster, amount, resolution, resolution)
-	end
-	return
+    for raster in rasters
+        laplacian_smoothing!(raster, amount, resolution, resolution)
+    end
+    return
 end;
 
 # ╔═╡ 6c73898b-b480-4efe-840b-c078120a5703
 md"""
 ## Processing the mass balance data
 
-The surface mass balance (SMB) data is provided in the form of annual mass balance per elevation band. In Reicalg.jl, the SMB model is based on the simple altitude-dependent parametrisation:
+The surface mass balance (SMB) data is provided in the form of annual mass balance per elevation band. In Glaide.jl, the SMB model is based on the simple altitude-dependent parametrisation:
 
 ```math
 \dot{b}(z) = \min\left\{\beta (z - \mathrm{ELA}),\ \dot{b}_\mathrm{max}\right\}~,
@@ -285,141 +285,141 @@ The data set covers time period from 1914 to 2022. In this section, we extract t
 # ╔═╡ be59f0e5-8a65-4e6e-87ac-b683670ee169
 function create_mass_balance_model(mass_balance_path)
     data = readdlm(mass_balance_path; skipstart=4)
-    
+
     # extract data for 2016-2017 hydrological year
     data = vec(data[102, :])
-    
+
     elevation_bands = LinRange(data[11], data[12], 26)
     ela             = data[8]
 
-	mb_rng    = (13+26):(13+2*26-1)
-	rho_w_i   = 1000 / 910
+    mb_rng    = (13+26):(13+2*26-1)
+    rho_w_i   = 1000 / 910
 
-	# convert from mm w.e./a to m/s
+    # convert from mm w.e./a to m/s
     mass_balance = data[mb_rng] * 1e-3 * rho_w_i / SECONDS_IN_YEAR
-    
+
     # remove NaNs from the mass balance data
     nan_mask = .!isnan.(mass_balance)
-    
+
     mass_balance    = mass_balance[nan_mask]
     elevation_bands = elevation_bands[nan_mask]
-    
+
     # find indices of minimal and maximal mass balance
-	# we'll fit the data between these bounds
+    # we'll fit the data between these bounds
     imin = argmin(mass_balance)
     imax = argmax(mass_balance)
-    
+
     # skip 5 points to only take fit the linear part
     nskip   = 5
     fit_rng = imin:imax-nskip
-    
+
     # fit the slope of the line crossing the 0 mass balance at ela
     β = lsq_fit(elevation_bands[fit_rng] .- ela, mass_balance[fit_rng])
-    
-    # fit the high altitude 
+
+    # fit the high altitude
     mass_balance_flat = mass_balance[(imax-nskip+1):end]
     b_max = sum(mass_balance_flat) / length(mass_balance_flat)
 
-	return β, ela, b_max, elevation_bands, mass_balance
+    return β, ela, b_max, elevation_bands, mass_balance
 end;
 
 # ╔═╡ 442e8496-850f-45b9-80ab-addf317f9e27
 md"""
 ## Creating the input files
 
-In this section, we define the function that combines all the previous developments to convert the pre-processed data into a format recognisable by Reicalg.jl. We pack data arrays, scalar physics parameters, and numerical parameters into named tuples, then save these tuples as JLD2:
+In this section, we define the function that combines all the previous developments to convert the pre-processed data into a format recognisable by Glaide.jl. We pack data arrays, scalar physics parameters, and numerical parameters into named tuples, then save these tuples as JLD2:
 """
 
 # ╔═╡ 68a2f01e-88d1-4655-8125-baab7d7c025f
 function create_input_file(resolution)
-	bedrock = create_bedrock(bed_tif_path,
-					         surface_tif_path,
-							 glacier_extent,
-						     resolution)
+    bedrock = create_bedrock(bed_tif_path,
+                             surface_tif_path,
+                             glacier_extent,
+                             resolution)
 
-	# The surface elevation data is georeferenced using the LV03 coordinate system
-	surface_2009 = Raster(surface_2009_path; crs=EPSG(21781))
-	surface_2017 = Raster(surface_2017_path; crs=EPSG(21781))
+    # The surface elevation data is georeferenced using the LV03 coordinate system
+    surface_2009 = Raster(surface_2009_path; crs=EPSG(21781))
+    surface_2017 = Raster(surface_2017_path; crs=EPSG(21781))
 
-	# create ice thickness from surface and bedrock models
-	thickness_2009 = create_ice_thickness(surface_2009, bedrock, resolution)
-	thickness_2017 = create_ice_thickness(surface_2017, bedrock, resolution)
+    # create ice thickness from surface and bedrock models
+    thickness_2009 = create_ice_thickness(surface_2009, bedrock, resolution)
+    thickness_2017 = create_ice_thickness(surface_2017, bedrock, resolution)
 
-	t = (2016 - 2009) / (2017 - 2009)
-	thickness_2016 = lerp.(thickness_2009, thickness_2017, t)
-	
-	# masking velocity with ice thickness at the end of the modelled period
-	velocity = create_velocity(velocity_path, bedrock, thickness_2017)
+    t = (2016 - 2009) / (2017 - 2009)
+    thickness_2016 = lerp.(thickness_2009, thickness_2017, t)
 
-	# fit the mass balance model
-	β, ela, b_max, eb, mb = create_mass_balance_model(mass_balance_path)
+    # masking velocity with ice thickness at the end of the modelled period
+    velocity = create_velocity(velocity_path, bedrock, thickness_2017)
 
-	smooth_rasters!(smooth_amount, resolution, bedrock,
-									           thickness_2016,
-									           thickness_2017,
-										       velocity)
+    # fit the mass balance model
+    β, ela, b_max, eb, mb = create_mass_balance_model(mass_balance_path)
 
-	B     = Array{Float64}(bedrock)
-	H_old = Array{Float64}(thickness_2016)
-	H     = Array{Float64}(thickness_2017)
+    smooth_rasters!(smooth_amount, resolution, bedrock,
+                                               thickness_2016,
+                                               thickness_2017,
+                                               velocity)
 
-	# av4 needed as velocity in Reicalg.jl is defined on grid nodes
-	V = Array{Float64}(velocity) |> av4;
+    B     = Array{Float64}(bedrock)
+    H_old = Array{Float64}(thickness_2016)
+    H     = Array{Float64}(thickness_2017)
 
-	S_old = B .+ H_old
-	
+    # av4 needed as velocity in Glaide.jl is defined on grid nodes
+    V = Array{Float64}(velocity) |> av4;
+
+    S_old = B .+ H_old
+
     # the mask excludes areas where ice thickness is 0 and mass balance is positive
     bool_mask = @. !((H_old[2:end-1, 2:end-1] == 0) &&
                      (S_old[2:end-1, 2:end-1] - ela > 0))
 
-	# convert to Float64
+    # convert to Float64
     mb_mask = convert(Matrix{Float64}, bool_mask)
 
-	# create fields (reverse the data to undo reversing done by GDAL)
-	fields = map(x -> reverse(x, dims=2), (; H_old, H, B, V, mb_mask))
-	
+    # create fields (reverse the data to undo reversing done by GDAL)
+    fields = map(x -> reverse(x, dims=2), (; H_old, H, B, V, mb_mask))
+
     nx, ny = size(H)
     dx, dy = float(resolution), float(resolution)
     lx, ly = nx * dx, ny * dy
 
-	# coordinates of cell centers
+    # coordinates of cell centers
     xc = LinRange(-lx / 2 + dx / 2, lx / 2 - dx / 2, nx)
     yc = LinRange(-ly / 2 + dy / 2, ly / 2 - dy / 2, ny)
-	
-	numerics = (; nx, ny, dx, dy, xc, yc)
 
-	scalars = (ρgn  = RHOG_N,
+    numerics = (; nx, ny, dx, dy, xc, yc)
+
+    scalars = (ρgn  = RHOG_N,
                A    = GLEN_A,
                npow = GLEN_N,
                dt   = 1.0 * SECONDS_IN_YEAR,
                lx,
                ly,
                β,
-           	   b_max,
+                  b_max,
                ela)
 
-	output_path = joinpath(datasets_dir, "aletsch_$(resolution)m.jld2")
+    output_path = joinpath(datasets_dir, "aletsch_$(resolution)m.jld2")
 
-	# save elevation bands and mass balance data for visualisation
-	jldsave(output_path; fields, scalars, numerics, eb, mb)
+    # save elevation bands and mass balance data for visualisation
+    jldsave(output_path; fields, scalars, numerics, eb, mb)
 
-	return
+    return
 end;
 
 # ╔═╡ ac8a9b9c-b0a5-42c3-96e0-de5b68abf66e
 md"""
 !!! note "Some comments on the code"
-	- Ice velocity data from [Rabatel et al. (2023)](https://doi.org/10.3390/data8040066) is given on an annual basis. We create the intermediate ice thickness to match the velocity in years 2016--2017 by assuming linear variation between snapshots. Since the linear interpolation preserves monotonicity, no clamping is needed after this step.
-	- The altitude-dependent SMB model that we use doesn't account for lateral variations of the mass balance. Therefore, in the numerical simulation the forward model might create non-zero ice thickness in the regions where the observed surface is ice-free. This is inconsistent with both the observed surface changes and velocity data that is used for the inversion. Here, we use the simple distributed correction for the mass balance: we introduce a mass balance mask, which remove ice accumulation in the regions where the observed ice thickness is zero.
-	- We pack the input data into named tuples. The raster data is stored in the flipped order in the underlying array. We fix this by reversing all the arrays along the second dimension before saving as JLD2.
+    - Ice velocity data from [Rabatel et al. (2023)](https://doi.org/10.3390/data8040066) is given on an annual basis. We create the intermediate ice thickness to match the velocity in years 2016--2017 by assuming linear variation between snapshots. Since the linear interpolation preserves monotonicity, no clamping is needed after this step.
+    - The altitude-dependent SMB model that we use doesn't account for lateral variations of the mass balance. Therefore, in the numerical simulation the forward model might create non-zero ice thickness in the regions where the observed surface is ice-free. This is inconsistent with both the observed surface changes and velocity data that is used for the inversion. Here, we use the simple distributed correction for the mass balance: we introduce a mass balance mask, which remove ice accumulation in the regions where the observed ice thickness is zero.
+    - We pack the input data into named tuples. The raster data is stored in the flipped order in the underlying array. We fix this by reversing all the arrays along the second dimension before saving as JLD2.
 
 With all preparations done, let's generate the input files:
 """
 
 # ╔═╡ b5624ea5-cd19-4b87-9634-8ab3682e2912
 for resolution in resolutions
-	@info "generating input files for resolution $resolution m"
-	create_input_file(resolution)
+    @info "generating input files for resolution $resolution m"
+    create_input_file(resolution)
 end;
 
 # ╔═╡ fa29f186-68c4-41f1-9a4a-de0f895b41ca
@@ -431,24 +431,24 @@ Finally, we visualise the input data for the highest resolution (which is $(mini
 
 # ╔═╡ 4c80c4b5-0a66-48c2-8617-20e33501f5ec
 with_theme(theme_latexfonts()) do
-	# visualise the highest resolution
-	vis_resolution = minimum(resolutions)
-	
-	vis_path = joinpath(datasets_dir, "aletsch_$(vis_resolution)m.jld2")
-	
-	fields, scalars, numerics, eb, mb = load(vis_path, "fields",
-															 "scalars",
-															 "numerics",
-															 "eb", 
-															 "mb")
+    # visualise the highest resolution
+    vis_resolution = minimum(resolutions)
 
-	
+    vis_path = joinpath(datasets_dir, "aletsch_$(vis_resolution)m.jld2")
+
+    fields, scalars, numerics, eb, mb = load(vis_path, "fields",
+                                                             "scalars",
+                                                             "numerics",
+                                                             "eb",
+                                                             "mb")
+
+
     fig = Figure(; size=(850, 550), fontsize=16)
 
     # convert to km
     x_km = numerics.xc ./ 1e3
     y_km = numerics.yc ./ 1e3
-    
+
     axs = (Axis(fig[1, 1][1, 1]; aspect=DataAspect()),
            Axis(fig[1, 2][1, 1]; aspect=DataAspect()),
            Axis(fig[2, 1][1, 1]; aspect=DataAspect()),
@@ -463,7 +463,7 @@ with_theme(theme_latexfonts()) do
     axs[3].title = L"H_{2016}~\mathrm{[m]}"
     axs[4].title = L"H_{2017} - H_{2016}~\mathrm{[m]}"
     axs[5].title = L"\text{mass balance mask}"
-    
+
     axs[3].xlabel = L"x~\mathrm{[km]}"
     axs[4].xlabel = L"x~\mathrm{[km]}"
 
@@ -472,7 +472,7 @@ with_theme(theme_latexfonts()) do
 
     axs[6].xlabel = L"z~\mathrm{[km]}"
     axs[6].ylabel = L"\dot{b}~\mathrm{[m/a]}"
-    
+
     hidexdecorations!.((axs[1], axs[2], axs[5]))
     hideydecorations!.((axs[2], axs[4], axs[5]))
 
@@ -480,12 +480,12 @@ with_theme(theme_latexfonts()) do
     axs[2].ygridvisible=true
     axs[4].ygridvisible=true
 
-	# cut off everything where the ice thickness is less than 1m
-	ice_mask   = fields.H 	   .< 1.0
-	ice_mask_v = av4(fields.H) .< 1.0
+    # cut off everything where the ice thickness is less than 1m
+    ice_mask   = fields.H 	   .< 1.0
+    ice_mask_v = av4(fields.H) .< 1.0
 
-	fields.V .*= SECONDS_IN_YEAR
-	
+    fields.V .*= SECONDS_IN_YEAR
+
     fields.V[ice_mask_v]   .= NaN
     fields.H_old[ice_mask] .= NaN
     fields.H[ice_mask]     .= NaN
@@ -499,7 +499,7 @@ with_theme(theme_latexfonts()) do
     foreach(hms) do h
         h.interpolate = true
     end
-    
+
     hms[1].colormap = :terrain
     hms[2].colormap = :turbo
     hms[3].colormap = :vik
@@ -510,7 +510,7 @@ with_theme(theme_latexfonts()) do
     hms[2].colorrange = (0, 300)
     hms[3].colorrange = (0, 900)
     hms[4].colorrange = (-10, 0)
-    
+
     z = LinRange(1900, 4150, 1000)
     b = @. min(scalars.β * (z - scalars.ela), scalars.b_max)
 
@@ -522,13 +522,13 @@ with_theme(theme_latexfonts()) do
 
     # parametrised model
     lines!(axs[6], z ./ 1e3, b .* SECONDS_IN_YEAR; linewidth=2, label="model")
-    
+
     scatter!(axs[6], scalars.ela / 1e3, 0; strokecolor=:black,
                                            strokewidth=2,
-                                   		   color=:transparent,
-                                   		   marker=:diamond,
-                                   		   label="ELA")
-    
+                                              color=:transparent,
+                                              marker=:diamond,
+                                              label="ELA")
+
     axislegend(axs[6]; position=:rb)
 
     cb = (Colorbar(fig[1, 1][1, 2], hms[1]),

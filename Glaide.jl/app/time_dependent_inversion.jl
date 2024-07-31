@@ -1,4 +1,4 @@
-using Reicalg
+using Glaide
 using CUDA
 using CairoMakie
 using Printf

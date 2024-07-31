@@ -1,4 +1,4 @@
-module Reicalg
+module Glaide
 
 # main solver function
 export solve!
@@ -92,4 +92,4 @@ include("time_dependent/parameters.jl")
 include("time_dependent/model.jl")
 include("time_dependent/objective.jl")
 
-end # module Reicalg
+end # module Glaide

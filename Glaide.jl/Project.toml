@@ -1,6 +1,6 @@
-name = "Reicalg"
+name = "Glaide"
 uuid = "86ebb91d-c5a7-4194-9fc7-3d0b981bb521"
-authors = ["Yilu Chen <yilchen@ethz.ch>, Ivan Utkin <iutkin@ethz.ch>, Ludovic Räss <luraess@ethz.ch>, Mauro Werder <mwerder@ethz.ch>"]
+authors = ["Yilu Chen <yilchen@ethz.ch>, Ivan Utkin <iutkin@ethz.ch>, Ludovic Räss <ludovic.rass@gmail.com>, Mauro Werder <mwerder@ethz.ch>"]
 version = "0.1.0"
 
 [deps]

@@ -7,17 +7,17 @@ using InteractiveUtils
 # ╔═╡ 40661bea-47ac-11ef-1a58-f5deede4bf68
 # ╠═╡ show_logs = false
 begin
-	import Pkg
-	Pkg.activate(Base.current_project())
+    import Pkg
+    Pkg.activate(Base.current_project())
     Pkg.instantiate()
 
-	using Reicalg
-	using CairoMakie
-	using Printf
-	using JLD2
-	using CUDA
+    using Glaide
+    using CairoMakie
+    using Printf
+    using JLD2
+    using CUDA
 
-	using PlutoUI
+    using PlutoUI
     TableOfContents()
 end
 
@@ -25,7 +25,7 @@ end
 md"""
 # Snapshot inversion
 
-In this notebook, we will use inverse modelling routine implemented in Reicalg.jl to reconstruct spatially variable sliding parameter $A_\mathrm{s}$. The inverse modelling problem is defined as a minimisation problem with the following objective functional:
+In this notebook, we will use inverse modelling routine implemented in Glaide.jl to reconstruct spatially variable sliding parameter $A_\mathrm{s}$. The inverse modelling problem is defined as a minimisation problem with the following objective functional:
 
 ```math
 J(A_\mathrm{s}) = \frac{\omega_V}{2}\sum_i\left(V_i(A_\mathrm{s}) - V^\mathrm{obs}_i\right)^2 + \frac{\beta}{2}\sum_i\left(\nabla A_{\mathrm{s}_i}\right)^2~,
@@ -48,15 +48,15 @@ Define the type encapsulating the properties of the inversion that might be diff
 
 # ╔═╡ 4a40c5c0-4e5e-4c7c-a4c7-2d8e67f5e60e
 Base.@kwdef struct InversionScenario
-	input_file::String
-	output_dir::String
-	E::Float64 = 1.0
+    input_file::String
+    output_dir::String
+    E::Float64 = 1.0
 end;
 
 # ╔═╡ 812269a3-dbc7-429c-9869-d96d15be34e9
 md"""
 !!! warning "Prerequisites"
-	Before running this notebook, make sure input files exist on your filesystem. To generate the input files for the synthetic setup, run the notebook [`generate_synthetic_setup.jl`](./open?path=Reicalg.jl/app/generate_synthetic_setup.jl).
+    Before running this notebook, make sure input files exist on your filesystem. To generate the input files for the synthetic setup, run the notebook [`generate_synthetic_setup.jl`](./open?path=Glaide.jl/app/generate_synthetic_setup.jl).
 """
 
 # ╔═╡ 383e178a-1053-48a3-b6ab-ab60ce0df19b
@@ -85,7 +85,7 @@ maxiter = 1000;
 
 # ╔═╡ 725a0a00-e07d-44b1-9a4d-ed0feb16b9aa
 md"""
-Define the parameters of the line search. Here, we only configure the minimal and maximal step size. In Reicalg, the two-way backtracking line search based on Armijo-Goldstein condition is implemented. If in the line search loop the step size decreases below $\alpha_\min$, the optimisation stops with an error. If the step size increases above $\alpha_\max$, line search accepts $\alpha_\max$ as the step size. Increasing $\alpha_\max$ might improve convergence rate in some cases, but can also lead to instabilities and convergence issues in the forward solver.
+Define the parameters of the line search. Here, we only configure the minimal and maximal step size. In Glaide, the two-way backtracking line search based on Armijo-Goldstein condition is implemented. If in the line search loop the step size decreases below $\alpha_\min$, the optimisation stops with an error. If the step size increases above $\alpha_\max$, line search accepts $\alpha_\max$ as the step size. Increasing $\alpha_\max$ might improve convergence rate in some cases, but can also lead to instabilities and convergence issues in the forward solver.
 """
 
 # ╔═╡ 70056cde-df6f-4ca0-bd45-eb574acfa21f
@@ -102,7 +102,7 @@ Here, we create a funciton that executes the inversion scenario:
 md"""
 Some comments on the above code:
 
-- We initialise the observed velocity field `V_obs` with `model.fields.V`. This is because the synthetic velocity is stored in the model's field `V`, as implemented in the notebook [`generate_synthetic_setup.jl`](./open?path=Reicalg.jl/app/generate_synthetic_setup.jl);
+- We initialise the observed velocity field `V_obs` with `model.fields.V`. This is because the synthetic velocity is stored in the model's field `V`, as implemented in the notebook [`generate_synthetic_setup.jl`](./open?path=Glaide.jl/app/generate_synthetic_setup.jl);
 - We create the callback object `callback = Callback(model, obs)`. The definition of `Callback` is a bit convoluted, but in short, it handles the debug visualisation, keeping track of the convergence history, and saving the intermediate results of the optimisation. For implementation details, see the __Extras__ section at the end of the notebook.
 """
 
@@ -144,143 +144,143 @@ md"""
 
 # ╔═╡ 70286306-748d-4362-9f64-bcd102392c3e
 begin
-	mutable struct Callback{M,S,JH}
-		model::M
-		scenario::S
-		j_hist::JH
-		fig::Figure
-		axs
-		hms
-		lns
-		cbs
-		video_stream
-		step::Int
+    mutable struct Callback{M,S,JH}
+        model::M
+        scenario::S
+        j_hist::JH
+        fig::Figure
+        axs
+        hms
+        lns
+        cbs
+        video_stream
+        step::Int
 
-		function Callback(model, scenario, V_obs)
-			j_hist = Point2{Float64}[]
+        function Callback(model, scenario, V_obs)
+            j_hist = Point2{Float64}[]
 
-			fig = Figure(; size=(800, 850))
+            fig = Figure(; size=(800, 850))
 
-		    axs = (Axis(fig[1, 1][1, 1]; aspect=DataAspect()),
-		           Axis(fig[1, 2][1, 1]; aspect=DataAspect()),
-		           Axis(fig[2, 1][1, 1]; aspect=DataAspect()),
-		           Axis(fig[2, 2][1, 1]; aspect=DataAspect()),
-				   Axis(fig[3, :]; yscale=log10))
+            axs = (Axis(fig[1, 1][1, 1]; aspect=DataAspect()),
+                   Axis(fig[1, 2][1, 1]; aspect=DataAspect()),
+                   Axis(fig[2, 1][1, 1]; aspect=DataAspect()),
+                   Axis(fig[2, 2][1, 1]; aspect=DataAspect()),
+                   Axis(fig[3, :]; yscale=log10))
 
-			axs[1].title = "log10(As)"
-			axs[2].title = "dJ/d(logAs)"
-			axs[3].title = "V_obs"
-			axs[4].title = "V"
-			axs[5].title = "Convergence"
+            axs[1].title = "log10(As)"
+            axs[2].title = "dJ/d(logAs)"
+            axs[3].title = "V_obs"
+            axs[4].title = "V"
+            axs[5].title = "Convergence"
 
-			axs[5].xlabel = "Iteration";
-			axs[5].ylabel = "J"
+            axs[5].xlabel = "Iteration";
+            axs[5].ylabel = "J"
 
-			xc_km, yc_km = model.numerics.xc ./ 1e3, model.numerics.yc ./ 1e3;
+            xc_km, yc_km = model.numerics.xc ./ 1e3, model.numerics.yc ./ 1e3;
 
-		    hms = (heatmap!(axs[1], xc_km, yc_km, Array(log10.(model.fields.As))),
-		           heatmap!(axs[2], xc_km, yc_km, Array(log10.(model.fields.As))),
-		           heatmap!(axs[3], xc_km, yc_km, Array(V_obs)),
-		           heatmap!(axs[4], xc_km, yc_km, Array(model.fields.V)))
+            hms = (heatmap!(axs[1], xc_km, yc_km, Array(log10.(model.fields.As))),
+                   heatmap!(axs[2], xc_km, yc_km, Array(log10.(model.fields.As))),
+                   heatmap!(axs[3], xc_km, yc_km, Array(V_obs)),
+                   heatmap!(axs[4], xc_km, yc_km, Array(model.fields.V)))
 
-			hms[1].colormap = Reverse(:roma)
-			hms[2].colormap = Reverse(:roma)
-			hms[3].colormap = :turbo
-			hms[4].colormap = :turbo
+            hms[1].colormap = Reverse(:roma)
+            hms[2].colormap = Reverse(:roma)
+            hms[3].colormap = :turbo
+            hms[4].colormap = :turbo
 
-			hms[1].colorrange = (-24, -20)
-			hms[2].colorrange = (-1e-8, 1e-8)
-			hms[3].colorrange = (0, 1e-5)
-			hms[4].colorrange = (0, 1e-5)
+            hms[1].colorrange = (-24, -20)
+            hms[2].colorrange = (-1e-8, 1e-8)
+            hms[3].colorrange = (0, 1e-5)
+            hms[4].colorrange = (0, 1e-5)
 
-			lns = (lines!(axs[5], Point2{Float64}[]), )
+            lns = (lines!(axs[5], Point2{Float64}[]), )
 
-		    cbs = (Colorbar(fig[1, 1][1, 2], hms[1]),
-		           Colorbar(fig[1, 2][1, 2], hms[2]),
-		           Colorbar(fig[2, 1][1, 2], hms[3]),
-		           Colorbar(fig[2, 2][1, 2], hms[4]))
+            cbs = (Colorbar(fig[1, 1][1, 2], hms[1]),
+                   Colorbar(fig[1, 2][1, 2], hms[2]),
+                   Colorbar(fig[2, 1][1, 2], hms[3]),
+                   Colorbar(fig[2, 2][1, 2], hms[4]))
 
-			new{typeof(model), typeof(scenario), typeof(j_hist)}(model,
-																				 scenario,
-											   					 j_hist,
-											   					 fig,
-				                               					 axs,
-				                               					 hms,
-				                               					 lns,
-				                               					 cbs,
-			                                   					 nothing, 0)
-		end
-	end
+            new{typeof(model), typeof(scenario), typeof(j_hist)}(model,
+                                                                                 scenario,
+                                                                    j_hist,
+                                                                    fig,
+                                                                    axs,
+                                                                    hms,
+                                                                    lns,
+                                                                    cbs,
+                                                                    nothing, 0)
+        end
+    end
 
-	function (cb::Callback)(state::OptmisationState)
-		if state.iter == 0
-			empty!(cb.j_hist)
-			cb.video_stream = VideoStream(cb.fig; framerate=10)
-			cb.step = 0
+    function (cb::Callback)(state::OptmisationState)
+        if state.iter == 0
+            empty!(cb.j_hist)
+            cb.video_stream = VideoStream(cb.fig; framerate=10)
+            cb.step = 0
 
-			mkpath(cb.scenario.output_dir)
-		end
+            mkpath(cb.scenario.output_dir)
+        end
 
-		push!(cb.j_hist, Point2(state.iter, state.j_value))
+        push!(cb.j_hist, Point2(state.iter, state.j_value))
 
-		if state.iter % 10 == 0
-			@info @sprintf("iter #%-4d, J = %1.3e, ΔJ/J = %1.3e, ΔX/X = %1.3e, α = %1.3e\n", state.iter,
-					  state.j_value,
-					  state.j_change,
-				      state.x_change,
-				      state.α)
+        if state.iter % 10 == 0
+            @info @sprintf("iter #%-4d, J = %1.3e, ΔJ/J = %1.3e, ΔX/X = %1.3e, α = %1.3e\n", state.iter,
+                      state.j_value,
+                      state.j_change,
+                      state.x_change,
+                      state.α)
 
-			cb.hms[1][3] = Array(state.X .* log10(ℯ))
-			cb.hms[2][3] = Array(state.X̄ ./ log10(ℯ))
-			cb.hms[4][3] = Array(cb.model.fields.V)
-			cb.lns[1][1] = cb.j_hist
-			autolimits!(cb.axs[5])
-			recordframe!(cb.video_stream)
+            cb.hms[1][3] = Array(state.X .* log10(ℯ))
+            cb.hms[2][3] = Array(state.X̄ ./ log10(ℯ))
+            cb.hms[4][3] = Array(cb.model.fields.V)
+            cb.lns[1][1] = cb.j_hist
+            autolimits!(cb.axs[5])
+            recordframe!(cb.video_stream)
 
-			output_path = joinpath(cb.scenario.output_dir, @sprintf("step_%04d.jld2", cb.step))
+            output_path = joinpath(cb.scenario.output_dir, @sprintf("step_%04d.jld2", cb.step))
 
-	        jldsave(output_path;
-	                X=Array(state.X),
-	                X̄=Array(state.X̄),
-	                V=Array(cb.model.fields.V),
-	                H=Array(cb.model.fields.H),
-	                iter=state.iter,
-	                j_hist=cb.j_hist,)
+            jldsave(output_path;
+                    X=Array(state.X),
+                    X̄=Array(state.X̄),
+                    V=Array(cb.model.fields.V),
+                    H=Array(cb.model.fields.H),
+                    iter=state.iter,
+                    j_hist=cb.j_hist,)
 
-	        cb.step += 1
-		end
-		return
-	end
+            cb.step += 1
+        end
+        return
+    end
 
-	md"""
-	⬅️ Show the contents of this cell to see the definition of `Callback` and the visualisation code.
-	"""
+    md"""
+    ⬅️ Show the contents of this cell to see the definition of `Callback` and the visualisation code.
+    """
 end
 
 # ╔═╡ 700749e5-5028-4ec3-ab64-92f80a283745
 function run_inversion(scenario::InversionScenario)
-	model = SnapshotSIA(scenario.input_file)
+    model = SnapshotSIA(scenario.input_file)
 
-	model.scalars.A *= scenario.E
+    model.scalars.A *= scenario.E
 
-	V_obs = copy(model.fields.V)
+    V_obs = copy(model.fields.V)
 
-	ωᵥ = inv(sum(V_obs .^ 2))
+    ωᵥ = inv(sum(V_obs .^ 2))
 
-	objective = SnapshotObjective(ωᵥ, V_obs, β_reg)
+    objective = SnapshotObjective(ωᵥ, V_obs, β_reg)
 
-	# see cells below for details on how the callback is implemented
-	callback = Callback(model, scenario, V_obs)
-	options  = OptimisationOptions(; line_search, callback, maxiter)
+    # see cells below for details on how the callback is implemented
+    callback = Callback(model, scenario, V_obs)
+    options  = OptimisationOptions(; line_search, callback, maxiter)
 
-	# initial guess
-	logAs0 = CUDA.fill(log(As_init), size(V_obs))
+    # initial guess
+    logAs0 = CUDA.fill(log(As_init), size(V_obs))
 
-	# inversion
-	optimise(model, objective, logAs0, options)
+    # inversion
+    optimise(model, objective, logAs0, options)
 
-	# show animation
-	return callback.video_stream
+    # show animation
+    return callback.video_stream
 end;
 
 # ╔═╡ 776fccde-8268-4b4c-bb98-f73b0bc02eb4
