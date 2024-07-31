@@ -43,13 +43,11 @@ julia> using Pluto
 julia> Pluto.run()
 ```
 
-5. Ideally, Pluto fires-up a server on `localhost:1234` that should open a tab in your default web-browser. From there, select the Pluto notebook to run, e.g., `app/generate_synthetic_setup.jl` and hit "run". This should launch the selected notebook.
+5. Ideally, Pluto fires-up a server on `localhost:1234` that should open a tab in your default web-browser. From there, select the Pluto notebook to run, e.g., `app/generate_synthetic_setup.jl` and hit "open". This should launch the selected notebook.
 
-<center>
     <img src="Glaide.jl/assets/pluto_ui.png" width=50%/>
-</center>
 
 > [!NOTE]
 > - You will first need to execute the `generate_synthetic_setup.jl` and/or `generate_aletsch_setup.jl` notebooks in order to create the data needed to further run the inversion workflows.
-> - Generating the Aletsch input data may take some time and will download some significant amount of data. Make sure to have a good internet connexion and grab a drink meanwhile it's processing.
+> - Fetching the various input data will download significant amount of data. Make sure to have a sufficiently good internet connexion and some time ahead and grab a drink while it's processing.
 > - Generating the Aletsch dataset for various spatial resolutions may consume up to 10GB of system RAM. Make sure to have sufficient free memory
