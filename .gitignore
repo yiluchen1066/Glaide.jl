@@ -2,4 +2,6 @@
 Manifest.toml
 
 # Project-specific
+datasets/
+figures/
 output/
