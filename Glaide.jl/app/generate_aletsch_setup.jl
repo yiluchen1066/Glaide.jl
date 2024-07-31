@@ -395,7 +395,7 @@ function create_input_file(resolution)
                lx,
                ly,
                β,
-                  b_max,
+               b_max,
                ela)
 
     output_path = joinpath(datasets_dir, "aletsch_$(resolution)m.jld2")
