@@ -22,6 +22,15 @@ begin
     TableOfContents()
 end
 
+# ╔═╡ b82f4216-763f-4b68-a1df-adcc8b3c1e45
+figures_dir = "../figures"; mkpath(figures_dir);
+
+# ╔═╡ faf1fba4-5602-4b8c-968f-5475fad2330f
+datasets_dir = "../datasets";
+
+# ╔═╡ 4f16fb34-b13f-415b-8f4d-10d1d2b29c38
+output_dir = "../output";
+
 # ╔═╡ 63512265-bbc4-49ba-b460-2e69c98f1228
 begin
     two_column_cm   = 17.8
@@ -77,7 +86,7 @@ md"""
 
 # ╔═╡ 9902e887-1496-4686-9c27-04b73d751ef6
 with_theme(makie_theme) do
-    vis_path = "../datasets/synthetic_25m.jld2"
+    vis_path = joinpath(datasets_dir, "synthetic_25m.jld2")
     
     fields, scalars, numerics = load(vis_path, "fields", "scalars", "numerics")
 
@@ -192,8 +201,8 @@ with_theme(makie_theme) do
         colgap!(l.content, 1, Fixed(10))
     end
 
-    save("../figures/synthetic_setup.pdf", fig; pt_per_unit, px_per_unit)
-    save("../figures/synthetic_setup.png", fig; pt_per_unit, px_per_unit)
+    save("$figures_dir/synthetic_setup.pdf", fig; pt_per_unit, px_per_unit)
+    save("$figures_dir/synthetic_setup.png", fig; pt_per_unit, px_per_unit)
 
     fig
 end
@@ -350,12 +359,12 @@ md"""
 """
 
 # ╔═╡ a2be1579-5cf4-4763-8529-abf3beb08b76
-synthetic_output_dirs = ("../output/time_dependent_synthetic_25m_1_1",
-                         "../output/time_dependent_synthetic_25m_1_0",
-                         "../output/time_dependent_synthetic_25m_0_1");
+synthetic_output_dirs = ("$output_dir/time_dependent_synthetic_25m_1_1",
+                         "$output_dir/time_dependent_synthetic_25m_1_0",
+                         "$output_dir/time_dependent_synthetic_25m_0_1");
 
 # ╔═╡ 84737c35-b4f4-4097-a4a4-9861b2a109f4
-synthetic_input_file = "../datasets/synthetic_25m.jld2";
+synthetic_input_file = joinpath(datasets_dir, "synthetic_25m.jld2");
 
 # ╔═╡ d6defbeb-74f2-4139-8918-1a9336b736f6
 with_theme(makie_theme) do
@@ -540,8 +549,8 @@ with_theme(makie_theme) do
         x, y = numerics.xc ./ 1e3, numerics.yc ./ 1e3
 
         out_files = (
-            @sprintf("../output/time_dependent_aletsch_%dm/step_%04d.jld2", res, last_step),
-            @sprintf("../output/snapshot_aletsch_%dm/step_%04d.jld2"      , res, last_step),
+            @sprintf("%s/time_dependent_aletsch_%dm/step_%04d.jld2", output_dir, res, last_step),
+            @sprintf("%s/snapshot_aletsch_%dm/step_%04d.jld2", output_dir, res, last_step),
         )
 
         for (row, out_file) in enumerate(out_files)
@@ -574,8 +583,8 @@ with_theme(makie_theme) do
 
     colgap!(fig.layout, Fixed(10))
     
-    save("../figures/aletsch_td_inversion_resolution.pdf", fig; pt_per_unit, px_per_unit)
-    save("../figures/aletsch_td_inversion_resolution.png", fig; pt_per_unit, px_per_unit)
+    save("$figures_dir/aletsch_td_inversion_resolution.pdf", fig; pt_per_unit, px_per_unit)
+    save("$figures_dir/aletsch_td_inversion_resolution.png", fig; pt_per_unit, px_per_unit)
 
     fig
 end
@@ -614,7 +623,7 @@ with_theme(makie_theme) do
         ax.xlabel = L"x\ \mathrm{[km]}"
     end
 
-    fields, numerics = load("../datasets/aletsch_25m.jld2", "fields", "numerics")
+    fields, numerics = load("$datasets_dir/aletsch_25m.jld2", "fields", "numerics")
     
     x, y = numerics.xc ./ 1e3, numerics.yc ./ 1e3
     
@@ -627,15 +636,15 @@ with_theme(makie_theme) do
     H_obs[im] .= NaN
     V_obs[iv] .= NaN
     
-    V_s1, H_s1 = load("../output/snapshot_aletsch_25m/step_0100.jld2", "V", "H")
+    V_s1, H_s1 = load("$output_dir/snapshot_aletsch_25m/step_0100.jld2", "V", "H")
     H_s1[im] .= NaN
     V_s1[iv] .= NaN
     
-    V_s2, H_s2 = load("../output/snapshot_forward_aletsch_25m.jld2", "V" ,"H")
+    V_s2, H_s2 = load("$output_dir/snapshot_forward_aletsch_25m.jld2", "V" ,"H")
     H_s2[im] .= NaN
     V_s2[iv] .= NaN
     
-    V_td, H_td = load("../output/time_dependent_aletsch_25m/step_0100.jld2", "V", "H")
+    V_td, H_td = load("$output_dir/time_dependent_aletsch_25m/step_0100.jld2", "V", "H")
     H_td[im] .= NaN
     V_td[iv] .= NaN
 
@@ -659,8 +668,8 @@ with_theme(makie_theme) do
 
     colgap!(fig.layout, Fixed(10))
     
-    save("../figures/aletsch_inversion_velocities.pdf", fig; pt_per_unit, px_per_unit)
-    save("../figures/aletsch_inversion_velocities.png", fig; pt_per_unit, px_per_unit)
+    save("$figures_dir/aletsch_inversion_velocities.pdf", fig; pt_per_unit, px_per_unit)
+    save("$figures_dir/aletsch_inversion_velocities.png", fig; pt_per_unit, px_per_unit)
     
     fig
 end
@@ -704,7 +713,7 @@ with_theme(makie_theme) do
         ax.ylabel = L"y\ \mathrm{[km]}"
     end
 
-    fields, numerics = load("../datasets/aletsch_25m.jld2", "fields", "numerics")
+    fields, numerics = load("$datasets_dir/aletsch_25m.jld2", "fields", "numerics")
     
     x, y = numerics.xc ./ 1e3, numerics.yc ./ 1e3
     
@@ -720,11 +729,11 @@ with_theme(makie_theme) do
     H_obs[im] .= NaN
     V_obs[iv] .= NaN
     
-    V_s, H_s = load("../output/snapshot_forward_aletsch_25m.jld2", "V" ,"H")
+    V_s, H_s = load("$output_dir/snapshot_forward_aletsch_25m.jld2", "V" ,"H")
     H_s[im] .= NaN
     V_s[iv] .= NaN
     
-    V_td, H_td = load("../output/time_dependent_aletsch_25m/step_0100.jld2", "V", "H")
+    V_td, H_td = load("$output_dir/time_dependent_aletsch_25m/step_0100.jld2", "V", "H")
     H_td[im] .= NaN
     V_td[iv] .= NaN
 
@@ -764,14 +773,17 @@ with_theme(makie_theme) do
 
     colgap!(fig.layout, Fixed(10))
     
-    save("../figures/aletsch_inversion_deltas.pdf", fig; pt_per_unit, px_per_unit)
-    save("../figures/aletsch_inversion_deltas.png", fig; pt_per_unit, px_per_unit)
+    save("$figures_dir/aletsch_inversion_deltas.pdf", fig; pt_per_unit, px_per_unit)
+    save("$figures_dir/aletsch_inversion_deltas.png", fig; pt_per_unit, px_per_unit)
     
     fig
 end
 
 # ╔═╡ Cell order:
 # ╟─cc163f70-4dac-11ef-3e26-7366ab19d20e
+# ╠═b82f4216-763f-4b68-a1df-adcc8b3c1e45
+# ╠═faf1fba4-5602-4b8c-968f-5475fad2330f
+# ╠═4f16fb34-b13f-415b-8f4d-10d1d2b29c38
 # ╠═63512265-bbc4-49ba-b460-2e69c98f1228
 # ╠═5d6f0d91-a968-413f-90a5-87e5d982daaa
 # ╠═a37259a8-6b04-47db-b1d1-841c1021e9c8
@@ -794,9 +806,9 @@ end
 # ╟─d6defbeb-74f2-4139-8918-1a9336b736f6
 # ╟─5dc29e4b-f572-4b46-8ccf-f65cd94b0433
 # ╠═db859254-b076-4b88-bae8-cffc82f863f9
-# ╠═eb90e0e4-95b3-4e1a-8239-fa891517a1c4
+# ╟─eb90e0e4-95b3-4e1a-8239-fa891517a1c4
 # ╟─3d2bea48-6f61-433d-97a8-8ac76137ff75
 # ╟─62c22e3d-fbc1-4925-ad36-6225dbbe78e5
 # ╟─9515f730-94a4-4262-8bc4-f3511aa797ad
 # ╟─4917b271-6dff-4f80-a51b-83eead3e6719
-# ╠═c38a1355-61eb-4b44-bca5-5c7c93bbf5a8
+# ╟─c38a1355-61eb-4b44-bca5-5c7c93bbf5a8
