@@ -87,7 +87,7 @@ md"""
 # ╔═╡ 9902e887-1496-4686-9c27-04b73d751ef6
 with_theme(makie_theme) do
     vis_path = joinpath(datasets_dir, "synthetic_25m.jld2")
-    
+
     fields, scalars, numerics = load(vis_path, "fields", "scalars", "numerics")
 
     H     = fields.H
@@ -97,13 +97,13 @@ with_theme(makie_theme) do
 
     V_old = fields.V_old
     V     = fields.V
-    
+
     ice_mask_old = H_old .< 1.0
     ice_mask     = H     .< 1.0
-    
+
     ice_mask_old_v = av4(H_old) .< 1.0
 
-    
+
     ice_mask_v = av4(H) .< 1.0
 
     H_old_v = copy(H_old)
@@ -152,7 +152,7 @@ with_theme(makie_theme) do
     axs[4].title = L"H~\mathrm{[m]}"
     axs[5].title = L"V_\mathrm{old}~\mathrm{[m/a]}"
     axs[6].title = L"V~\mathrm{[m/a]}"
-    
+
     # convert to km for plotting
     xc_km, yc_km = numerics.xc / 1e3, numerics.yc / 1e3
 
@@ -164,13 +164,13 @@ with_theme(makie_theme) do
            heatmap!(axs[6], xc_km, yc_km, V_v))
 
     contour!(axs[1], xc_km, yc_km, H; levels=1:1, linewidth=0.5, color=:black)
-    
+
     # enable interpolation for smoother picture
     foreach(hms) do h
         h.interpolate = true
         h.rasterize   = px_per_unit
     end
-    
+
     hms[1].colormap = :terrain
     hms[2].colormap = Reverse(:roma)
     hms[3].colormap = :vik
@@ -215,11 +215,11 @@ md"""
 # ╔═╡ b0844542-8f1f-4691-9777-23ce34675e19
 with_theme(makie_theme) do
     vis_path = "../datasets/aletsch_25m.jld2"
-    
+
     fields, scalars, numerics, eb, mb = load(vis_path, "fields",
                                                         "scalars",
                                                         "numerics",
-                                                        "eb", 
+                                                        "eb",
                                                         "mb")
 
     fig = Figure(; size=(two_column_pt, 310))
@@ -227,7 +227,7 @@ with_theme(makie_theme) do
     # convert to km
     x_km = numerics.xc ./ 1e3
     y_km = numerics.yc ./ 1e3
-    
+
     axs = (Axis(fig[1, 1][1, 1]; aspect=DataAspect()),
            Axis(fig[1, 2][1, 1]; aspect=DataAspect()),
            Axis(fig[2, 1][1, 1]; aspect=DataAspect()),
@@ -287,7 +287,7 @@ with_theme(makie_theme) do
         h.interpolate = true
         h.rasterize   = px_per_unit
     end
-    
+
     hms[1].colormap = :terrain
     hms[2].colormap = :turbo
     hms[3].colormap = :vik
@@ -298,7 +298,7 @@ with_theme(makie_theme) do
     hms[2].colorrange = (0, 300)
     hms[3].colorrange = (0, 900)
     hms[4].colorrange = (-10, 0)
-    
+
     z = LinRange(1900, 4150, 1000)
     b = @. min(scalars.β * (z - scalars.ela), scalars.b_max)
 
@@ -310,14 +310,14 @@ with_theme(makie_theme) do
 
     # parametrised model
     lin = lines!(axs[6], z ./ 1e3, b .* SECONDS_IN_YEAR; linewidth=1, label="model")
-    
+
     sc = scatter!(axs[6], scalars.ela / 1e3, 0; strokecolor = :black,
                                                 strokewidth = 0.5,
                                                 color       = :transparent,
                                                 markersize  = 3,
                                                 marker      = :diamond,
                                                 label       = "ELA")
-    
+
     lg = Legend(fig[2,3], axs[6])
     lg.halign = :right
     lg.valign = :bottom
@@ -467,7 +467,7 @@ with_theme(makie_theme) do
     end
 
     cbs = [Colorbar(fig[row, col][1, 2], hms[row, col]) for row in 1:4, col in 1:3]
-    
+
     for (label, idx) in zip('a':'l', [(row, col) for col in 1:3, row in 1:4])
         Label(fig[idx..., TopLeft()], string(label))
     end
@@ -496,7 +496,7 @@ with_theme(makie_theme) do
 
     save("../figures/synthetic_td_inversion.pdf", fig; pt_per_unit, px_per_unit)
     save("../figures/synthetic_td_inversion.png", fig; pt_per_unit, px_per_unit)
-    
+
     fig
 end
 
@@ -519,7 +519,7 @@ with_theme(makie_theme) do
     for ax in axs[1, :]
         hidexdecorations!(ax)
     end
-    
+
     for ax in axs[:, 2:end]
         hideydecorations!(ax)
     end
@@ -545,7 +545,7 @@ with_theme(makie_theme) do
     for (i, res) in enumerate(aletsch_resolutions)
         input_file = "../datasets/aletsch_$(res)m.jld2"
         numerics   = load(input_file, "numerics")
-        
+
         x, y = numerics.xc ./ 1e3, numerics.yc ./ 1e3
 
         out_files = (
@@ -582,7 +582,7 @@ with_theme(makie_theme) do
     cb.label = L"A_s\ \mathrm{[Pa^{-3}\,m\,s^{-1}]}"
 
     colgap!(fig.layout, Fixed(10))
-    
+
     save("$figures_dir/aletsch_td_inversion_resolution.pdf", fig; pt_per_unit, px_per_unit)
     save("$figures_dir/aletsch_td_inversion_resolution.png", fig; pt_per_unit, px_per_unit)
 
@@ -602,7 +602,7 @@ md"""
 # ╔═╡ 9515f730-94a4-4262-8bc4-f3511aa797ad
 with_theme(makie_theme) do
     fig = Figure(size=(two_column_pt, 185))
-    
+
     axs = [Axis(fig[1, col]) for col in 1:4]
 
     axs[1].title = L"\mathrm{Observed}"
@@ -611,11 +611,11 @@ with_theme(makie_theme) do
     axs[4].title = L"\mathrm{Time-dependent}"
 
     axs[1].ylabel = L"y\ \mathrm{[km]}"
-    
+
     for ax in axs[2:end]
         hideydecorations!(ax)
     end
-    
+
     for ax in axs
         limits!(ax, -7, 7, -10, 10)
         ax.aspect = DataAspect()
@@ -624,9 +624,9 @@ with_theme(makie_theme) do
     end
 
     fields, numerics = load("$datasets_dir/aletsch_25m.jld2", "fields", "numerics")
-    
+
     x, y = numerics.xc ./ 1e3, numerics.yc ./ 1e3
-    
+
     H_obs  = fields.H
     V_obs  = fields.V
 
@@ -635,15 +635,15 @@ with_theme(makie_theme) do
 
     H_obs[im] .= NaN
     V_obs[iv] .= NaN
-    
+
     V_s1, H_s1 = load("$output_dir/snapshot_aletsch_25m/step_0100.jld2", "V", "H")
     H_s1[im] .= NaN
     V_s1[iv] .= NaN
-    
+
     V_s2, H_s2 = load("$output_dir/snapshot_forward_aletsch_25m.jld2", "V" ,"H")
     H_s2[im] .= NaN
     V_s2[iv] .= NaN
-    
+
     V_td, H_td = load("$output_dir/time_dependent_aletsch_25m/step_0100.jld2", "V", "H")
     H_td[im] .= NaN
     V_td[iv] .= NaN
@@ -667,10 +667,10 @@ with_theme(makie_theme) do
     end
 
     colgap!(fig.layout, Fixed(10))
-    
+
     save("$figures_dir/aletsch_inversion_velocities.pdf", fig; pt_per_unit, px_per_unit)
     save("$figures_dir/aletsch_inversion_velocities.png", fig; pt_per_unit, px_per_unit)
-    
+
     fig
 end
 
@@ -682,22 +682,22 @@ md"""
 # ╔═╡ c38a1355-61eb-4b44-bca5-5c7c93bbf5a8
 with_theme(makie_theme) do
     fig = Figure(size=(one_column_pt, 260))
-    
+
     axs = [Axis(fig[row, col]) for row in 1:2, col in 1:2]
 
     axs[1,1].title = L"\Delta V"
     axs[1,2].title = L"\Delta V"
     axs[2,1].title = L"\Delta H"
     axs[2,2].title = L"\Delta H"
-    
+
     for ax in axs[1, :]
         hidexdecorations!(ax)
     end
-    
+
     for ax in axs[:, 2:end]
         hideydecorations!(ax)
     end
-    
+
     for ax in axs
         limits!(ax, -7, 7, -10, 10)
         ax.aspect = DataAspect()
@@ -714,9 +714,9 @@ with_theme(makie_theme) do
     end
 
     fields, numerics = load("$datasets_dir/aletsch_25m.jld2", "fields", "numerics")
-    
+
     x, y = numerics.xc ./ 1e3, numerics.yc ./ 1e3
-    
+
     H_obs  = fields.H
     V_obs  = fields.V
 
@@ -728,18 +728,18 @@ with_theme(makie_theme) do
 
     H_obs[im] .= NaN
     V_obs[iv] .= NaN
-    
+
     V_s, H_s = load("$output_dir/snapshot_forward_aletsch_25m.jld2", "V" ,"H")
     H_s[im] .= NaN
     V_s[iv] .= NaN
-    
+
     V_td, H_td = load("$output_dir/time_dependent_aletsch_25m/step_0100.jld2", "V", "H")
     H_td[im] .= NaN
     V_td[iv] .= NaN
 
     V_s[V_s .== V_obs] .= NaN
     V_td[V_td .== V_obs] .= NaN
-    
+
     H_s[H_s .== H_obs] .= NaN
     H_td[H_td .== H_obs] .= NaN
 
@@ -758,7 +758,7 @@ with_theme(makie_theme) do
     hms[2].colorrange = (1e-2, 1e0)
     hms[3].colorrange = (1e-3, 1e-1)
     hms[4].colorrange = (1e-3, 1e-1)
-    
+
     hms[1].colormap    = :turbo
     hms[2].colormap    = :turbo
     hms[3].colormap    = :vik
@@ -772,10 +772,10 @@ with_theme(makie_theme) do
     end
 
     colgap!(fig.layout, Fixed(10))
-    
+
     save("$figures_dir/aletsch_inversion_deltas.pdf", fig; pt_per_unit, px_per_unit)
     save("$figures_dir/aletsch_inversion_deltas.png", fig; pt_per_unit, px_per_unit)
-    
+
     fig
 end
 
