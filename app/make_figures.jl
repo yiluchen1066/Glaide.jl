@@ -103,7 +103,6 @@ with_theme(makie_theme) do
 
     ice_mask_old_v = av4(H_old) .< 1.0
 
-
     ice_mask_v = av4(H) .< 1.0
 
     H_old_v = copy(H_old)
@@ -171,8 +170,8 @@ with_theme(makie_theme) do
         h.rasterize   = px_per_unit
     end
 
-	hms[2].colorscale = log10
-	
+    hms[2].colorscale = log10
+
     hms[1].colormap = :terrain
     hms[2].colormap = Reverse(:roma)
     hms[3].colormap = :vik
@@ -761,10 +760,10 @@ with_theme(makie_theme) do
     hms[3].colorrange = (1e-3, 1e-1)
     hms[4].colorrange = (1e-3, 1e-1)
 
-    hms[1].colormap    = :turbo
-    hms[2].colormap    = :turbo
-    hms[3].colormap    = :vik
-    hms[4].colormap    = :vik
+    hms[1].colormap = :turbo
+    hms[2].colormap = :turbo
+    hms[3].colormap = :vik
+    hms[4].colormap = :vik
 
     cbs = (Colorbar(fig[1,3], hms[2]),
            Colorbar(fig[2,3], hms[4]))
