@@ -121,7 +121,7 @@ with_theme(makie_theme) do
     As_v[ice_mask_v] .= NaN
     V_v[ice_mask_v]  .= NaN
 
-    fig = Figure(; size=(two_column_pt, 280))
+    fig = Figure(; size=(two_column_pt, 270))
 
     axs = (Axis(fig[1, 1][1, 1]; aspect=DataAspect()),
            Axis(fig[2, 1][1, 1]; aspect=DataAspect()),
@@ -147,7 +147,7 @@ with_theme(makie_theme) do
     axs[6].xlabel = L"x~\mathrm{[km]}"
 
     axs[1].title = L"B~\mathrm{[m]}"
-    axs[2].title = L"\log_{10}(As)"
+    axs[2].title = L"A_s\ \mathrm{[Pa^{-3}\,m\,s^{-1}]}"
     axs[3].title = L"H_\mathrm{old}~\mathrm{[m]}"
     axs[4].title = L"H~\mathrm{[m]}"
     axs[5].title = L"V_\mathrm{old}~\mathrm{[m/a]}"
@@ -157,7 +157,7 @@ with_theme(makie_theme) do
     xc_km, yc_km = numerics.xc / 1e3, numerics.yc / 1e3
 
     hms = (heatmap!(axs[1], xc_km, yc_km, B),
-           heatmap!(axs[2], xc_km, yc_km, log10.(As_v)),
+           heatmap!(axs[2], xc_km, yc_km, As_v),
            heatmap!(axs[3], xc_km, yc_km, H_old_v),
            heatmap!(axs[4], xc_km, yc_km, H_v),
            heatmap!(axs[5], xc_km, yc_km, V_old_v),
@@ -171,6 +171,8 @@ with_theme(makie_theme) do
         h.rasterize   = px_per_unit
     end
 
+	hms[2].colorscale = log10
+	
     hms[1].colormap = :terrain
     hms[2].colormap = Reverse(:roma)
     hms[3].colormap = :vik
@@ -179,7 +181,7 @@ with_theme(makie_theme) do
     hms[6].colormap = :turbo
 
     hms[1].colorrange = (1000, 4000)
-    hms[2].colorrange = (-24, -20)
+    hms[2].colorrange = (1e-24, 1e-20)
     hms[3].colorrange = (0, 150)
     hms[4].colorrange = (0, 150)
     hms[5].colorrange = (0, 300)
