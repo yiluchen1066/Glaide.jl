@@ -15,7 +15,7 @@ The Aletsch glacier data used in the scripts is available for download from the 
 We provide a collection of [Pluto.jl](https://plutojl.org) notebooks located in the [**app/**](./app/) directory to reproduce all the figures from the paper and run snapshot and time-dependent inversions on synthetic and real (Aletsch glacier in the Swiss Alps) geometries.
 
 > [!WARNING]
-> You need a server with a **CUDA capable GPU** in order to run Glaide.jl and perform the following any computational steps beyond setup generation.
+> You need a server with a **CUDA capable GPU** in order to run Glaide.jl and perform any computational steps beyond setup generation.
 
 1. To get started, download or clone the current repository on a GPU-hosting machine or server
 ```
