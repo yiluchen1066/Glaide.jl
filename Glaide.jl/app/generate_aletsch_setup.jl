@@ -19,7 +19,10 @@ begin
 
     using PlutoUI
     TableOfContents()
-end
+
+	# disable memcheck
+	Rasters.checkmem!(false)
+end;
 
 # ╔═╡ 764a33ef-e288-45ec-960c-caf2eb56e3d3
 md"""
@@ -33,6 +36,13 @@ We will perform the following steps:
 2. Crop and resample the raster data to match the specified extent and resolution
 3. Create the best fit curve for the measured mass balance;
 4. Create the mass balance mask to remove ice accumulation in the areas where there is no ice by the end of the modelled period.
+"""
+
+# ╔═╡ 5b834f97-ac8f-42b3-b0b2-21229730ca14
+md"""
+!!! warning "System memory (RAM) and internet connexion requirements"
+    - Downloading the various input data will download significant amount of data. Make sure to have a sufficiently good internet connexion and some time ahead. 
+	- Generating the Aletsch dataset for various spatial resolutions may consume up to 10GB of system RAM. Make sure to have sufficient free memory (to avoid failures with Rasters.jl, we've set `Rasters.checkmem!(false)`).
 """
 
 # ╔═╡ 8bc9c1af-6f5e-40f7-9afb-a9134c56412a
@@ -543,6 +553,7 @@ end
 # ╔═╡ Cell order:
 # ╟─d80af3c8-36ec-4d09-9b83-46b45bb25374
 # ╟─764a33ef-e288-45ec-960c-caf2eb56e3d3
+# ╟─5b834f97-ac8f-42b3-b0b2-21229730ca14
 # ╟─8bc9c1af-6f5e-40f7-9afb-a9134c56412a
 # ╠═0f9575cb-b4b6-4d3a-97d4-dc5db7c23c12
 # ╟─72db902c-10f3-4446-99d5-4eb0f810662b
