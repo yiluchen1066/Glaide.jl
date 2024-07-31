@@ -5,3 +5,9 @@ Manifest.toml
 datasets/
 figures/
 output/
+
+# macOS
+.DS_Store
+
+# VS code
+.vscode
