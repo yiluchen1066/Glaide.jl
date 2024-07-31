@@ -50,4 +50,4 @@ julia> Pluto.run()
 > [!NOTE]
 > - You will first need to execute the `generate_synthetic_setup.jl` and/or `generate_aletsch_setup.jl` notebooks in order to create the data needed to further run the inversion workflows.
 > - Fetching the various input data will download ~4 GB of data. Make sure to have a sufficiently good internet connexion and some time ahead and grab a drink while it's processing.
-> - Generating the Aletsch dataset for various spatial resolutions may consume up to 10GB of system RAM. Make sure to have sufficient free memory
+> - Generating the Aletsch dataset for various spatial resolutions may consume up to 10 GB of system RAM. Make sure to have sufficient free memory

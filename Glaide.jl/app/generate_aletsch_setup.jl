@@ -42,7 +42,7 @@ We will perform the following steps:
 md"""
 !!! warning "System memory (RAM) and internet connexion requirements"
     - Fetching the various input data will download ~4 GB of data. Make sure to have a sufficiently good internet connexion and some time ahead.
-	- Generating the Aletsch dataset for various spatial resolutions may consume up to 10GB of system RAM. Make sure to have sufficient free memory (to avoid failures with Rasters.jl, we've set `Rasters.checkmem!(false)`).
+	- Generating the Aletsch dataset for various spatial resolutions may consume up to 10 GB of system RAM. Make sure to have sufficient free memory (to avoid failures with Rasters.jl, we've set `Rasters.checkmem!(false)`).
 """
 
 # ╔═╡ 8bc9c1af-6f5e-40f7-9afb-a9134c56412a
