@@ -106,9 +106,9 @@ Bed and some surface elevation data can be downloaded automatically from their o
 sources_dir = joinpath(datasets_dir, "_sources"); mkpath(sources_dir);
 
 # ╔═╡ 4af27194-4ebe-41a9-a716-142b3f4817e0
- Markdown.parse("""
+md"""
 The Zenodo repository provides the dataset for ice velocities from [Rabatel et al. (2023)](https://doi.org/10.3390/data8040066), elevation data from [swissALTI3D](https://www.swisstopo.admin.ch/en/height-model-swissalti3d), and mass balance data from [GLAMOS](https://glamos.ch/#/A10g-05). We define the Zenodo URL from which we can access the files:
-""")
+"""
 
 # ╔═╡ 24930db6-f893-4cc6-ad30-58e8bac0ee1c
 zenodo_url = "https://zenodo.org/api/records/13133070/files-archive";
