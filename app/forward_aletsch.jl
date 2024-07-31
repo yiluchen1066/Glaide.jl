@@ -73,7 +73,7 @@ with_theme(theme_latexfonts()) do
     hideydecorations!(axs[2])
     hideydecorations!(axs[3])
 
-    axs[1].title = L"A_s\ \mathrm{[Pa\,s^{-2}]}"
+    axs[1].title = L"A_s\ \mathrm{[Pa^{-3}\,m\,s^{-1}]}"
     axs[2].title = L"V\ \mathrm{[m\ a^{-1}]}"
     axs[3].title = L"H\ \mathrm{[m]}"
 
