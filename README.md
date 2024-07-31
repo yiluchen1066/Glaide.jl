@@ -43,7 +43,7 @@ julia> using Pluto
 julia> Pluto.run()
 ```
 
-5. After exectuing these commands, Pluto web application should open in your default web-browser. From there, select the Pluto notebook to run, e.g., `app/generate_synthetic_setup.jl` and hit "open". This should launch the selected notebook.
+5. After executing these commands, Pluto web application should open in your default web-browser. From there, select the Pluto notebook to run, e.g., `app/generate_synthetic_setup.jl` and hit "open". This should launch the selected notebook.
 
     <img src="assets/pluto_ui.png" width=50%/>
 
