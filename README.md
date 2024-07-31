@@ -45,7 +45,7 @@ julia> Pluto.run()
 
 5. Ideally, Pluto fires-up a server on `localhost:1234` that should open a tab in your default web-browser. From there, select the Pluto notebook to run, e.g., `app/generate_synthetic_setup.jl` and hit "open". This should launch the selected notebook.
 
-    <img src="Glaide.jl/assets/pluto_ui.png" width=50%/>
+    <img src="assets/pluto_ui.png" width=50%/>
 
 > [!NOTE]
 > - You will first need to execute the `generate_synthetic_setup.jl` and/or `generate_aletsch_setup.jl` notebooks in order to create the data needed to further run the inversion workflows.
