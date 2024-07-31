@@ -235,7 +235,7 @@ with_theme(makie_theme) do
            Axis(fig[1, 3][1, 1]; aspect=DataAspect()),
            Axis(fig[2, 3]      ; title=L"\text{SMB model}"))
 
-    for ax in axs
+    for ax in axs[1:end-1]
         limits!(ax, -7, 7, -10, 10)
     end
 
@@ -797,7 +797,7 @@ end
 # ╟─b92a481f-4977-4f51-a68f-f210864388b0
 # ╟─9902e887-1496-4686-9c27-04b73d751ef6
 # ╟─a785cc48-5386-49b5-901c-780568d7301b
-# ╟─b0844542-8f1f-4691-9777-23ce34675e19
+# ╠═b0844542-8f1f-4691-9777-23ce34675e19
 # ╟─e3c678e8-d43a-4a3c-a26e-ccbc15d89501
 # ╠═2f8c5e86-c904-4710-96dc-5375864d3166
 # ╟─a35b1524-48d3-404e-b727-2ebef5c8b2c2
