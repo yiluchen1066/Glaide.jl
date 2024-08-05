@@ -12,7 +12,7 @@ This Julia package is companion to the paper titled _"Snapshot and time-dependen
 The Aletsch glacier data used in the scripts is available for download from the [ETH research collection](https://www.research-collection.ethz.ch) and from [Zenodo](https://doi.org/10.5281/zenodo.13133070).
 
 ## Getting started
-We provide a collection of [Pluto.jl](https://plutojl.org) notebooks located in the [**app/**](./app/) directory to reproduce all the figures from the paper and run snapshot and time-dependent inversions on synthetic and real (Aletsch glacier in the Swiss Alps) geometries.
+We provide a collection of [Pluto.jl](https://plutojl.org) notebooks located in the [**app/**](./app/) directory to reproduce all the figures from the paper and run snapshot and time-dependent inversions on synthetic and real ([Aletsch glacier in the Swiss Alps](https://s.geo.admin.ch/may6x854g9bn)) geometries.
 
 > [!WARNING]
 > You need a server with a **CUDA capable GPU** in order to run Glaide.jl and perform any computational steps beyond setup generation.
