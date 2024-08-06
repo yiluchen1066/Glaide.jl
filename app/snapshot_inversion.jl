@@ -97,7 +97,7 @@ line_search = BacktrackingLineSearch(; α_min=1e2, α_max=1e6);
 md"""
 ## Inversion function
 
-Here, we create a funciton that executes the inversion scenario:
+Here, we create a function that executes the inversion scenario:
 """
 
 # ╔═╡ 97bcae72-f6a8-4cc7-99d4-e383069085e1
