@@ -33,7 +33,7 @@ In this notebook, we will prepare the inputs for the Glaide.jl model.
 We will perform the following steps:
 
 1. Download the datasets containing the elevation, velocity, and mass balance for the Aletsch glacier in years 2016--2017;
-2. Crop and resample the raster data to match the specified extent and resolution
+2. Crop and resample the raster data to match the specified extent and resolution;
 3. Create the best fit curve for the measured mass balance;
 4. Create the mass balance mask to remove ice accumulation in the areas where there is no ice by the end of the modelled period.
 """
@@ -99,7 +99,7 @@ smooth_amount = 1e3;
 md"""
 ## Prerequisites
 
-Bed and some surface elevation data can be downloaded automatically from their original sources, while other data needs to be downloaded from a Zenodo repository (as it woule else need to be manually handled). The source files will be places into the `datasets/_sources` directory:
+Bed and some surface elevation data can be downloaded automatically from their original sources, while other data needs to be downloaded from a Zenodo repository (as it would else need to be manually handled). The source files will be places into the `datasets/_sources` directory:
 """
 
 # ╔═╡ 37042783-bafe-444f-85ff-bc9f17d4ff53
