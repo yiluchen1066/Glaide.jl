@@ -575,7 +575,7 @@ with_theme(makie_theme) do
         end
     end
 
-    for (label, idx) in zip('a':'h', [(row, col) for row in 1:2, col in 1:4])
+    for (label, idx) in zip('a':'h', [(col, row) for row in 1:4, col in 1:2])
         Label(fig[idx..., TopLeft()], string(label); padding=(0, 5, 0, 0))
     end
 
@@ -682,14 +682,14 @@ md"""
 
 # ╔═╡ c38a1355-61eb-4b44-bca5-5c7c93bbf5a8
 with_theme(makie_theme) do
-    fig = Figure(size=(one_column_pt, 260))
+    fig = Figure(size=(two_column_pt, 500))
 
     axs = [Axis(fig[row, col]) for row in 1:2, col in 1:2]
 
-    axs[1,1].title = L"\Delta V"
-    axs[1,2].title = L"\Delta V"
-    axs[2,1].title = L"\Delta H"
-    axs[2,2].title = L"\Delta H"
+    #axs[1,1].title = L"\Delta V"
+    #axs[1,2].title = L"\Delta V"
+    #axs[2,1].title = L"\Delta H"
+    #axs[2,2].title = L"\Delta H"
 
     for ax in axs[1, :]
         hidexdecorations!(ax)
@@ -768,7 +768,10 @@ with_theme(makie_theme) do
     cbs = (Colorbar(fig[1,3], hms[2]),
            Colorbar(fig[2,3], hms[4]))
 
-    for (label, idx) in zip('a':'d', [(col, row) for row in 1:2, col in 1:2])
+	cbs[1].label = L"\Delta V"
+	cbs[2].label = L"\Delta H"
+
+    for (label, idx) in zip('a':'d', [(row, col) for row in 1:2, col in 1:2])
         Label(fig[idx..., TopLeft()], string(label); padding=(0, 0, 0, 0))
     end
 
