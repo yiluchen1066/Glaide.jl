@@ -682,7 +682,7 @@ md"""
 
 # ╔═╡ c38a1355-61eb-4b44-bca5-5c7c93bbf5a8
 with_theme(makie_theme) do
-    fig = Figure(size=(two_column_pt, 500))
+    fig = Figure(size=(two_column_pt .* 0.9, 500))
 
     axs = [Axis(fig[row, col]) for row in 1:2, col in 1:2]
 
@@ -771,7 +771,7 @@ with_theme(makie_theme) do
 	cbs[1].label = L"\Delta V"
 	cbs[2].label = L"\Delta H"
 
-    for (label, idx) in zip('a':'d', [(row, col) for row in 1:2, col in 1:2])
+    for (label, idx) in zip('a':'d', [(col, row) for row in 1:2, col in 1:2])
         Label(fig[idx..., TopLeft()], string(label); padding=(0, 0, 0, 0))
     end
 
