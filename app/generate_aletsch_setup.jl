@@ -319,7 +319,7 @@ function create_mass_balance_model(mass_balance_path)
     imin = argmin(mass_balance)
     imax = argmax(mass_balance)
 
-    # skip 5 points to only take fit the linear part
+    # skip 5 points to only fit the linear part
     nskip   = 5
     fit_rng = imin:imax-nskip
 
