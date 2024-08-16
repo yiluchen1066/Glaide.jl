@@ -20,8 +20,8 @@ begin
     using PlutoUI
     TableOfContents()
 
-	# disable memcheck
-	Rasters.checkmem!(false)
+    # disable memcheck
+    Rasters.checkmem!(false)
 end;
 
 # ╔═╡ 764a33ef-e288-45ec-960c-caf2eb56e3d3
