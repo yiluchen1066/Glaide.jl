@@ -783,6 +783,97 @@ with_theme(makie_theme) do
     fig
 end
 
+# ╔═╡ 832890ee-7f90-4fcc-a7fb-aef8a1fb47b2
+md"""
+## Comparing Aletsch runs for 10, 50, 100 years using snapshot and time-dependent inputs
+"""
+
+# ╔═╡ b763f8fb-0088-4a53-9382-9b7a3fe2ef8f
+aletsch_years = (10, 50, 100);
+
+# ╔═╡ 673d08ad-1669-457e-905d-aa8f13c72ac4
+with_theme(makie_theme) do
+    fig = Figure(size=(two_column_pt, 400))
+    axs = [Axis(fig[row, col]) for row in 1:2, col in eachindex(aletsch_years)]
+
+    axs[1, 1].ylabel = L"y\,[\mathrm{km}]"
+    axs[2, 1].ylabel = L"y\,[\mathrm{km}]"
+
+    for ax in axs[1, :]
+        hidexdecorations!(ax)
+    end
+
+    for ax in axs[:, 2:end]
+        hideydecorations!(ax)
+    end
+
+    for (i, ax) in enumerate(axs[1, :])
+        ax.title  = L"%$(aletsch_years[i])\,\mathrm{yrs}"
+    end
+
+    for ax in axs[end, :]
+        ax.xlabel = L"x\,[\mathrm{km}]"
+    end
+
+    for ax in axs
+        limits!(ax, -7, 7, -10, 10)
+        ax.aspect = DataAspect()
+        ax.xgridvisible = true
+        ax.ygridvisible = true
+    end
+
+    hms = Heatmap[]
+
+    fields, numerics = load("$datasets_dir/aletsch_25m.jld2", "fields", "numerics")
+
+    x, y = numerics.xc ./ 1e3, numerics.yc ./ 1e3
+
+    for (i, yrs) in enumerate(aletsch_years)
+
+		out_files = (
+            @sprintf("%s/forward_aletsch/forward_aletsch_25m_time_dep_%dyrs.jld2", output_dir, yrs),
+            @sprintf("%s/forward_aletsch/forward_aletsch_25m_snap_%dyrs.jld2", output_dir, yrs),
+            )
+
+		for (row, out_file) in enumerate(out_files)
+            V, H = load(out_file, "V", "H")
+
+            ice_mask = H .< 1.0
+            ice_mask_v = av4(H) .< 1.0
+
+			V[ice_mask_v] .= NaN
+			H[ice_mask] .= NaN
+
+            hm = heatmap!(axs[row, i], x, y, V .* SECONDS_IN_YEAR)
+			#hm = heatmap!(axs[row, i], x, y, H)
+
+            hm.colormap    = :turbo
+            hm.colorrange  = (0, 300)
+			#hm.colormap    = :vik
+            #hm.colorrange  = (0, 900)
+			hm.interpolate = true
+            hm.rasterize   = px_per_unit
+
+            push!(hms, hm)
+        end
+    end
+
+    for (label, idx) in zip('a':'h', [(col, row) for row in 1:3, col in 1:2])
+        Label(fig[idx..., TopLeft()], string(label); padding=(0, 5, 0, 0))
+    end
+
+	cb = Colorbar(fig[:, length(aletsch_years) + 1], hms[end])
+    cb.label = L"V\ \mathrm{[m\,a^{-1}]}"
+	#cb.label = L"H\ \mathrm{[m]}"
+
+    colgap!(fig.layout, Fixed(10))
+
+    save("$figures_dir/aletsch_fwd_evol.pdf", fig; pt_per_unit, px_per_unit)
+    save("$figures_dir/aletsch_fwd_evol.png", fig; pt_per_unit, px_per_unit)
+
+    fig
+end
+
 # ╔═╡ Cell order:
 # ╟─cc163f70-4dac-11ef-3e26-7366ab19d20e
 # ╠═b82f4216-763f-4b68-a1df-adcc8b3c1e45
@@ -815,4 +906,6 @@ end
 # ╟─62c22e3d-fbc1-4925-ad36-6225dbbe78e5
 # ╟─9515f730-94a4-4262-8bc4-f3511aa797ad
 # ╟─4917b271-6dff-4f80-a51b-83eead3e6719
-# ╟─c38a1355-61eb-4b44-bca5-5c7c93bbf5a8
+# ╟─832890ee-7f90-4fcc-a7fb-aef8a1fb47b2
+# ╠═b763f8fb-0088-4a53-9382-9b7a3fe2ef8f
+# ╠═673d08ad-1669-457e-905d-aa8f13c72ac4
