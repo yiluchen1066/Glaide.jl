@@ -990,8 +990,8 @@ with_theme(makie_theme) do
         Label(fig[idx..., TopLeft()], string(label); padding=(0, 0, 0, 0))
     end
 
-    save("$figures_dir/aletsch_fwd_evol_dHdt.pdf", fig; pt_per_unit, px_per_unit)
-    save("$figures_dir/aletsch_fwd_evol_dHdt.png", fig; pt_per_unit, px_per_unit)
+    save("$figures_dir/aletsch_fwd_evol_deltas.pdf", fig; pt_per_unit, px_per_unit)
+    save("$figures_dir/aletsch_fwd_evol_deltas.png", fig; pt_per_unit, px_per_unit)
 
     fig
 end
