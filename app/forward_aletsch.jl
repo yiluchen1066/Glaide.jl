@@ -34,26 +34,35 @@ In this notebook, we run the SIA model using the reconstructed distribution of t
 input_file = "../datasets/aletsch_25m.jld2";
 
 # ╔═╡ 9c08b16c-c809-4919-9afb-04387eb9abd7
-inversion_file = "../output/snapshot_aletsch_25m/step_0100.jld2";
+#inversion_file = "../output/snapshot_aletsch_25m/step_0100.jld2";
+inversion_file = "../output/time_dependent_aletsch_25m/step_0100.jld2";
 
 # ╔═╡ efefd1dd-7439-436a-ad5d-9054307cb368
 E = 0.25;
 
+# ╔═╡ b70f7a61-c958-47a2-925a-75efe46f8aaa
+nt = 11;
+
 # ╔═╡ 9ebf02c2-7234-4f09-8108-b671c99263cc
 model = let
-    model = TimeDependentSIA(input_file)
+    model = TimeDependentSIA(input_file; report=true)
     model.scalars.A *= E
 
     X = load(inversion_file, "X")
     copy!(model.fields.As, exp.(X))
 
-    solve!(model)
+    for it in 1:nt
+        solve!(model)
+        model.fields.H_old .= model.fields.H
+    end
 
     # save the results
     V = Array(model.fields.V)
     H = Array(model.fields.H)
 
-    jldsave("../output/synthetic_forward_aletsch_25m.jld2"; V, H)
+    #jldsave("../output/snapshot_forward_aletsch_25m.jld2"; V, H)
+    #jldsave("../output/forward_aletsch/forward_aletsch_25m_snap_$(nt)yrs.jld2"; V, H)
+    jldsave("../output/forward_aletsch/forward_aletsch_25m_time_dep_$(nt)yrs.jld2"; V, H)
 
     model
 end;
@@ -126,5 +135,6 @@ end
 # ╠═b06089a6-4433-4dcb-bb24-45fbfba0bd65
 # ╠═9c08b16c-c809-4919-9afb-04387eb9abd7
 # ╠═efefd1dd-7439-436a-ad5d-9054307cb368
+# ╠═b70f7a61-c958-47a2-925a-75efe46f8aaa
 # ╠═9ebf02c2-7234-4f09-8108-b671c99263cc
 # ╟─a2a8b755-7466-4fe5-aa7a-f2043d96d04b

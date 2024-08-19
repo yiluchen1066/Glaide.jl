@@ -297,7 +297,7 @@ function create_mass_balance_model(mass_balance_path)
     data = readdlm(mass_balance_path; skipstart=4)
 
     # extract data for 2016-2017 hydrological year
-    data = vec(data[102, :])
+    data = vec(data[103, :])
 
     elevation_bands = LinRange(data[11], data[12], 26)
     ela             = data[8]
@@ -408,7 +408,7 @@ function create_input_file(resolution)
                b_max,
                ela)
 
-    output_path = joinpath(datasets_dir, "aletsch_$(resolution)m.jld2")
+	output_path = joinpath(datasets_dir, "aletsch_$(resolution)m.jld2")
 
     # save elevation bands and mass balance data for visualisation
     jldsave(output_path; fields, scalars, numerics, eb, mb)
