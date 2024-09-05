@@ -147,20 +147,20 @@ with_theme(makie_theme) do
 
     axs[1].title = L"B~\mathrm{[m]}"
     axs[2].title = L"A_s\ \mathrm{[Pa^{-3}\,m\,s^{-1}]}"
-    axs[3].title = L"H_\mathrm{old}~\mathrm{[m]}"
-    axs[4].title = L"H~\mathrm{[m]}"
-    axs[5].title = L"V_\mathrm{old}~\mathrm{[m/a]}"
-    axs[6].title = L"V~\mathrm{[m/a]}"
+    axs[3].title = L"V_\mathrm{old}~\mathrm{[m/a]}"
+    axs[4].title = L"V~\mathrm{[m/a]}"
+    axs[5].title = L"H_\mathrm{old}~\mathrm{[m]}"
+    axs[6].title = L"H~\mathrm{[m]}"
 
     # convert to km for plotting
     xc_km, yc_km = numerics.xc / 1e3, numerics.yc / 1e3
 
     hms = (heatmap!(axs[1], xc_km, yc_km, B),
            heatmap!(axs[2], xc_km, yc_km, As_v),
-           heatmap!(axs[3], xc_km, yc_km, H_old_v),
-           heatmap!(axs[4], xc_km, yc_km, H_v),
-           heatmap!(axs[5], xc_km, yc_km, V_old_v),
-           heatmap!(axs[6], xc_km, yc_km, V_v))
+           heatmap!(axs[3], xc_km, yc_km, V_old_v),
+           heatmap!(axs[4], xc_km, yc_km, V_v),
+           heatmap!(axs[5], xc_km, yc_km, H_old_v),
+           heatmap!(axs[6], xc_km, yc_km, H_v))
 
     contour!(axs[1], xc_km, yc_km, H; levels=1:1, linewidth=0.5, color=:black)
 
@@ -174,17 +174,18 @@ with_theme(makie_theme) do
 
     hms[1].colormap = :terrain
     hms[2].colormap = Reverse(:roma)
-    hms[3].colormap = Reverse(:ice)
-    hms[4].colormap = Reverse(:ice)
-    hms[5].colormap = :matter
-    hms[6].colormap = :matter
+    hms[3].colormap = :matter
+    hms[4].colormap = :matter
+    hms[5].colormap = Reverse(:ice)
+    hms[6].colormap = Reverse(:ice)
+ 
 
     hms[1].colorrange = (1000, 4000)
     hms[2].colorrange = (1e-24, 1e-20)
-    hms[3].colorrange = (0, 150)
-    hms[4].colorrange = (0, 150)
-    hms[5].colorrange = (0, 300)
-    hms[6].colorrange = (0, 300)
+    hms[3].colorrange = (0, 300)
+    hms[4].colorrange = (0, 300)
+    hms[5].colorrange = (0, 150)
+    hms[6].colorrange = (0, 150)
 
     cbs = (Colorbar(fig[1, 1][1, 2], hms[1]),
            Colorbar(fig[2, 1][1, 2], hms[2]),
