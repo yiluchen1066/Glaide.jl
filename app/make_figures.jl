@@ -836,10 +836,6 @@ with_theme(makie_theme) do
 
     axs = [Axis(fig[row, col]) for row in 1:2, col in 1:2]
 
-    #axs[1,1].title = L"\Delta V"
-    #axs[1,2].title = L"\Delta V"
-    #axs[2,1].title = L"\Delta H"
-    #axs[2,2].title = L"\Delta H"
     axs[1,1].title = L"\text{Snapshot+}"
     axs[1,2].title = L"\text{Time-dependent}"
 
@@ -897,10 +893,35 @@ with_theme(makie_theme) do
     H_s[H_s .== H_obs] .= NaN
     H_td[H_td .== H_obs] .= NaN
 
-    hms = (heatmap!(axs[1,1], x, y, (V_s  .- V_obs)./V_obs*100), #*SECONDS_IN_YEAR),
-           heatmap!(axs[1,2], x, y, (V_td .- V_obs)./V_obs*100), #*SECONDS_IN_YEAR),
-           heatmap!(axs[2,1], x, y, (H_s  .- H_obs)./H_obs*100),
-           heatmap!(axs[2,2], x, y, (H_td .- H_obs)./H_obs*100))
+	V_err_s  = (V_s  .- V_obs)./V_obs*100
+	V_err_td = (V_td .- V_obs)./V_obs*100
+	H_err_s  = (H_s  .- H_obs)./H_obs*100
+    H_err_td = (H_td .- H_obs)./H_obs*100
+
+	# show averaged errors over the glacier:
+    cut = 100
+	I = .!isnan.(V_err_s) .& (abs.(V_err_s).<cut)
+	@show sum(abs.(V_err_s[I]))./sum(I)
+	I = .!isnan.(V_err_td) .& (abs.(V_err_td).<cut)
+	@show sum(abs.(V_err_td[I]))./sum(I)
+	I = .!isnan.(H_err_s) .& (abs.(H_err_s).<cut)
+	@show sum(abs.(H_err_s[I]))./sum(I)
+	I = .!isnan.(H_err_td) .& (abs.(H_err_td).<cut)
+	@show sum(abs.(H_err_td[I]))./sum(I)
+
+	I = .!isnan.(V_err_s) .& ((V_err_s).<cut)
+	@show sum((V_err_s[I]))./sum(I)
+	I = .!isnan.(V_err_td) .& ((V_err_td).<cut)
+	@show sum((V_err_td[I]))./sum(I)
+	I = .!isnan.(H_err_s) .& ((H_err_s).<cut)
+	@show sum((H_err_s[I]))./sum(I)
+	I = .!isnan.(H_err_td) .& ((H_err_td).<cut)
+	@show sum((H_err_td[I]))./sum(I)
+
+    hms = (heatmap!(axs[1,1], x, y, V_err_s), 
+           heatmap!(axs[1,2], x, y, V_err_td),
+           heatmap!(axs[2,1], x, y, H_err_s),
+           heatmap!(axs[2,2], x, y, H_err_td))
 	[contour!(axs[i], x, y, H_c; levels=1:1, linewidth=0.5, color=:black) for i=1:4]
 
     for hm in hms
@@ -909,13 +930,7 @@ with_theme(makie_theme) do
         #hm.colorscale  = log10
     end
 
-   #hms[1].colorrange = (1e-2, 1e0)
-    #hms[2].colorrange = (1e-2, 1e0)
     hms[1].colorrange = hms[2].colorrange = (-70,70)
-    #hms[3].colorrange = (1e-3, 1e-1)
-    #hms[4].colorrange = (1e-3, 1e-1)
-    #hms[3].colorrange = (-0.05,0.05)
-    #hms[4].colorrange = (-0.05,0.05)
     hms[3].colorrange = hms[4].colorrange = (-25,25)
 
     hms[1].colormap = :BrBG_9 #:matter
