@@ -398,8 +398,8 @@ with_theme(makie_theme) do
     axs = [Axis(fig[row, col][1, 1]) for row in 1:4, col in 1:3]
 
     axs[1, 1].title = L"A^\mathrm{synth}_s\ \mathrm{[Pa^{-3}\,m\,s^{-1}]}"
-    axs[1, 2].title = L"V_\mathrm{obs}\ \mathrm{[m\,a^{-1}]}"
-    axs[1, 3].title = L"H_\mathrm{obs}\ \mathrm{[m]}"
+    axs[1, 2].title = L"V^\mathrm{obs}\ \mathrm{[m\,a^{-1}]}"
+    axs[1, 3].title = L"H^\mathrm{obs}\ \mathrm{[m]}"
 
     for ax in axs[2:end, 1]
         ax.title = L"A_s\ \mathrm{[Pa^{-3}\,m\,s^{-1}]}"
@@ -536,8 +536,8 @@ with_theme(makie_theme) do
     axs = [Axis(fig[row, col][1, 1]) for row in 1:4, col in 1:3]
 
     axs[1, 1].title = L"A^\mathrm{synth}_s\ \mathrm{[Pa^{-3}\,m\,s^{-1}]}"
-    axs[1, 2].title = L"V_\mathrm{obs}\ \mathrm{[m\,a^{-1}]}"
-    axs[1, 3].title = L"H_\mathrm{obs}\ \mathrm{[m]}"
+    axs[1, 2].title = L"V^\mathrm{obs}\ \mathrm{[m\,a^{-1}]}"
+    axs[1, 3].title = L"H^\mathrm{obs}\ \mathrm{[m]}"
 
     for ax in axs[2:end, 1]
         ax.title = L"A_s\ \mathrm{[Pa^{-3}\,m\,s^{-1}]}"
