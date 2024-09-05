@@ -380,8 +380,8 @@ with_theme(makie_theme) do
     ice_mask   = fields.H .< 1.0;
     ice_mask_v = av4(fields.H) .< 1.0
 
-    max_V = maximum(fields.V);
-    max_H = maximum(fields.H);
+    max_V = maximum(abs.(fields.V));
+    max_H = maximum(abs.(fields.H));
 
     V_obs = copy(fields.V)
     V_obs[ice_mask_v] .= NaN
@@ -405,11 +405,11 @@ with_theme(makie_theme) do
     end
 
     for ax in axs[2:end, 2]
-        ax.title = L"\Delta V"
+        ax.title = L"V_\mathrm{err}"
     end
 
     for ax in axs[2:end, 3]
-        ax.title = L"\Delta H"
+        ax.title = L"H_\mathrm{err}"
     end
 
     for ax in axs[:, 2:end]
@@ -505,6 +505,7 @@ end
 
 # ╔═╡ dff28ae3-c379-45c0-95e1-8026da1b11a1
 # same as above but not log-scale
+
 with_theme(makie_theme) do
     fields, scalars, numerics = load(synthetic_input_file, "fields",
                                                            "scalars",
@@ -540,11 +541,11 @@ with_theme(makie_theme) do
     end
 
     for ax in axs[2:end, 2]
-        ax.title = L"\Delta V"
+        ax.title = L"V_\mathrm{err}"
     end
 
     for ax in axs[2:end, 3]
-        ax.title = L"\Delta H"
+        ax.title = L"H_\mathrm{err}"
     end
 
     for ax in axs[:, 2:end]
@@ -595,13 +596,13 @@ with_theme(makie_theme) do
     for hm in hms[2:end, 2]
         #hm.colorscale = log10
         hm.colormap   = :matter
-        #hm.colorrange = (1e-4, 1e0)
+        hm.colorrange = (-1, 1e0)
     end
 
     for hm in hms[2:end, 3]
         #hm.colorscale = log10
         hm.colormap   = Reverse(:ice)
-        #hm.colorrange = (1e-4, 1e0)
+        hm.colorrange = (-1, 1e0)
     end
 
     cbs = [Colorbar(fig[row, col][1, 2], hms[row, col]) for row in 1:4, col in 1:3]
@@ -630,12 +631,12 @@ with_theme(makie_theme) do
         hms[i+1, 1][3] = As
 #        hms[i+1, 2][3] = (V .- V_obs)* SECONDS_IN_YEAR #abs.(V .- V_obs) ./ max_V
 #        hms[i+1, 3][3] = H .- H_obs #abs.(H .- H_obs) ./ max_H
-        hms[i+1, 2][3] = (V .- V_obs) ./ max_V #abs.(V .- V_obs) ./ max_V
-        hms[i+1, 3][3] = (H .- H_obs) ./ max_H #abs.(H .- H_obs) ./ max_H
+        hms[i+1, 2][3] = (V .- V_obs) ./ V_obs #abs.(V .- V_obs) ./ max_V
+        hms[i+1, 3][3] = (H .- H_obs) ./ H_obs #abs.(H .- H_obs) ./ max_H
     end
 
-    save("../figures/synthetic_td_inversion.pdf", fig; pt_per_unit, px_per_unit)
-    save("../figures/synthetic_td_inversion.png", fig; pt_per_unit, px_per_unit)
+    #save("../figures/synthetic_td_inversion.pdf", fig; pt_per_unit, px_per_unit)
+    #save("../figures/synthetic_td_inversion.png", fig; pt_per_unit, px_per_unit)
 
     fig
 end
@@ -747,8 +748,8 @@ with_theme(makie_theme) do
 
     axs[1].title = L"\mathrm{Observed}"
     axs[2].title = L"\mathrm{Snapshot}"
-    axs[3].title = L"\mathrm{Snapshot+}"
-    axs[4].title = L"\mathrm{Time-dependent}"
+    axs[3].title = L"\text{Snapshot+}"
+    axs[4].title = L"\text{Time-dependent}"
 
     axs[1].ylabel = L"y\ \mathrm{[km]}"
 
@@ -781,7 +782,7 @@ with_theme(makie_theme) do
     H_s1[im] .= NaN
     V_s1[iv] .= NaN
 
-    V_s2, H_s2 = load("$output_dir/snapshot_forward_aletsch_25m.jld2", "V" ,"H")
+    V_s2, H_s2 = load("$output_dir/forward_aletsch/forward_aletsch_25m_snap_1yrs.jld2", "V" ,"H")
     H_s2[im] .= NaN
     V_s2[iv] .= NaN
 
@@ -900,12 +901,12 @@ with_theme(makie_theme) do
 
    #hms[1].colorrange = (1e-2, 1e0)
     #hms[2].colorrange = (1e-2, 1e0)
-    hms[1].colorrange = hms[2].colorrange = (-90,90)
+    hms[1].colorrange = hms[2].colorrange = (-70,70)
     #hms[3].colorrange = (1e-3, 1e-1)
     #hms[4].colorrange = (1e-3, 1e-1)
     #hms[3].colorrange = (-0.05,0.05)
     #hms[4].colorrange = (-0.05,0.05)
-    hms[3].colorrange = hms[4].colorrange = (-40,40)
+    hms[3].colorrange = hms[4].colorrange = (-25,25)
 
     hms[1].colormap = :BrBG_5 #:matter
     hms[2].colormap = :BrBG_5 #:matter
@@ -915,8 +916,8 @@ with_theme(makie_theme) do
     cbs = (Colorbar(fig[1,3], hms[2]),
            Colorbar(fig[2,3], hms[4]))
 
-    cbs[1].label = L"\Delta V [ma$^{-1}$]"
-    cbs[2].label = L"\Delta H [m]"
+    cbs[1].label = L"\hat{V}_\mathrm{err} \quad[%]"
+    cbs[2].label = L"\hat{H}_\mathrm{err} \quad[%]"
 
     for (label, idx) in zip('a':'d', [(col, row) for row in 1:2, col in 1:2])
         Label(fig[idx..., TopLeft()], string(label); padding=(0, 0, 0, 0))
@@ -1174,9 +1175,9 @@ with_theme(makie_theme) do
     end
 
     fields, numerics = load("$datasets_dir/aletsch_25m.jld2", "fields", "numerics")
-
-    x, y = numerics.xc ./ 1e3, numerics.yc ./ 1e3
-
+	
+	x, y = numerics.xc ./ 1e3, numerics.yc ./ 1e3
+	
     V_s1, H_s1   = load("$output_dir/forward_aletsch/forward_aletsch_25m_snap_1yrs.jld2", "V", "H")
     V_s2, H_s2   = load("$output_dir/forward_aletsch/forward_aletsch_25m_snap_2yrs.jld2", "V", "H")
     V_s11, H_s11 = load("$output_dir/forward_aletsch/forward_aletsch_25m_snap_11yrs.jld2", "V", "H")
@@ -1233,7 +1234,9 @@ heatmap!(axs[2,1], x, y, dV_dt_td1   .* SECONDS_IN_YEAR),
            heatmap!(axs[2,2], x, y, dV_dt_td10  .* SECONDS_IN_YEAR))
     #       heatmap!(axs[2,1], x, y, dH_dt_s1  ),
      #      heatmap!(axs[2,2], x, y, dH_dt_s10 ))
-	
+
+	[contour!(axs[i], x, y, fields.H; levels=1:1, linewidth=0.5, color=:black) for i=1:4]
+
     for hm in hms[1:4]
         hm.colormap    = :BrBG_5
         hm.interpolate = true
@@ -1355,9 +1358,10 @@ heatmap!(axs[2,1], x, y, dH_dt_td1 ),
         hm.colormap    = :delta
         hm.interpolate = true
         hm.rasterise   = px_per_unit
-        hm.colorrange  = (-12, 12)
+		hm.colorrange  = (-12, 12)
     end
-
+	[contour!(axs[i], x, y, fields.H; levels=1:1, linewidth=0.5, color=:black) for i=1:4]
+	
     cbs = (Colorbar(fig[1,3], hms[1]),
            Colorbar(fig[2,3], hms[3]))
 
