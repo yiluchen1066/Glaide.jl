@@ -162,7 +162,8 @@ with_theme(makie_theme) do
            heatmap!(axs[5], xc_km, yc_km, H_old_v),
            heatmap!(axs[6], xc_km, yc_km, H_v))
 
-    contour!(axs[1], xc_km, yc_km, H; levels=1:1, linewidth=0.5, color=:black)
+    [contour!(axs[i], xc_km, yc_km, H_old; levels=1:1, linewidth=0.5, color=:black) for i=(1,3,5)]
+    [contour!(axs[i], xc_km, yc_km, H; levels=1:1, linewidth=0.5, color=:black) for i=(2,4,6)]
 
     # enable interpolation for smoother picture
     foreach(hms) do h
@@ -178,7 +179,7 @@ with_theme(makie_theme) do
     hms[4].colormap = :matter
     hms[5].colormap = Reverse(:ice)
     hms[6].colormap = Reverse(:ice)
- 
+
 
     hms[1].colorrange = (1000, 4000)
     hms[2].colorrange = (1e-24, 1e-20)
@@ -195,7 +196,7 @@ with_theme(makie_theme) do
            Colorbar(fig[2, 3][1, 2], hms[6]))
 
     for (label, idx) in zip('a':'f',
-                            ((1,1), (1,2), (1,3), (2,1), (2,2), (2,3)))
+                            ((1, 1), (1, 2), (1, 3), (2, 1), (2, 2), (2, 3)))
         Label(fig[idx..., TopLeft()], string(label); padding=(0, 10, 0, 0))
     end
 
@@ -272,7 +273,7 @@ with_theme(makie_theme) do
     fields.V .*= SECONDS_IN_YEAR
 
     H_c = copy(fields.H)
-	
+
 
     fields.V[ice_mask_v]   .= NaN
     fields.H_old[ice_mask] .= NaN
@@ -332,7 +333,7 @@ with_theme(makie_theme) do
           Colorbar(fig[2, 1][1, 2], hms[3]),
           Colorbar(fig[2, 2][1, 2], hms[4]),
           #Colorbar(fig[1, 3][1, 2], hms[5])
-	      )
+          )
 
     for (label, idx) in zip('a':'f',
                             ((1,1), (1,2), (1,3), (2,1), (2,2), (2,3)))
@@ -497,6 +498,8 @@ with_theme(makie_theme) do
         hms[i+1, 2][3] = abs.(V .- V_obs) ./ max_V
         hms[i+1, 3][3] = abs.(H .- H_obs) ./ max_H
     end
+
+    [contour!(axs[i], x, y, fields.H; levels=1:1, linewidth=0.5, color=:black) for i=1:12]
 
     save("../figures/synthetic_td_inversion.pdf", fig; pt_per_unit, px_per_unit)
     save("../figures/synthetic_td_inversion.png", fig; pt_per_unit, px_per_unit)
@@ -718,12 +721,12 @@ with_theme(makie_theme) do
             push!(hms, hm)
         end
     end
-	vis_path = 
+    vis_path =
 
     fields, numerics = load("../datasets/aletsch_25m.jld2", "fields", "numerics")
-	x, y = numerics.xc ./ 1e3, numerics.yc ./ 1e3
-	[contour!(axs[i], x, y, fields.H; levels=1:1, linewidth=0.5, color=:black) for i=1:8]
-	
+    x, y = numerics.xc ./ 1e3, numerics.yc ./ 1e3
+    [contour!(axs[i], x, y, fields.H; levels=1:1, linewidth=0.5, color=:black) for i=1:8]
+
     for (label, idx) in zip('a':'h', [(col, row) for row in 1:4, col in 1:2])
         Label(fig[idx..., TopLeft()], string(label); padding=(0, 5, 0, 0))
     end
@@ -778,7 +781,7 @@ with_theme(makie_theme) do
     x, y = numerics.xc ./ 1e3, numerics.yc ./ 1e3
 
     H_obs  = fields.H
-	H_c = copy(H_obs)
+    H_c = copy(H_obs)
     V_obs  = fields.V
 
     im = H_obs      .< 1
@@ -802,7 +805,7 @@ with_theme(makie_theme) do
     arrays = (V_obs, V_s1, V_s2, V_td)
 
     hms = [heatmap!(ax, x, y, data .* SECONDS_IN_YEAR) for (ax, data) in zip(axs, arrays)]
-	[contour!(axs[i], x, y, H_c; levels=1:1, linewidth=0.5, color=:black) for i=1:4]
+    [contour!(axs[i], x, y, H_c; levels=1:1, linewidth=0.5, color=:black) for i=1:4]
 
     for hm in hms
         hm.colormap    = :matter
@@ -868,7 +871,7 @@ with_theme(makie_theme) do
     x, y = numerics.xc ./ 1e3, numerics.yc ./ 1e3
 
     H_obs  = fields.H
-	H_c = copy(H_obs)
+    H_c = copy(H_obs)
     V_obs  = fields.V
 
     H_max = maximum(H_obs)
@@ -894,36 +897,36 @@ with_theme(makie_theme) do
     H_s[H_s .== H_obs] .= NaN
     H_td[H_td .== H_obs] .= NaN
 
-	V_err_s  = (V_s  .- V_obs)./V_obs*100
-	V_err_td = (V_td .- V_obs)./V_obs*100
-	H_err_s  = (H_s  .- H_obs)./H_obs*100
+    V_err_s  = (V_s  .- V_obs)./V_obs*100
+    V_err_td = (V_td .- V_obs)./V_obs*100
+    H_err_s  = (H_s  .- H_obs)./H_obs*100
     H_err_td = (H_td .- H_obs)./H_obs*100
 
-	# show averaged errors over the glacier:
+    # show averaged errors over the glacier:
     cut = 100
-	I = .!isnan.(V_err_s) .& (abs.(V_err_s).<cut)
-	@show sum(abs.(V_err_s[I]))./sum(I)
-	I = .!isnan.(V_err_td) .& (abs.(V_err_td).<cut)
-	@show sum(abs.(V_err_td[I]))./sum(I)
-	I = .!isnan.(H_err_s) .& (abs.(H_err_s).<cut)
-	@show sum(abs.(H_err_s[I]))./sum(I)
-	I = .!isnan.(H_err_td) .& (abs.(H_err_td).<cut)
-	@show sum(abs.(H_err_td[I]))./sum(I)
+    I = .!isnan.(V_err_s) .& (abs.(V_err_s).<cut)
+    @show sum(abs.(V_err_s[I]))./sum(I)
+    I = .!isnan.(V_err_td) .& (abs.(V_err_td).<cut)
+    @show sum(abs.(V_err_td[I]))./sum(I)
+    I = .!isnan.(H_err_s) .& (abs.(H_err_s).<cut)
+    @show sum(abs.(H_err_s[I]))./sum(I)
+    I = .!isnan.(H_err_td) .& (abs.(H_err_td).<cut)
+    @show sum(abs.(H_err_td[I]))./sum(I)
 
-	I = .!isnan.(V_err_s) .& ((V_err_s).<cut)
-	@show sum((V_err_s[I]))./sum(I)
-	I = .!isnan.(V_err_td) .& ((V_err_td).<cut)
-	@show sum((V_err_td[I]))./sum(I)
-	I = .!isnan.(H_err_s) .& ((H_err_s).<cut)
-	@show sum((H_err_s[I]))./sum(I)
-	I = .!isnan.(H_err_td) .& ((H_err_td).<cut)
-	@show sum((H_err_td[I]))./sum(I)
+    I = .!isnan.(V_err_s) .& ((V_err_s).<cut)
+    @show sum((V_err_s[I]))./sum(I)
+    I = .!isnan.(V_err_td) .& ((V_err_td).<cut)
+    @show sum((V_err_td[I]))./sum(I)
+    I = .!isnan.(H_err_s) .& ((H_err_s).<cut)
+    @show sum((H_err_s[I]))./sum(I)
+    I = .!isnan.(H_err_td) .& ((H_err_td).<cut)
+    @show sum((H_err_td[I]))./sum(I)
 
-    hms = (heatmap!(axs[1,1], x, y, V_err_s), 
+    hms = (heatmap!(axs[1,1], x, y, V_err_s),
            heatmap!(axs[1,2], x, y, V_err_td),
            heatmap!(axs[2,1], x, y, H_err_s),
            heatmap!(axs[2,2], x, y, H_err_td))
-	[contour!(axs[i], x, y, H_c; levels=1:1, linewidth=0.5, color=:black) for i=1:4]
+    [contour!(axs[i], x, y, H_c; levels=1:1, linewidth=0.5, color=:black) for i=1:4]
 
     for hm in hms
         hm.interpolate = true
@@ -971,8 +974,8 @@ with_theme(makie_theme) do
     axs[2, 1].ylabel = L"y\,[\mathrm{km}]"
 
     axs[1,1].title = L"\text{Snapshot+}"
-	axs[1,2].title = L"\text{Time-dependent}"
- 
+    axs[1,2].title = L"\text{Time-dependent}"
+
     for ax in axs[:,2:end]
         hideydecorations!(ax)
     end
@@ -1023,51 +1026,51 @@ with_theme(makie_theme) do
     dV_dt_s1[ice_mask_v] .= NaN
     dV_dt_td1[ice_mask_v] .= NaN
 
-    # dt = 10 #yrs
-    # dH_dt_s10  = (H_s11  .- H_s1) ./ dt
-    # dH_dt_td10 = (H_td11 .- H_td1) ./ dt
+    #dt = 10 #yrs
+    #dH_dt_s10  = (H_s11  .- H_s1) ./ dt
+    #dH_dt_td10 = (H_td11 .- H_td1) ./ dt
 
-    # dV_dt_s10  = (V_s11  .- V_s1) ./ dt
-    # dV_dt_td10 = (V_td11 .- V_td1) ./ dt
+    #dV_dt_s10  = (V_s11  .- V_s1) ./ dt
+    #dV_dt_td10 = (V_td11 .- V_td1) ./ dt
 
-    # H_max10 = maximum(dH_dt_td10)
-    # V_max10 = maximum(dV_dt_td10)
+    #H_max10 = maximum(dH_dt_td10)
+    #V_max10 = maximum(dV_dt_td10)
 
-    # ice_mask = H_td11 .< 1.0
-    # ice_mask_v = av4(H_td11) .< 1.0
+    #ice_mask = H_td11 .< 1.0
+    #ice_mask_v = av4(H_td11) .< 1.0
 
-    # dH_dt_s10[ice_mask] .= NaN
-    # dH_dt_td10[ice_mask] .= NaN
+    #dH_dt_s10[ice_mask] .= NaN
+    #dH_dt_td10[ice_mask] .= NaN
 
-    # dV_dt_s10[ice_mask_v] .= NaN
-    # dV_dt_td10[ice_mask_v] .= NaN
+    #dV_dt_s10[ice_mask_v] .= NaN
+    #dV_dt_td10[ice_mask_v] .= NaN
 
-    hms = (heatmap!(axs[1,1], x, y, dV_dt_s1 .* SECONDS_IN_YEAR ),
+    hms = (heatmap!(axs[1,1], x, y, dV_dt_s1  .* SECONDS_IN_YEAR),
            heatmap!(axs[1,2], x, y, dV_dt_td1 .* SECONDS_IN_YEAR),
            heatmap!(axs[2,1], x, y, dH_dt_s1 ),
-           heatmap!(axs[2,2], x, y, dH_dt_td1  ))
-	
+           heatmap!(axs[2,2], x, y, dH_dt_td1))
+
     for hm in hms[1:2]
         hm.colormap    = :BrBG_9
         hm.interpolate = true
         hm.rasterise   = px_per_unit
-		hm.colorrange  = (-30,30)
+        hm.colorrange  = (-30,30)
     end
     for hm in hms[3:4]
         hm.colormap    = :diverging_bwg_20_95_c41_n256 #:delta
         hm.interpolate = true
         hm.rasterise   = px_per_unit
-		hm.colorrange  = (-15,15)
+        hm.colorrange  = (-15,15)
     end
-	[contour!(axs[i], x, y, fields.H; levels=1:1, linewidth=0.5, color=:black) for i=1:4]
-	
+    [contour!(axs[i], x, y, fields.H; levels=1:1, linewidth=0.5, color=:black) for i=1:4]
+
     cbs = (Colorbar(fig[1,3], hms[1]),
            Colorbar(fig[2,3], hms[3]))
 
     cbs[1].label = L"V_{2018} - V_{2017}  \quad \mathrm{[m\,a^{-1}]}"
-    cbs[2].label = L"H_{2018} - H_{2017}  \quad 
-	\mathrm{[m]}"
- 
+    cbs[2].label = L"H_{2018} - H_{2017}  \quad
+    \mathrm{[m]}"
+
     colgap!(fig.layout, Fixed(10))
 
     for (label, idx) in zip('a':'d', [(col, row) for row in 1:2, col in 1:2])
@@ -1324,9 +1327,9 @@ with_theme(makie_theme) do
     end
 
     fields, numerics = load("$datasets_dir/aletsch_25m.jld2", "fields", "numerics")
-	
-	x, y = numerics.xc ./ 1e3, numerics.yc ./ 1e3
-	
+
+    x, y = numerics.xc ./ 1e3, numerics.yc ./ 1e3
+
     V_s1, H_s1   = load("$output_dir/forward_aletsch/forward_aletsch_25m_snap_1yrs.jld2", "V", "H")
     V_s2, H_s2   = load("$output_dir/forward_aletsch/forward_aletsch_25m_snap_2yrs.jld2", "V", "H")
     V_s11, H_s11 = load("$output_dir/forward_aletsch/forward_aletsch_25m_snap_11yrs.jld2", "V", "H")
@@ -1384,7 +1387,7 @@ heatmap!(axs[2,1], x, y, dV_dt_td1   .* SECONDS_IN_YEAR),
     #       heatmap!(axs[2,1], x, y, dH_dt_s1  ),
      #      heatmap!(axs[2,2], x, y, dH_dt_s10 ))
 
-	[contour!(axs[i], x, y, fields.H; levels=1:1, linewidth=0.5, color=:black) for i=1:4]
+    [contour!(axs[i], x, y, fields.H; levels=1:1, linewidth=0.5, color=:black) for i=1:4]
 
     for hm in hms[1:4]
         hm.colormap    = :BrBG_5
@@ -1398,7 +1401,7 @@ heatmap!(axs[2,1], x, y, dV_dt_td1   .* SECONDS_IN_YEAR),
 
     cbs[1].label = L"\Delta V^\mathrm{s} / \Delta t\ \mathrm{[m\,a^{-2}]}"
     cbs[2].label = L"\Delta V^\mathrm{td} / \Delta t\ \mathrm{[m\,a^{-2}]}"
- 
+
     colgap!(fig.layout, Fixed(10))
 
     for (label, idx) in zip('a':'d', [(col, row) for row in 1:2, col in 1:2])
@@ -1476,7 +1479,7 @@ with_theme(makie_theme) do
     dV_dt_td1[ice_mask_v] .= NaN
 
     @show dt = 10 #yrs
-	
+
     dH_dt_s10  = (H_s11  .- H_s1) ./ dt
     dH_dt_td10 = (H_td11 .- H_td1) ./ dt
 
@@ -1505,21 +1508,21 @@ heatmap!(axs[2,1], x, y, dH_dt_td1 ),
            heatmap!(axs[2,2], x, y, dH_dt_td10  ))
     #       heatmap!(axs[2,1], x, y, dH_dt_s1  ),
      #      heatmap!(axs[2,2], x, y, dH_dt_s10 ))
-	
+
     for hm in hms[1:4]
         hm.colormap    = :delta
         hm.interpolate = true
         hm.rasterise   = px_per_unit
-		hm.colorrange  = (-12, 12)
+        hm.colorrange  = (-12, 12)
     end
-	[contour!(axs[i], x, y, fields.H; levels=1:1, linewidth=0.5, color=:black) for i=1:4]
-	
+    [contour!(axs[i], x, y, fields.H; levels=1:1, linewidth=0.5, color=:black) for i=1:4]
+
     cbs = (Colorbar(fig[1,3], hms[1]),
            Colorbar(fig[2,3], hms[3]))
 
     cbs[1].label = L"\Delta H^\mathrm{s} / \Delta t\ \mathrm{[m\,a^{-2}]}"
     cbs[2].label = L"\Delta H^\mathrm{td} / \Delta t\ \mathrm{[m\,a^{-2}]}"
- 
+
     colgap!(fig.layout, Fixed(10))
 
     for (label, idx) in zip('a':'d', [(col, row) for row in 1:2, col in 1:2])
@@ -1548,7 +1551,7 @@ end
 # ╠═00042d22-7004-4c84-ac57-3826420d2d57
 # ╠═a1682eff-3d75-4483-91ed-2b4490807e33
 # ╟─c097b1fc-28d7-49c7-8734-9b63b94ba8cd
-# ╠═b92a481f-4977-4f51-a68f-f210864388b0
+# ╟─b92a481f-4977-4f51-a68f-f210864388b0
 # ╠═9902e887-1496-4686-9c27-04b73d751ef6
 # ╟─a785cc48-5386-49b5-901c-780568d7301b
 # ╠═b0844542-8f1f-4691-9777-23ce34675e19
