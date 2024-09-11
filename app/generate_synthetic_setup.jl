@@ -1,5 +1,5 @@
 ### A Pluto.jl notebook ###
-# v0.19.45
+# v0.19.46
 
 using Markdown
 using InteractiveUtils
@@ -356,7 +356,7 @@ with_theme(theme_latexfonts()) do
 end
 
 # ╔═╡ Cell order:
-# ╟─3b975e48-4794-11ef-3fc0-6deaeef86908
+# ╠═3b975e48-4794-11ef-3fc0-6deaeef86908
 # ╟─f0f3e0fa-d870-4ba8-84d8-bbe7f05035aa
 # ╠═0969205b-2d11-4ba2-b43a-f10fcd0dd85d
 # ╟─cef6480e-d715-42a8-93d7-fa676fad09c1
@@ -379,4 +379,4 @@ end
 # ╟─6b358a59-26c4-434a-9a05-cc14c35fe2bb
 # ╠═a1cdae82-f33c-48a8-a10f-02bb55e2d93f
 # ╟─263ab006-a16a-446f-827b-e59bf9ee5622
-# ╟─6365ffea-405f-4941-9894-a566a1d0aa08
+# ╠═6365ffea-405f-4941-9894-a566a1d0aa08
