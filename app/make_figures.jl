@@ -147,10 +147,10 @@ with_theme(makie_theme) do
 
     axs[1].title = L"B~\mathrm{[m]}"
     axs[2].title = L"A_s\ \mathrm{[Pa^{-3}\,m\,s^{-1}]}"
-    axs[3].title = L"V_\mathrm{old}~\mathrm{[m/a]}"
-    axs[4].title = L"V~\mathrm{[m/a]}"
-    axs[5].title = L"H_\mathrm{old}~\mathrm{[m]}"
-    axs[6].title = L"H~\mathrm{[m]}"
+    axs[3].title = L"V^\mathrm{init}~\mathrm{[m/a]}"
+    axs[4].title = L"V^\mathrm{obs}~\mathrm{[m/a]}"
+    axs[5].title = L"H^\mathrm{init}~\mathrm{[m]}"
+    axs[6].title = L"H^\mathrm{obs}~\mathrm{[m]}"
 
     # convert to km for plotting
     xc_km, yc_km = numerics.xc / 1e3, numerics.yc / 1e3

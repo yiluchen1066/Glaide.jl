@@ -363,6 +363,8 @@ function create_input_file(resolution)
 
     # fit the mass balance model
     β, ela, b_max, eb, mb = create_mass_balance_model(mass_balance_path)
+	# output for table in paper:
+	@show β*SECONDS_IN_YEAR, ela, b_max*SECONDS_IN_YEAR
 
     smooth_rasters!(smooth_amount, resolution, bedrock,
                                                thickness_2016,
