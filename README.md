@@ -43,11 +43,21 @@ julia> using Pluto
 julia> Pluto.run()
 ```
 
-5. After executing these commands, Pluto web application should open in your default web-browser. From there, select the Pluto notebook to run, e.g., `app/generate_synthetic_setup.jl` and hit "open". This should launch the selected notebook.
+5. After executing these commands, a Pluto web application should open in your default web-browser. From there, select the Pluto notebook to run, e.g., `app/generate_synthetic_setup.jl` and hit "open". This should launch the selected notebook.
 
     <img src="assets/pluto_ui.png" width=50%/>
+
+## Generating the figures
+To reproduce all figures from the study, you need to run the `app/make_figures.jl` notebook. This notebook requires, however, to have produced all data for visualisation beforehand. To do so, we recommend to run the Pluto notebooks from the [**app/**](./app/) folder in the following sequence:
+1. `generate_synthetic_setup.jl`
+2. `generate_aletsch_setup.jl`
+3. `snapshot_inversion.jl`
+4. `time_dependent_inversion.jl`
+5. `forward_aletsch.jl`
+6. `make_figures.jl`
 
 > [!NOTE]
 > - You will first need to execute the `generate_synthetic_setup.jl` and/or `generate_aletsch_setup.jl` notebooks in order to create the data needed to further run the inversion workflows.
 > - Fetching the input files will download ~4 GB of data. Make sure to have a sufficiently good internet connection and some time ahead and grab a drink while it's processing.
 > - Generating the Aletsch dataset for various spatial resolutions may consume up to 10 GB of system RAM. Make sure to have sufficient free memory.
+> - The time-dependent inversions of high-resolution Aletsch may consume a significant amount of compute resources and take some time, reason why we provide a "plain" Julia script `time_dependent_inversion.jl` instead of a Pluto notebook. The time-dependent synthetic experiments can nevertheless be launched using the `time_dependent_inversion.jl` Pluto notebook if desired.
