@@ -4,7 +4,7 @@ using CairoMakie
 using Printf
 using JLD2
 
-Base.@kwdef struct InversionScenario{LS}
+Base.@kwdef struct InversionScenarioTimeDependent{LS}
     input_file::String
     output_dir::String
     # initial sliding parameter value
@@ -23,7 +23,7 @@ Base.@kwdef struct InversionScenario{LS}
     line_search::LS
 end
 
-function time_dependent_inversion(scenario::InversionScenario)
+function time_dependent_inversion(scenario::InversionScenarioTimeDependent)
     # unpack params
     (; input_file, output_dir, As_init, E, β_reg, ωᵥ, ωₕ, maxiter, line_search) = scenario
 
@@ -98,7 +98,7 @@ end
 synthetic_line_search = BacktrackingLineSearch(; α_min=1e3, α_max=1e6)
 
 for (ωᵥ, ωₕ) in ((0, 1), (1, 0), (1, 1))
-    synthetic_params = InversionScenario(;
+    synthetic_params = InversionScenarioTimeDependent(;
                                          input_file="datasets/synthetic_25m.jld2",
                                          output_dir="output/time_dependent_synthetic_25m_$(ωᵥ)_$(ωₕ)",
                                          ωᵥ=float(ωᵥ),
@@ -108,7 +108,7 @@ for (ωᵥ, ωₕ) in ((0, 1), (1, 0), (1, 1))
 end
 
 for res in (200, 100, 50, 25)
-    aletsch_params = InversionScenario(;
+    aletsch_params = InversionScenarioTimeDependent(;
                                        input_file  = "datasets/aletsch_$(res)m.jld2",
                                        output_dir  = "output/time_dependent_aletsch_$(res)m",
                                        E           = 2.5e-1,

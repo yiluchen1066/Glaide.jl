@@ -47,7 +47,7 @@ Define the type encapsulating the properties of the inversion that might be diff
 """
 
 # ╔═╡ 4a40c5c0-4e5e-4c7c-a4c7-2d8e67f5e60e
-Base.@kwdef struct InversionScenario
+Base.@kwdef struct InversionScenarioSnapshot
     input_file::String
     output_dir::String
     E::Float64 = 1.0
@@ -116,7 +116,7 @@ First, we define the inversion scenario for the synthetic glacier. Since the inp
 """
 
 # ╔═╡ bcff8e89-e6c0-4a7a-a6b6-3617000bc721
-synthetic_scenario = InversionScenario(; input_file="../datasets/synthetic_25m.jld2",
+synthetic_scenario = InversionScenarioSnapshot(; input_file="../datasets/synthetic_25m.jld2",
 output_dir="../output/snapshot_synthetic_25m");
 
 # ╔═╡ 13ee7e08-64cb-47cb-a3bc-614396cef169
@@ -132,7 +132,7 @@ Then, we create the inversion scenarion to reconstruct sliding parameter at the 
 """
 
 # ╔═╡ f95355fd-86f2-4320-bac3-a3301fb73394
-aletsch_scenario = InversionScenario(; input_file="../datasets/aletsch_25m.jld2", output_dir="../output/snapshot_aletsch_25m", E=0.25);
+aletsch_scenario = InversionScenarioSnapshot(; input_file="../datasets/aletsch_25m.jld2", output_dir="../output/snapshot_aletsch_25m", E=0.25);
 
 # ╔═╡ 506d30a1-588e-496b-a4da-50888b21c393
 md"""
@@ -260,7 +260,7 @@ begin
 end
 
 # ╔═╡ 700749e5-5028-4ec3-ab64-92f80a283745
-function run_inversion(scenario::InversionScenario)
+function run_inversion(scenario::InversionScenarioSnapshot)
     model = SnapshotSIA(scenario.input_file)
 
     model.scalars.A *= scenario.E
@@ -295,15 +295,15 @@ run_inversion(aletsch_scenario)
 
 # ╔═╡ 45dacb6d-de79-476e-84fc-c394644c9e00
 # ╠═╡ show_logs = false
-run_inversion(InversionScenario(; input_file="../datasets/aletsch_200m.jld2", output_dir="../output/snapshot_aletsch_200m", E=0.25))
+run_inversion(InversionScenarioSnapshot(; input_file="../datasets/aletsch_200m.jld2", output_dir="../output/snapshot_aletsch_200m", E=0.25))
 
 # ╔═╡ 2a6367e7-6521-4188-8a40-11748cf11ffc
 # ╠═╡ show_logs = false
-run_inversion(InversionScenario(; input_file="../datasets/aletsch_100m.jld2", output_dir="../output/snapshot_aletsch_100m", E=0.25))
+run_inversion(InversionScenarioSnapshot(; input_file="../datasets/aletsch_100m.jld2", output_dir="../output/snapshot_aletsch_100m", E=0.25))
 
 # ╔═╡ 6c6d30ae-63b0-421a-8061-c4bb73d95f91
 # ╠═╡ show_logs = false
-run_inversion(InversionScenario(; input_file="../datasets/aletsch_50m.jld2", output_dir="../output/snapshot_aletsch_50m", E=0.25))
+run_inversion(InversionScenarioSnapshot(; input_file="../datasets/aletsch_50m.jld2", output_dir="../output/snapshot_aletsch_50m", E=0.25))
 
 # ╔═╡ Cell order:
 # ╟─40661bea-47ac-11ef-1a58-f5deede4bf68
