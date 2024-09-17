@@ -138,19 +138,19 @@ with_theme(makie_theme) do
         limits!(ax, -10, 10, -10, 10)
     end
 
-    axs[1].ylabel = L"y~\mathrm{[km]}"
-    axs[2].ylabel = L"y~\mathrm{[km]}"
+    axs[1].ylabel = L"y~\mathrm{(km)}"
+    axs[2].ylabel = L"y~\mathrm{(km)}"
 
-    axs[2].xlabel = L"x~\mathrm{[km]}"
-    axs[4].xlabel = L"x~\mathrm{[km]}"
-    axs[6].xlabel = L"x~\mathrm{[km]}"
+    axs[2].xlabel = L"x~\mathrm{(km)}"
+    axs[4].xlabel = L"x~\mathrm{(km)}"
+    axs[6].xlabel = L"x~\mathrm{(km)}"
 
-    axs[1].title = L"B~\mathrm{[m]}"
-    axs[2].title = L"A_s\ \mathrm{[Pa^{-3}\,m\,s^{-1}]}"
-    axs[3].title = L"V^\mathrm{init}~\mathrm{[m/a]}"
-    axs[4].title = L"V^\mathrm{obs}~\mathrm{[m/a]}"
-    axs[5].title = L"H^\mathrm{init}~\mathrm{[m]}"
-    axs[6].title = L"H^\mathrm{obs}~\mathrm{[m]}"
+    axs[1].title = L"B~\mathrm{(m)}"
+    axs[2].title = L"A_s\ \mathrm{(Pa^{-3}\,m\,s^{-1})}"
+    axs[3].title = L"V^\mathrm{init}~\mathrm{(m\,a^{-1})}"
+    axs[4].title = L"V^\mathrm{obs}~\mathrm{(m\,a^{-1})}"
+    axs[5].title = L"H^\mathrm{init}~\mathrm{(m)}"
+    axs[6].title = L"H^\mathrm{obs}~\mathrm{(m)}"
 
     # convert to km for plotting
     xc_km, yc_km = numerics.xc / 1e3, numerics.yc / 1e3
@@ -244,20 +244,20 @@ with_theme(makie_theme) do
 
     colgap!(fig.layout, 1, Relative(0.08))
 
-    axs[1].title = L"B~\mathrm{[m]}"
-    axs[2].title = L"V~\mathrm{[m\,a^{-1}]}"
-    axs[3].title = L"H_{2016}~\mathrm{[m]}"
-    axs[4].title = L"H_{2017} - H_{2016}~\mathrm{[m]}"
+    axs[1].title = L"B~\mathrm{(m)}"
+    axs[2].title = L"V~\mathrm{(m\,a^{-1})}"
+    axs[3].title = L"H_{2016}~\mathrm{(m)}"
+    axs[4].title = L"H_{2017} - H_{2016}~\mathrm{(m)}"
     axs[5].title = L"\text{Mass balance mask}"
 
-    axs[3].xlabel = L"x~\mathrm{[km]}"
-    axs[4].xlabel = L"x~\mathrm{[km]}"
+    axs[3].xlabel = L"x~\mathrm{(km)}"
+    axs[4].xlabel = L"x~\mathrm{(km)}"
 
-    axs[1].ylabel = L"y~\mathrm{[km]}"
-    axs[3].ylabel = L"y~\mathrm{[km]}"
+    axs[1].ylabel = L"y~\mathrm{(km)}"
+    axs[3].ylabel = L"y~\mathrm{(km)}"
 
-    axs[6].xlabel = L"z~\mathrm{[km]}"
-    axs[6].ylabel = L"\dot{b}~\mathrm{[m/a]}"
+    axs[6].xlabel = L"z~\mathrm{(km)}"
+    axs[6].ylabel = L"\dot{b}~\mathrm{(m/a)}"
 
     hidexdecorations!.((axs[1], axs[2], axs[5]))
     hideydecorations!.((axs[2], axs[4], axs[5]))
@@ -398,12 +398,12 @@ with_theme(makie_theme) do
 
     axs = [Axis(fig[row, col][1, 1]) for row in 1:4, col in 1:3]
 
-    axs[1, 1].title = L"A^\mathrm{synth}_s\ \mathrm{[Pa^{-3}\,m\,s^{-1}]}"
-    axs[1, 2].title = L"V^\mathrm{obs}\ \mathrm{[m\,a^{-1}]}"
-    axs[1, 3].title = L"H^\mathrm{obs}\ \mathrm{[m]}"
+    axs[1, 1].title = L"A^\mathrm{synth}_s\ \mathrm{(Pa^{-3}\,m\,s^{-1})}"
+    axs[1, 2].title = L"V^\mathrm{obs}\ \mathrm{(m\,a^{-1})}"
+    axs[1, 3].title = L"H^\mathrm{obs}\ \mathrm{(m)}"
 
     for ax in axs[2:end, 1]
-        ax.title = L"A_s\ \mathrm{[Pa^{-3}\,m\,s^{-1}]}"
+        ax.title = L"A_s\ \mathrm{(Pa^{-3}\,m\,s^{-1})}"
     end
 
     for ax in axs[2:end, 2]
@@ -423,11 +423,11 @@ with_theme(makie_theme) do
     end
 
     for ax in axs[:, 1]
-        ax.ylabel = L"y\ [\mathrm{km}]"
+        ax.ylabel = L"y\ (\mathrm{km})"
     end
 
     for ax in axs[end, :]
-        ax.xlabel = L"x\ [\mathrm{km}]"
+        ax.xlabel = L"x\ (\mathrm{km})"
     end
 
     for ax in axs
@@ -540,7 +540,7 @@ with_theme(makie_theme) do
 
     axs[1, 1].title = L"A^\mathrm{synth}_s\ \mathrm{[Pa^{-3}\,m\,s^{-1}]}"
     axs[1, 2].title = L"V^\mathrm{obs}\ \mathrm{[m\,a^{-1}]}"
-    axs[1, 3].title = L"H^\mathrm{obs}\ \mathrm{[m]}"
+    axs[1, 3].title = L"H^\mathrm{obs}\ \mathrm{(m)}"
 
     for ax in axs[2:end, 1]
         ax.title = L"A_s\ \mathrm{[Pa^{-3}\,m\,s^{-1}]}"
@@ -661,8 +661,8 @@ with_theme(makie_theme) do
     fig = Figure(size=(two_column_pt, 330))
     axs = [Axis(fig[row, col]) for row in 1:2, col in eachindex(aletsch_resolutions)]
 
-    axs[1, 1].ylabel = L"y\,[\mathrm{km}]"
-    axs[2, 1].ylabel = L"y\,[\mathrm{km}]"
+    axs[1, 1].ylabel = L"y\,(\mathrm{km})"
+    axs[2, 1].ylabel = L"y\,(\mathrm{km})"
 
     for ax in axs[1, :]
         hidexdecorations!(ax)
@@ -677,7 +677,7 @@ with_theme(makie_theme) do
     end
 
     for ax in axs[end, :]
-        ax.xlabel = L"x\,[\mathrm{km}]"
+        ax.xlabel = L"x\,(\mathrm{km})"
     end
 
     for ax in axs
@@ -732,7 +732,7 @@ with_theme(makie_theme) do
     end
 
     cb = Colorbar(fig[:, length(aletsch_resolutions) + 1], hms[end])
-    cb.label = L"A_s\ \mathrm{[Pa^{-3}\,m\,s^{-1}]}"
+    cb.label = L"A_s\ \mathrm{(Pa^{-3}\,m\,s^{-1})}"
 
     colgap!(fig.layout, Fixed(10))
 
@@ -763,7 +763,7 @@ with_theme(makie_theme) do
     axs[3].title = L"\text{Snapshot+}"
     axs[4].title = L"\text{Time-dependent}"
 
-    axs[1].ylabel = L"y\ \mathrm{[km]}"
+    axs[1].ylabel = L"y\ \mathrm{(km)}"
 
     for ax in axs[2:end]
         hideydecorations!(ax)
@@ -773,7 +773,7 @@ with_theme(makie_theme) do
         limits!(ax, -7, 7, -10, 10)
         ax.aspect = DataAspect()
         ax.ygridvisible = true
-        ax.xlabel = L"x\ \mathrm{[km]}"
+        ax.xlabel = L"x\ \mathrm{(km)}"
     end
 
     fields, numerics = load("$datasets_dir/aletsch_25m.jld2", "fields", "numerics")
@@ -815,7 +815,7 @@ with_theme(makie_theme) do
     end
 
     cb = Colorbar(fig[1,end+1], hms[end])
-    cb.label = L"V\ \mathrm{[m\,a^{-1}]}"
+    cb.label = L"V\ \mathrm{(m\,a^{-1})}"
 
     for (label, idx) in zip('a':'d', [(1, col) for col in 1:4])
         Label(fig[idx..., TopLeft()], string(label); padding=(0, 5, 0, 0))
@@ -859,11 +859,11 @@ with_theme(makie_theme) do
     end
 
     for ax in axs[end, :]
-        ax.xlabel = L"x\ \mathrm{[km]}"
+        ax.xlabel = L"x\ \mathrm{(km)}"
     end
 
     for ax in axs[:, 1]
-        ax.ylabel = L"y\ \mathrm{[km]}"
+        ax.ylabel = L"y\ \mathrm{(km)}"
     end
 
     fields, numerics = load("$datasets_dir/aletsch_25m.jld2", "fields", "numerics")
@@ -883,7 +883,9 @@ with_theme(makie_theme) do
     H_obs[im] .= NaN
     V_obs[iv] .= NaN
 
-    V_s, H_s = load("$output_dir/forward_aletsch/forward_aletsch_25m_snap_1yrs.jld2", "V" ,"H")
+	#V_s, H_s   = load("$output_dir/snapshot_aletsch_25m/step_0100.jld2", "V", "H") # this is snapshot
+    V_s, H_s = load("$output_dir/forward_aletsch/forward_aletsch_25m_snap_1yrs.jld2", "V" ,"H") # snapshot+
+	
     H_s[im] .= NaN
     V_s[iv] .= NaN
 
@@ -922,10 +924,10 @@ with_theme(makie_theme) do
     I = .!isnan.(H_err_td) .& ((H_err_td).<cut)
     @show sum((H_err_td[I]))./sum(I)
 
-    hms = (heatmap!(axs[1,1], x, y, V_err_s),
-           heatmap!(axs[1,2], x, y, V_err_td),
-           heatmap!(axs[2,1], x, y, H_err_s),
-           heatmap!(axs[2,2], x, y, H_err_td))
+    hms = (heatmap!(axs[1,1], x, y, (V_err_s)),
+           heatmap!(axs[1,2], x, y, (V_err_td)),
+           heatmap!(axs[2,1], x, y, (H_err_s)),
+           heatmap!(axs[2,2], x, y, (H_err_td)))
     [contour!(axs[i], x, y, H_c; levels=1:1, linewidth=0.5, color=:black) for i=1:4]
 
     for hm in hms
@@ -945,8 +947,8 @@ with_theme(makie_theme) do
     cbs = (Colorbar(fig[1,3], hms[2]),
            Colorbar(fig[2,3], hms[4]))
 
-    cbs[1].label = L"\hat{V}_\mathrm{err} \quad[%]"
-    cbs[2].label = L"\hat{H}_\mathrm{err} \quad[%]"
+    cbs[1].label = L"\hat{V}_\mathrm{err} \quad(%)"
+    cbs[2].label = L"\hat{H}_\mathrm{err} \quad(%)"
 
     for (label, idx) in zip('a':'d', [(col, row) for row in 1:2, col in 1:2])
         Label(fig[idx..., TopLeft()], string(label); padding=(0, 0, 0, 0))
@@ -970,10 +972,10 @@ with_theme(makie_theme) do
     fig = Figure(size=(two_column_pt .* 0.9, 500))
     axs = [Axis(fig[row, col]) for row in 1:2, col in 1:2]
 
-    axs[1, 1].ylabel = L"y\,[\mathrm{km}]"
-    axs[2, 1].ylabel = L"y\,[\mathrm{km}]"
+    axs[1, 1].ylabel = L"y\,(\mathrm{km})"
+    axs[2, 1].ylabel = L"y\,(\mathrm{km})"
 
-    axs[1,1].title = L"\text{Snapshot+}"
+    axs[1,1].title = L"\text{Snapshot}"
     axs[1,2].title = L"\text{Time-dependent}"
 
     for ax in axs[:,2:end]
@@ -985,7 +987,7 @@ with_theme(makie_theme) do
     end
 
     for ax in axs[end, :]
-        ax.xlabel = L"x\,[\mathrm{km}]"
+        ax.xlabel = L"x\,(\mathrm{km})"
     end
 
     for ax in axs
@@ -999,10 +1001,12 @@ with_theme(makie_theme) do
 
     x, y = numerics.xc ./ 1e3, numerics.yc ./ 1e3
 
-    V_s1, H_s1   = load("$output_dir/forward_aletsch/forward_aletsch_25m_snap_1yrs.jld2", "V", "H")
+	#V_s0, H_s0   = load("$output_dir/snapshot_aletsch_25m/step_0100.jld2", "V", "H") # this is snapshot
+    V_s1, H_s1   = load("$output_dir/forward_aletsch/forward_aletsch_25m_snap_1yrs.jld2", "V", "H") # this is snapshot+
     V_s2, H_s2   = load("$output_dir/forward_aletsch/forward_aletsch_25m_snap_2yrs.jld2", "V", "H")
     V_s11, H_s11 = load("$output_dir/forward_aletsch/forward_aletsch_25m_snap_11yrs.jld2", "V", "H")
 
+	#V_td0, H_td0   = load("$output_dir/time_dependent_aletsch_25m/step_0100.jld2", "V", "H")
     V_td1, H_td1   = load("$output_dir/forward_aletsch/forward_aletsch_25m_time_dep_1yrs.jld2", "V", "H")
     V_td2, H_td2   = load("$output_dir/forward_aletsch/forward_aletsch_25m_time_dep_2yrs.jld2", "V", "H")
     V_td11, H_td11 = load("$output_dir/forward_aletsch/forward_aletsch_25m_time_dep_11yrs.jld2", "V", "H")
@@ -1067,9 +1071,8 @@ with_theme(makie_theme) do
     cbs = (Colorbar(fig[1,3], hms[1]),
            Colorbar(fig[2,3], hms[3]))
 
-    cbs[1].label = L"V_{2018} - V_{2017}  \quad \mathrm{[m\,a^{-1}]}"
-    cbs[2].label = L"H_{2018} - H_{2017}  \quad
-    \mathrm{[m]}"
+    cbs[1].label = L"V_{2018} - V_{2017}  \quad \mathrm{(m\,a^{-1})}"
+    cbs[2].label = L"H_{2018} - H_{2017}  \quad \mathrm{(m)}"
 
     colgap!(fig.layout, Fixed(10))
 
@@ -1079,6 +1082,126 @@ with_theme(makie_theme) do
 
     save("$figures_dir/aletsch_fwd_evol_deltas.pdf", fig; pt_per_unit, px_per_unit)
     save("$figures_dir/aletsch_fwd_evol_deltas.png", fig; pt_per_unit, px_per_unit)
+
+    fig
+end
+
+# ╔═╡ b30e647f-4bf3-4c6f-a5d2-2a9a6b9b413b
+with_theme(makie_theme) do
+    fig = Figure(size=(two_column_pt .* 0.9, 500))
+    axs = [Axis(fig[row, col]) for row in 1:2, col in 1:2]
+
+    axs[1, 1].ylabel = L"y\,(\mathrm{km})"
+    axs[2, 1].ylabel = L"y\,(\mathrm{km})"
+
+    axs[1,1].title = L"\text{Snapshot+}"
+    axs[1,2].title = L"\text{Time-dependent}"
+
+    for ax in axs[:,2:end]
+        hideydecorations!(ax)
+    end
+
+    for ax in axs[1, :]
+        hidexdecorations!(ax)
+    end
+
+    for ax in axs[end, :]
+        ax.xlabel = L"x\,(\mathrm{km})"
+    end
+
+    for ax in axs
+        limits!(ax, -7, 7, -10, 10)
+        ax.aspect = DataAspect()
+        ax.xgridvisible = true
+        ax.ygridvisible = true
+    end
+
+    fields, numerics = load("$datasets_dir/aletsch_25m.jld2", "fields", "numerics")
+
+    x, y = numerics.xc ./ 1e3, numerics.yc ./ 1e3
+
+    V_s1, H_s1   = load("$output_dir/forward_aletsch/forward_aletsch_25m_snap_1yrs.jld2", "V", "H")
+    V_s2, H_s2   = load("$output_dir/forward_aletsch/forward_aletsch_25m_snap_2yrs.jld2", "V", "H")
+    V_s11, H_s11 = load("$output_dir/forward_aletsch/forward_aletsch_25m_snap_11yrs.jld2", "V", "H")
+
+	V_td0, H_td0   = load("$output_dir/time_dependent_aletsch_25m/step_0100.jld2", "V", "H")
+    V_td1, H_td1   = load("$output_dir/forward_aletsch/forward_aletsch_25m_time_dep_1yrs.jld2", "V", "H")
+    V_td2, H_td2   = load("$output_dir/forward_aletsch/forward_aletsch_25m_time_dep_2yrs.jld2", "V", "H")
+    V_td11, H_td11 = load("$output_dir/forward_aletsch/forward_aletsch_25m_time_dep_11yrs.jld2", "V", "H")
+
+ #    dt = 1 #yr
+ #    dH_dt_s1  = (H_s2  .- H_s1) ./ dt
+ #    #dH_dt_td1 = (H_td2 .- H_td1) ./ dt
+	# dH_dt_td1 = (H_td1 .- H_td0) ./ dt
+
+ #    dV_dt_s1  = (V_s2  .- V_s1) ./ dt
+ #    #dV_dt_td1 = (V_td2 .- V_td1) ./ dt
+	# dV_dt_td1 = (V_td1 .- V_td0) ./ dt
+
+ #    H_max1 = maximum(dH_dt_td1)
+ #    V_max1 = maximum(dV_dt_td1)
+
+ #    ice_mask = H_td2 .< 1.0
+ #    ice_mask_v = av4(H_td2) .< 1.0
+
+ #    dH_dt_s1[ice_mask] .= NaN
+ #    dH_dt_td1[ice_mask] .= NaN
+
+ #    dV_dt_s1[ice_mask_v] .= NaN
+ #    dV_dt_td1[ice_mask_v] .= NaN
+
+    dt = 10 #yrs
+    dH_dt_s10  = (H_s11  .- H_s1) ./ dt
+    dH_dt_td10 = (H_td11 .- H_td1) ./ dt
+
+    dV_dt_s10  = (V_s11  .- V_s1) ./ dt
+    dV_dt_td10 = (V_td11 .- V_td1) ./ dt
+
+    H_max10 = maximum(dH_dt_td10)
+    V_max10 = maximum(dV_dt_td10)
+
+    ice_mask = H_td11 .< 1.0
+    ice_mask_v = av4(H_td11) .< 1.0
+
+    dH_dt_s10[ice_mask] .= NaN
+    dH_dt_td10[ice_mask] .= NaN
+
+    dV_dt_s10[ice_mask_v] .= NaN
+    dV_dt_td10[ice_mask_v] .= NaN
+
+    hms = (heatmap!(axs[1,1], x, y, dV_dt_s10  .* SECONDS_IN_YEAR),
+           heatmap!(axs[1,2], x, y, dV_dt_td10 .* SECONDS_IN_YEAR),
+           heatmap!(axs[2,1], x, y, dH_dt_s10 ),
+           heatmap!(axs[2,2], x, y, dH_dt_td10))
+
+    for hm in hms[1:2]
+        hm.colormap    = :BrBG_9
+        hm.interpolate = true
+        hm.rasterise   = px_per_unit
+        hm.colorrange  = (-10,10)
+    end
+    for hm in hms[3:4]
+        hm.colormap    = :diverging_bwg_20_95_c41_n256 #:delta
+        hm.interpolate = true
+        hm.rasterise   = px_per_unit
+        hm.colorrange  = (-15,15)
+    end
+    [contour!(axs[i], x, y, fields.H; levels=1:1, linewidth=0.5, color=:black) for i=1:4]
+
+    cbs = (Colorbar(fig[1,3], hms[1]),
+           Colorbar(fig[2,3], hms[3]))
+
+    cbs[1].label = L"V_{2027} - V_{2017}  \quad \mathrm{(m\,a^{-1})}"
+    cbs[2].label = L"H_{2027} - H_{2017}  \quad \mathrm{(m)}"
+
+    colgap!(fig.layout, Fixed(10))
+
+    for (label, idx) in zip('a':'d', [(col, row) for row in 1:2, col in 1:2])
+        Label(fig[idx..., TopLeft()], string(label); padding=(0, 0, 0, 0))
+    end
+
+    save("$figures_dir/aletsch_fwd_evol_deltas_10yr.pdf", fig; pt_per_unit, px_per_unit)
+    save("$figures_dir/aletsch_fwd_evol_deltas_10yr.png", fig; pt_per_unit, px_per_unit)
 
     fig
 end
@@ -1096,23 +1219,23 @@ with_theme(makie_theme) do
     fig = Figure(size=(two_column_pt, 400))
     axs = [Axis(fig[row, col]) for row in 1:2, col in eachindex(aletsch_years)]
 
-    axs[1, 1].ylabel = L"y\,[\mathrm{km}]"
-    axs[2, 1].ylabel = L"y\,[\mathrm{km}]"
+    axs[1, 1].ylabel = L"y\,(\mathrm{km})"
+    axs(2, 1).ylabel = L"y\,(\mathrm{km})"
 
-    for ax in axs[1, :]
+    for ax in axs(1, :)
         hidexdecorations!(ax)
     end
 
-    for ax in axs[:, 2:end]
+    for ax in axs(:, 2:end)
         hideydecorations!(ax)
     end
 
-    for (i, ax) in enumerate(axs[1, :])
-        ax.title  = L"%$(aletsch_years[i])\,\mathrm{yrs}"
+    for (i, ax) in enumerate(axs(1, :))
+        ax.title  = L"%$(aletsch_years(i))\,\mathrm{yrs}"
     end
 
-    for ax in axs[end, :]
-        ax.xlabel = L"x\,[\mathrm{km}]"
+    for ax in axs(end, :)
+        ax.xlabel = L"x\,(\mathrm{km})"
     end
 
     for ax in axs
@@ -1122,7 +1245,7 @@ with_theme(makie_theme) do
         ax.ygridvisible = true
     end
 
-    hms = Heatmap[]
+    hms = Heatmap()
 
     fields, numerics = load("$datasets_dir/aletsch_25m.jld2", "fields", "numerics")
 
@@ -1163,8 +1286,8 @@ with_theme(makie_theme) do
     end
 
     cb = Colorbar(fig[:, length(aletsch_years) + 1], hms[end])
-    cb.label = L"V\ \mathrm{[m\,a^{-1}]}"
-    #cb.label = L"H\ \mathrm{[m]}"
+    cb.label = L"V\ \mathrm{(m\,a^{-1})}"
+    #cb.label = L"H\ \mathrm{(m)}"
 
     colgap!(fig.layout, Fixed(10))
 
@@ -1182,8 +1305,8 @@ with_theme(makie_theme) do
     fig = Figure(size=(two_column_pt .* 0.9, 500))
     axs = [Axis(fig[row, col]) for row in 1:2, col in 1:2]
 
-    axs[1, 1].ylabel = L"y\,[\mathrm{km}]"
-    axs[2, 1].ylabel = L"y\,[\mathrm{km}]"
+    axs[1, 1].ylabel = L"y\,(\mathrm{km})"
+    axs[2, 1].ylabel = L"y\,(\mathrm{km})"
 
     axs[1].title = L"2017 - 2018"
     axs[3].title = L"2017 - 2027"
@@ -1197,7 +1320,7 @@ with_theme(makie_theme) do
     end
 
     for ax in axs[end, :]
-        ax.xlabel = L"x\,[\mathrm{km}]"
+        ax.xlabel = L"x\,(\mathrm{km})"
     end
 
     for ax in axs
@@ -1278,8 +1401,8 @@ with_theme(makie_theme) do
     cbs = (Colorbar(fig[1,3], hms[1]),
            Colorbar(fig[2,3], hms[3]))
 
-    cbs[1].label = L"\left( \Delta V^\mathrm{s} - \Delta V^\mathrm{td} \right) / \Delta t\ \mathrm{[m\,a^{-2}]}"
-    cbs[2].label = L"\left( \Delta H^\mathrm{s} - \Delta H^\mathrm{td} \right) / \Delta t\ \mathrm{[m\,a^{-1}]}"
+    cbs[1].label = L"\left( \Delta V^\mathrm{s} - \Delta V^\mathrm{td} \right) / \Delta t\ \mathrm{(m\,a^{-2})}"
+    cbs[2].label = L"\left( \Delta H^\mathrm{s} - \Delta H^\mathrm{td} \right) / \Delta t\ \mathrm{(m\,a^{-1})}"
 
     colgap!(fig.layout, Fixed(10))
 
@@ -1301,8 +1424,8 @@ with_theme(makie_theme) do
     fig = Figure(size=(two_column_pt .* 0.9, 500))
     axs = [Axis(fig[row, col]) for row in 1:2, col in 1:2]
 
-    axs[1, 1].ylabel = L"y\,[\mathrm{km}]"
-    axs[2, 1].ylabel = L"y\,[\mathrm{km}]"
+    axs[1, 1].ylabel = L"y\,(\mathrm{km})"
+    axs[2, 1].ylabel = L"y\,(\mathrm{km})"
 
     axs[1].title = L"2017 - 2018"
     axs[3].title = L"2017 - 2027"
@@ -1316,7 +1439,7 @@ with_theme(makie_theme) do
     end
 
     for ax in axs[end, :]
-        ax.xlabel = L"x\,[\mathrm{km}]"
+        ax.xlabel = L"x\,(\mathrm{km})"
     end
 
     for ax in axs
@@ -1399,8 +1522,8 @@ heatmap!(axs[2,1], x, y, dV_dt_td1   .* SECONDS_IN_YEAR),
     cbs = (Colorbar(fig[1,3], hms[1]),
            Colorbar(fig[2,3], hms[3]))
 
-    cbs[1].label = L"\Delta V^\mathrm{s} / \Delta t\ \mathrm{[m\,a^{-2}]}"
-    cbs[2].label = L"\Delta V^\mathrm{td} / \Delta t\ \mathrm{[m\,a^{-2}]}"
+    cbs[1].label = L"\Delta V^\mathrm{s} / \Delta t\ \mathrm{(m\,a^{-2})}"
+    cbs[2].label = L"\Delta V^\mathrm{td} / \Delta t\ \mathrm{(m\,a^{-2})}"
 
     colgap!(fig.layout, Fixed(10))
 
@@ -1422,8 +1545,8 @@ with_theme(makie_theme) do
     fig = Figure(size=(two_column_pt .* 0.9, 500))
     axs = [Axis(fig[row, col]) for row in 1:2, col in 1:2]
 
-    axs[1, 1].ylabel = L"y\,[\mathrm{km}]"
-    axs[2, 1].ylabel = L"y\,[\mathrm{km}]"
+    axs[1, 1].ylabel = L"y\,(\mathrm{km})"
+    axs[2, 1].ylabel = L"y\,(\mathrm{km})"
 
     axs[1].title = L"2017 - 2018"
     axs[3].title = L"2017 - 2027"
@@ -1437,7 +1560,7 @@ with_theme(makie_theme) do
     end
 
     for ax in axs[end, :]
-        ax.xlabel = L"x\,[\mathrm{km}]"
+        ax.xlabel = L"x\,(\mathrm{km})"
     end
 
     for ax in axs
@@ -1520,8 +1643,8 @@ heatmap!(axs[2,1], x, y, dH_dt_td1 ),
     cbs = (Colorbar(fig[1,3], hms[1]),
            Colorbar(fig[2,3], hms[3]))
 
-    cbs[1].label = L"\Delta H^\mathrm{s} / \Delta t\ \mathrm{[m\,a^{-2}]}"
-    cbs[2].label = L"\Delta H^\mathrm{td} / \Delta t\ \mathrm{[m\,a^{-2}]}"
+    cbs[1].label = L"\Delta H^\mathrm{s} / \Delta t\ \mathrm{(m\,a^{-2})}"
+    cbs[2].label = L"\Delta H^\mathrm{td} / \Delta t\ \mathrm{(m\,a^{-2})}"
 
     colgap!(fig.layout, Fixed(10))
 
@@ -1572,6 +1695,7 @@ end
 # ╠═c38a1355-61eb-4b44-bca5-5c7c93bbf5a8
 # ╟─832890ee-7f90-4fcc-a7fb-aef8a1fb47b2
 # ╠═1315f741-afa2-4eb5-9ef6-243115ec8746
+# ╠═b30e647f-4bf3-4c6f-a5d2-2a9a6b9b413b
 # ╠═b763f8fb-0088-4a53-9382-9b7a3fe2ef8f
 # ╠═673d08ad-1669-457e-905d-aa8f13c72ac4
 # ╠═26127ab1-fb5e-45ac-83fd-59fd57915d43

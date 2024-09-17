@@ -41,12 +41,12 @@ inversion_files = ["../output/snapshot_aletsch_25m/step_0100.jld2",
 E = 0.25;
 
 # ╔═╡ b70f7a61-c958-47a2-925a-75efe46f8aaa
-nts = [1,2,11];
+nts = Int[1,2,11,50];
 
 # ╔═╡ 9ebf02c2-7234-4f09-8108-b671c99263cc
 models = let
     mkpath("../output/forward_aletsch/")
-    models = Matrix{Any}(undef,2,3)
+    models = Matrix{Any}(undef,length(inversion_files),length(nts))
     for (flag, inversion_file) in enumerate(inversion_files)
         for (i, nt) in enumerate(nts)
             model = TimeDependentSIA(input_file; report=true)
