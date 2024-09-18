@@ -99,8 +99,8 @@ synthetic_line_search = BacktrackingLineSearch(; α_min=1e3, α_max=1e6)
 
 for (ωᵥ, ωₕ) in ((0, 1), (1, 0), (1, 1))
     synthetic_params = InversionScenarioTimeDependent(;
-                                         input_file="datasets/synthetic_25m.jld2",
-                                         output_dir="output/time_dependent_synthetic_25m_$(ωᵥ)_$(ωₕ)",
+                                         input_file="../datasets/synthetic_25m.jld2",
+                                         output_dir="../output/time_dependent_synthetic_25m_$(ωᵥ)_$(ωₕ)",
                                          ωᵥ=float(ωᵥ),
                                          ωₕ=float(ωₕ),
                                          line_search=synthetic_line_search)
