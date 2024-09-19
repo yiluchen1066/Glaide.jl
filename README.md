@@ -49,9 +49,9 @@ julia> Pluto.run()
 
 ## Reproducing the study
 
-To run all simulations and reproduce all figures from the study, you need to run the notebooks / scripts in `app/`. This can be done by running the script `app/main.jl` from within the `app/` folder.
+To run all simulations and reproduce all figures from the study, you need to run the notebooks / scripts in `app/`. This can be done by running the script `app/main.jl` **from within** the `app/` folder (`cd app` first).
 
-Or, run the Pluto notebooks from the [**app/**](./app/) folder in the following sequence:
+Or, run the Pluto notebooks located in the [**app/**](./app/) folder in the following sequence:
 1. `generate_synthetic_setup.jl`
 2. `generate_aletsch_setup.jl`
 3. `snapshot_inversion.jl`
