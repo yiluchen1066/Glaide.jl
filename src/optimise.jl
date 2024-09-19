@@ -71,6 +71,7 @@ function optimise(model, objective, X0, options)
 
     # gradient descent loop
     iter = 1
+    β    = 0.0
     while iter <= maxiter
         # find a suitable step size
         α = find_step_line_search(model, objective, line_search, α, X, X0, X̄, P, J0)
@@ -84,11 +85,12 @@ function optimise(model, objective, X0, options)
         # compute gradient
         ∇J!(X̄, X, objective, model)
 
-        # Hager-Zhang rule
-        Y    = X̄ .- X̄p
-        dkyk = dot(P, Y)
-        ηk   = -inv(sqrt(dot(P, P)) * min(0.01, sqrt(dot(X̄, X̄))))
-        β    = max(dot(Y .- (2.0 * dot(Y, Y) / dkyk) .* P, X̄) / dkyk, ηk)
+        # Hager-Zhang rule after 5 warm-up iterations
+        if iter > 5
+            Y    = X̄ .- X̄p
+            dkyk = dot(P, Y)
+            β    = max(dot(Y .- (2.0 * dot(Y, Y) / dkyk) .* P, X̄) / dkyk, 0.0)
+        end
 
         # update search direction
         @. P = P * β - X̄
