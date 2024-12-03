@@ -1,118 +1,143 @@
 # CUDA kernels
 
-# surface gradient
-Base.@propagate_inbounds function ∇S(H, B, dx, dy, ix, iy)
-    ∇Sx = 0.5 * (@d_xi(B) + @d_xa(B)) / dx +
-          0.5 * (@d_xi(H) + @d_xa(H)) / dx
+# NEW FORMULATION
 
-    ∇Sy = 0.5 * (@d_yi(B) + @d_ya(B)) / dy +
-          0.5 * (@d_yi(H) + @d_ya(H)) / dy
+Base.@propagate_inbounds function residual(B, H, H_old, A, Aₛ, ρgn, n, b, ela, mb_max, mb_mask, _dt, _dx, _dy)
+    # average sliding coefficient
+    Aₛˣ = avˣ(Aₛ)
+    Aₛʸ = avʸ(Aₛ)
 
-    return sqrt(∇Sx^2 + ∇Sy^2)
-end
+    # surface elevation
+    S = B .+ H
 
-# SIA fluxes
-Base.@propagate_inbounds function qx(H, B, D, dx, dy, ix, iy)
-    return -@av_ya(D) * (@d_xi(H) + @d_xi(B)) / dx
-end
+    # bedrock gradient
+    ∇Bˣ = δˣ(B) .* _dx
+    ∇Bʸ = δʸ(B) .* _dy
 
-Base.@propagate_inbounds function qy(H, B, D, dx, dy, ix, iy)
-    return -@av_xa(D) * (@d_yi(H) + @d_yi(B)) / dy
-end
+    # surface gradient
+    ∇Sˣˣ = δˣₐ(S) .* _dx
+    ∇Sʸʸ = δʸₐ(S) .* _dy
 
-# SIA diffusivity
-function _diffusivity!(D, H, B, As, A, ρgn, npow, dx, dy)
-    @get_indices
-    @inbounds if ix <= size(D, 1) && iy <= size(D, 2)
-        # surface gradient
-        gradS = ∇S(H, B, dx, dy, ix, iy)
-        # diffusion coefficient
-        H_av      = @av_xy(H)
-        D[ix, iy] = ρgn * (2.0 / (npow + 2) * A * H_av^(npow + 2) + As[ix, iy] * H_av^(npow + 1)) * gradS^(npow - 1)
+    # surface gradient magnitude
+    ∇Sˣₙ = sqrt.(innʸ(∇Sˣˣ) .^ 2 + av4(∇Sʸʸ) .^ 2) .^ (n - 1)
+    ∇Sʸₙ = sqrt.(av4(∇Sˣˣ) .^ 2 + innˣ(∇Sʸʸ) .^ 2) .^ (n - 1)
+
+    Γˣ₁ = (2 / (n + 2) * A) .* ∇Sˣₙ
+    Γʸ₁ = (2 / (n + 2) * A) .* ∇Sʸₙ
+
+    Γˣ₂ = Aₛˣ .* ∇Sˣₙ
+    Γʸ₂ = Aₛʸ .* ∇Sʸₙ
+
+    # diffusivity of the deformational component
+    Dˣ₁ = Γˣ₁ ./ (n + 3)
+    Dʸ₁ = Γʸ₁ ./ (n + 3)
+
+    # diffusivity of the sliding component
+    Dˣ₂ = Γˣ₂ ./ (n + 2)
+    Dʸ₂ = Γʸ₂ ./ (n + 2)
+
+    # velocity of the deformational component
+    Wˣ₁ = .-Γˣ₁ .* ∇Bˣ
+    Wʸ₁ = .-Γʸ₁ .* ∇Bʸ
+
+    # velocity of the sliding component
+    Wˣ₂ = .-Γˣ₂ .* ∇Bˣ
+    Wʸ₂ = .-Γʸ₂ .* ∇Bʸ
+
+    Hⁿ¹ = H .^ (n + 1)
+    Hⁿ² = Hⁿ¹ .* H
+    Hⁿ³ = Hⁿ² .* H
+
+    # fluxes
+    qˣ = .-(Dˣ₁ .* δˣ(Hⁿ³) .* _dx .+ Dˣ₂ .* δˣ(Hⁿ²) .* _dx) .+
+         max.(Wˣ₁, 0) .* lˣ(Hⁿ²) .+ min.(Wˣ₁, 0) .* rˣ(Hⁿ²) .+
+         max.(Wˣ₂, 0) .* lˣ(Hⁿ¹) .+ min.(Wˣ₂, 0) .* rˣ(Hⁿ¹)
+
+    qʸ = .-(Dʸ₁ .* δʸ(Hⁿ³) .* _dy .+ Dʸ₂ .* δʸ(Hⁿ²) .* _dy) .+
+         max.(Wʸ₁, 0) .* lʸ(Hⁿ²) .+ min.(Wʸ₁, 0) .* rʸ(Hⁿ²) .+
+         max.(Wʸ₂, 0) .* lʸ(Hⁿ¹) .+ min.(Wʸ₂, 0) .* rʸ(Hⁿ¹)
+
+    ∇q = ρgn * (δˣ(qˣ) * _dx + δʸ(qʸ) * _dy)
+
+    mb = ela_mass_balance(S[2, 2], b, ela, mb_max) * mb_mask
+
+    dH_dt = (H[2, 2] - H_old) * _dt
+
+    r = mb - dH_dt - ∇q
+
+    if H[2, 2] == 0 && r < 0
+        r = zero(r)
     end
-    return
+
+    return r
 end
 
-# mass conservation residual
-function _residual!(r_H, B, H, H_old, D, β, ela, b_max, mb_mask, dt, dx, dy)
+function _residual!(r, z, B, H, H_old, A, Aₛ, ρgn, n, b, ela, mb_max, mb_mask, _dt, _dx, _dy)
     @get_indices
-    @inbounds if ix <= size(H, 1) - 2 && iy <= size(H, 2) - 2
-        # observed geometry changes
-        dH_dt = (H[ix+1, iy+1] - H_old[ix+1, iy+1]) / dt
+    @inbounds if ix <= size(H, 1) && iy <= size(H, 2)
+        Hₗ  = st3x3(H, ix, iy)
+        Bₗ  = st3x3(B, ix, iy)
+        Aₛₗ = st3x3(Aₛ, ix, iy)
 
-        # interface fluxes
-        qx_w = qx(H, B, D, dx, dy, ix, iy)
-        qx_e = qx(H, B, D, dx, dy, ix + 1, iy)
+        ℜ(x) = @inbounds residual(Bₗ, x, H_old[ix, iy], A, Aₛₗ, ρgn, n, b, ela, mb_max, mb_mask[ix, iy], _dt, _dx, _dy)
 
-        qy_s = qy(H, B, D, dx, dy, ix, iy)
-        qy_n = qy(H, B, D, dx, dy, ix, iy + 1)
+        result = ForwardDiff.gradient!(DiffResults.GradientResult(Hₗ), ℜ, Hₗ)
 
-        # ice flow
-        divQ = (qx_e - qx_w) / dx + (qy_n - qy_s) / dy
-
-        # surface mass balance
-        b = ela_mass_balance(B[ix+1, iy+1] + H[ix+1, iy+1], β, ela, b_max)
-
-        # no accumulation if (b > 0) && (H == 0) at t == t0
-        b *= mb_mask[ix, iy]
-
-        # total mass conservation
-        r_H[ix, iy] = b - dH_dt - divQ
+        r[ix, iy] = DiffResults.value(result)
+        q         = 0.5sum(abs.(DiffResults.gradient(result))) + 1e-8
+        z[ix, iy] = r[ix, iy] / q
     end
     return
 end
 
 # update ice thickness with constraint H > 0
-function _update_ice_thickness!(H, dH_dτ, r_H, dτ, dmp)
+function _update_ice_thickness!(H, p, α)
     @get_indices
-    @inbounds if ix <= size(H, 1) - 2 && iy <= size(H, 2) - 2
-        # residual damping improves convergence
-        dH_dτ[ix, iy] = dH_dτ[ix, iy] * dmp + r_H[ix, iy]
-
+    @inbounds if ix <= size(H, 1) && iy <= size(H, 2)
         # update ice thickness
-        H[ix+1, iy+1] = max(0.0, H[ix+1, iy+1] + dτ * dH_dτ[ix, iy])
-
-        # set residual to zero in ice-free cells to correctly detect convergence
-        if H[ix+1, iy+1] == 0.0
-            r_H[ix, iy] = 0.0
-        end
+        H[ix, iy] = max(H[ix, iy] + α * p[ix, iy], zero(H[ix, iy]))
     end
     return
 end
 
+function _surface_velocity(H, B, Aₛ, A, ρgn, n, dx, dy)
+    # surface elevation
+    S = B .+ H
+
+    # surface gradient
+    ∇Sˣ = δˣ(S) ./ dx
+    ∇Sʸ = δʸ(S) ./ dy
+
+    ∇Sₙ = sqrt(avˣ(∇Sˣ)^2 + avʸ(∇Sʸ)^2)^n
+
+    return ρgn * (2 / (n + 1) * A * H[2, 2]^(n + 1) + Aₛ * H[2, 2]^n) * ∇Sₙ
+end
+
 # surface velocity magnitude
-function _surface_velocity!(V, H, B, As, A, ρgn, npow, dx, dy)
+function _surface_velocity!(V, H, B, As, A, ρgn, n, dx, dy)
     @get_indices
     @inbounds if ix <= size(V, 1) && iy <= size(V, 2)
-        # surface gradient
-        gradS = ∇S(H, B, dx, dy, ix, iy)
-        # velocity magnitude
-        H_av      = @av_xy(H)
-        V[ix, iy] = ρgn * (2.0 / (npow + 1) * A * H_av^(npow + 1) + As[ix, iy] * H_av^npow) * gradS^npow
+        Hₗ = st3x3(H, ix, iy)
+        Bₗ = st3x3(B, ix, iy)
+        V[ix, iy] = _surface_velocity(Hₗ, Bₗ, As[ix, iy], A, ρgn, n, dx, dy)
     end
     return
 end
 
 # wrappers
-function diffusivity!(D, H, B, As, A, ρgn, npow, dx, dy)
+function residual!(r, z, B, H, H_old, A, Aₛ, ρgn, n, b, ela, mb_max, mb_mask, dt, dx, dy)
     nthreads, nblocks = launch_config(size(H))
-    @cuda threads = nthreads blocks = nblocks _diffusivity!(D, H, B, As, A, ρgn, npow, dx, dy)
+    @cuda threads = nthreads blocks = nblocks _residual!(r, z, B, H, H_old, A, Aₛ, ρgn, n, b, ela, mb_max, mb_mask, inv(dt), inv(dx), inv(dy))
     return
 end
 
-function residual!(r_H, B, H, H_old, D, β, ela, b_max, mb_mask, dt, dx, dy)
+function update_ice_thickness!(H, p, α)
     nthreads, nblocks = launch_config(size(H))
-    @cuda threads = nthreads blocks = nblocks _residual!(r_H, B, H, H_old, D, β, ela, b_max, mb_mask, dt, dx, dy)
+    @cuda threads = nthreads blocks = nblocks _update_ice_thickness!(H, p, α)
     return
 end
 
-function update_ice_thickness!(H, dH_dτ, r_H, dτ, dmp)
+function surface_velocity!(V, H, B, As, A, ρgn, n, dx, dy)
     nthreads, nblocks = launch_config(size(H))
-    @cuda threads = nthreads blocks = nblocks _update_ice_thickness!(H, dH_dτ, r_H, dτ, dmp)
-    return
-end
-
-function surface_velocity!(V, H, B, As, A, ρgn, npow, dx, dy)
-    nthreads, nblocks = launch_config(size(H))
-    @cuda threads = nthreads blocks = nblocks _surface_velocity!(V, H, B, As, A, ρgn, npow, dx, dy)
+    @cuda threads = nthreads blocks = nblocks _surface_velocity!(V, H, B, As, A, ρgn, n, dx, dy)
 end

@@ -32,6 +32,9 @@ using Printf
 using CairoMakie
 using CUDA
 using Enzyme
+using ForwardDiff
+using DiffResults
+using StaticArrays
 using JLD2
 using ZipArchives
 using Downloads
@@ -45,7 +48,7 @@ const GLEN_N          = 3
 const RHOG_N          = (910 * 9.81)^3
 
 # surface mass balance model
-ela_mass_balance(z, β, ela, b_max) = min(β * (z - ela), b_max)
+@inline ela_mass_balance(z, b, ela, mb_max) = min(b * (z - ela), mb_max)
 
 # CUDA launch configuration heuristics in 1D
 function launch_config(sz::Integer)
@@ -70,6 +73,9 @@ include("utils.jl")
 
 # helper macros for calculating finite differences
 include("macros.jl")
+
+# finite difference operators
+include("finite_difference.jl")
 
 # homogeneous and non-homogeneous Neumann boundary conditions
 include("boundary_conditions.jl")
