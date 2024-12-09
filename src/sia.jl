@@ -1,7 +1,8 @@
+struct ComputePreconditionedResidual end
+struct ComputePreconditioner end
+struct ComputeResidual end
+
 # CUDA kernels
-
-# NEW FORMULATION
-
 Base.@propagate_inbounds function residual(B, H, H_old, A, Aₛ, ρgn, n, b, ela, mb_max, mb_mask, _dt, _dx, _dy)
     # average sliding coefficient
     Aₛˣ = avˣ(Aₛ)
@@ -72,20 +73,30 @@ Base.@propagate_inbounds function residual(B, H, H_old, A, Aₛ, ρgn, n, b, ela
     return r
 end
 
-function _residual!(r, z, B, H, H_old, A, Aₛ, ρgn, n, b, ela, mb_max, mb_mask, _dt, _dx, _dy)
+function _residual!(r, z, B, H, H_old, A, Aₛ, ρgn, n, b, ela, mb_max, mb_mask, _dt, _dx, _dy, mode)
     @get_indices
     @inbounds if ix <= size(H, 1) && iy <= size(H, 2)
         Hₗ  = st3x3(H, ix, iy)
         Bₗ  = st3x3(B, ix, iy)
         Aₛₗ = st3x3(Aₛ, ix, iy)
 
-        ℜ(x) = @inbounds residual(Bₗ, x, H_old[ix, iy], A, Aₛₗ, ρgn, n, b, ela, mb_max, mb_mask[ix, iy], _dt, _dx, _dy)
+        H_o = H_old[ix, iy]
+        mbm = mb_mask[ix, iy]
 
-        result = ForwardDiff.gradient!(DiffResults.GradientResult(Hₗ), ℜ, Hₗ)
+        ℜ(x) = @inbounds residual(Bₗ, x, H_o, A, Aₛₗ, ρgn, n, b, ela, mb_max, mbm, _dt, _dx, _dy)
 
-        r[ix, iy] = DiffResults.value(result)
-        q         = 0.5sum(abs.(DiffResults.gradient(result))) + 1e-8
-        z[ix, iy] = r[ix, iy] / q
+        if mode == ComputeResidual()
+            r[ix, iy] = ℜ(Hₗ)
+        elseif mode == ComputePreconditionedResidual()
+            result    = ForwardDiff.gradient!(DiffResults.GradientResult(Hₗ), ℜ, Hₗ)
+            r[ix, iy] = DiffResults.value(result)
+            q         = 0.5sum(abs.(DiffResults.gradient(result))) + 1e-8
+            z[ix, iy] = r[ix, iy] / q
+        elseif mode == ComputePreconditioner()
+            result    = ForwardDiff.gradient!(DiffResults.GradientResult(Hₗ), ℜ, Hₗ)
+            q         = 0.5sum(abs.(DiffResults.gradient(result))) + 1e-8
+            z[ix, iy] = inv(q)
+        end
     end
     return
 end
@@ -125,9 +136,9 @@ function _surface_velocity!(V, H, B, As, A, ρgn, n, dx, dy)
 end
 
 # wrappers
-function residual!(r, z, B, H, H_old, A, Aₛ, ρgn, n, b, ela, mb_max, mb_mask, dt, dx, dy)
+function residual!(r, z, B, H, H_old, A, Aₛ, ρgn, n, b, ela, mb_max, mb_mask, dt, dx, dy, mode)
     nthreads, nblocks = launch_config(size(H))
-    @cuda threads = nthreads blocks = nblocks _residual!(r, z, B, H, H_old, A, Aₛ, ρgn, n, b, ela, mb_max, mb_mask, inv(dt), inv(dx), inv(dy))
+    @cuda threads = nthreads blocks = nblocks _residual!(r, z, B, H, H_old, A, Aₛ, ρgn, n, b, ela, mb_max, mb_mask, inv(dt), inv(dx), inv(dy), mode)
     return
 end
 

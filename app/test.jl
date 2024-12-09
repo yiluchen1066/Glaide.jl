@@ -10,7 +10,7 @@ const DupNN = DuplicatedNoNeed
 function main()
     # geometry
     Lx, Ly     = 20e3, 20e3
-    resolution = 50.0
+    resolution = 100.0
 
     # ice flow parameters
     As_0 = 1e-22
@@ -58,7 +58,7 @@ function main()
     fill!(model.fields.mb_mask, 1.0)
 
     # solve the model to steady state
-    solve!(model)
+    @time solve!(model)
 
     # save geometry and surface velocity
     model.fields.H_old .= model.fields.H
@@ -76,21 +76,11 @@ function main()
     model.scalars.dt = 15 * SECONDS_IN_YEAR
 
     # solve again
-    solve!(model)
+    @time solve!(model)
 
-    V̄ = make_zero(model.fields.V)
-    H̄ = make_zero(model.fields.H)
-    Ās = make_zero(model.fields.As)
+    Ās = zero(model.fields.As)
 
-    # Enzyme.autodiff(Enzyme.Reverse, Glaide.surface_velocity!,
-    #                 DupNN(model.fields.V, V̄),
-    #                 DupNN(model.fields.H, H̄),
-    #                 Const(model.fields.B),
-    #                 DupNN(model.fields.As, Ās),
-    #                 Const(model.scalars.A),
-    #                 Const(model.scalars.ρgn),
-    #                 Const(model.scalars.n),
-    #                 Const(dx), Const(dy))
+    Glaide.solve_adjoint!(Ās, model)
 
     with_theme(theme_latexfonts()) do
         B       = Array(model.fields.B)
@@ -166,7 +156,7 @@ function main()
         end
 
         hms[1].colormap = :terrain
-        hms[2].colormap = Reverse(:roma)
+        hms[2].colormap = Makie.Reverse(:roma)
         hms[3].colormap = :vik
         hms[4].colormap = :vik
         hms[5].colormap = :turbo

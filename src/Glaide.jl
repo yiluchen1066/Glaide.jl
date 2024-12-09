@@ -65,7 +65,7 @@ function launch_config(sz::NTuple{2,Integer})
 end
 
 # Enzyme utils
-@inline ∇(fun, args...) = (Enzyme.autodiff_deferred(Enzyme.Reverse, fun, Const, args...); return)
+∇(fun, args...) = (Enzyme.autodiff_deferred(Enzyme.Reverse, Const(fun), Const, args...); return)
 const DupNN = DuplicatedNoNeed
 
 # helper functions to simplify the data processing
