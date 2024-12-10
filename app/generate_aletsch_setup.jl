@@ -400,10 +400,10 @@ function create_input_file(resolution)
 
     numerics = (; nx, ny, dx, dy, xc, yc)
 
-    scalars = (ρgn  = RHOG_N,
-               A    = GLEN_A,
-               npow = GLEN_N,
-               dt   = 1.0 * SECONDS_IN_YEAR,
+    scalars = (ρgn = RHOG_N,
+               A   = GLEN_A,
+               n   = GLEN_N,
+               dt  = 1.0 * SECONDS_IN_YEAR,
                lx,
                ly,
                β,

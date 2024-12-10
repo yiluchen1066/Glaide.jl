@@ -40,6 +40,7 @@ using ZipArchives
 using Downloads
 using Rasters
 using ImageMorphology
+using LLVM
 
 # define consntants
 const SECONDS_IN_YEAR = 3600 * 24 * 365

@@ -161,8 +161,8 @@ function solve_adjoint!(Ās, model::TimeDependentSIA)
     (; ψ, r̄, z̄, H̄, V̄, ∂J_∂H) = model.adjoint_fields
 
     # unpack numerical parameters
-    (; nx, ny, dx, dy)           = model.numerics
-    (; α, maxiter, ncheck, εtol) = model.adjoint_numerics
+    (; nx, ny, dx, dy, dmpswitch, ndmp) = model.numerics
+    (; α, maxiter, ncheck, εtol)        = model.adjoint_numerics
 
     N = max(nx, ny)
 
@@ -179,37 +179,30 @@ function solve_adjoint!(Ās, model::TimeDependentSIA)
     fill!(Ās, 0.0)
 
     # first propagate partial velocity derivatives
-    Enzyme.autodiff(Enzyme.Reverse, surface_velocity!,
-                    DupNN(V, V̄), DupNN(H, H̄),
-                    Const(B), DupNN(As, Ās), Const(A),
-                    Const(ρgn), Const(n),
-                    Const(dx), Const(dy))
+    ∇surface_velocity!(DupNN(V, V̄), DupNN(H, H̄),
+                       Const(B), DupNN(As, Ās), Const(A),
+                       Const(ρgn), Const(n),
+                       Const(dx), Const(dy))
 
     # Enzyme overwrites memory, save array
     copy!(∂J_∂H, H̄)
-
-    # compute preconditioner
-    residual!(r, z, B, H, H_old, A, As, ρgn, n, b, ela, mb_max, mb_mask, dt, dx, dy, ComputePreconditioner())
 
     # initialize shadow variables (Enzyme accumulates derivatives in-place)
     copy!(r̄, ψ)
     copy!(H̄, ∂J_∂H)
 
-    Enzyme.autodiff(Enzyme.Reverse, residual!,
-                    DupNN(r, r̄),
-                    Const(z),
-                    Const(B),
-                    DupNN(H, H̄),
-                    Const(H_old),
-                    Const(A),
-                    Const(As),
-                    Const(ρgn), Const(n),
-                    Const(b), Const(ela), Const(mb_max), Const(mb_mask),
-                    Const(dt), Const(dx), Const(dy), Const(ComputeResidual()))
+    ∇residual!(DupNN(r, r̄),
+               Const(z),
+               Const(B),
+               DupNN(H, H̄),
+               Const(H_old),
+               Const(A),
+               Const(As),
+               Const(ρgn), Const(n),
+               Const(b), Const(ela), Const(mb_max), Const(mb_mask),
+               Const(dt), Const(dx), Const(dy), Const(ComputeResidual()))
 
-    @. z̄ = r̄ * z
-
-    copy!(p, z̄)
+    copy!(p, H̄)
 
     # iterative loop
     iter            = 1
@@ -224,34 +217,31 @@ function solve_adjoint!(Ās, model::TimeDependentSIA)
 
         # residual
         if (iter > dmpswitch) && (iter % ndmp == 0)
-            copy!(r0, r̄)
+            copy!(r0, H̄)
         end
 
         # initialize shadow variables (Enzyme accumulates derivatives in-place)
         copy!(r̄, ψ)
         copy!(H̄, ∂J_∂H)
 
-        Enzyme.autodiff(Enzyme.Reverse, residual!,
-                        DupNN(r, r̄),
-                        Const(z),
-                        Const(B),
-                        DupNN(H, H̄),
-                        Const(H_old),
-                        Const(A),
-                        Const(As),
-                        Const(ρgn), Const(n),
-                        Const(b), Const(ela), Const(mb_max), Const(mb_mask),
-                        Const(dt), Const(dx), Const(dy), Const(ComputeResidual()))
-
-        @. z̄ = r̄ * z
+        ∇residual!(DupNN(r, r̄),
+                   Const(z),
+                   Const(B),
+                   DupNN(H, H̄),
+                   Const(H_old),
+                   Const(A),
+                   Const(As),
+                   Const(ρgn), Const(n),
+                   Const(b), Const(ela), Const(mb_max), Const(mb_mask),
+                   Const(dt), Const(dx), Const(dy), Const(ComputeResidual()))
 
         if (iter > dmpswitch) && (iter % ndmp == 0)
-            dkyk, yy = mapreduce((_r, _r0, _p) -> (_p * (_r - _r0), (_r - _r0)^2), (x, y) -> x .+ y, r̄, r0, p; init=(0.0, 0.0))
-            β₀       = mapreduce((_r, _r0, _p, _z) -> (_r - _r0 + (2yy / dkyk) * _p) * _z, +, r̄, r0, p, z̄) / dkyk
+            dkyk, yy = mapreduce((_r, _r0, _p) -> (_p * (_r - _r0), (_r - _r0)^2), (x, y) -> x .+ y, H̄, r0, p; init=(0.0, 0.0))
+            β₀       = mapreduce((_r, _r0, _p, _z) -> (_r - _r0 + (2yy / dkyk) * _p) * _z, +, H̄, r0, p, H̄) / dkyk
             β        = clamp(β₀, 0, 1)
         end
 
-        @. p = p * β + z
+        @. p = p * β + H̄
 
         if iter % ncheck == 0
             # difference in the adjoint state between iterations
@@ -286,10 +276,15 @@ function solve_adjoint!(Ās, model::TimeDependentSIA)
     end
 
     # propagate derivatives w.r.t. sliding parameter
-    ∇residual!(DupNN(r, copy(ψ)),
-               Const(B), Const(H), Const(H_old),
-               DupNN(D, D̄),
-               Const(β), Const(ela), Const(b_max), Const(mb_mask),
+    ∇residual!(DupNN(r, r̄),
+               Const(z),
+               Const(B),
+               Const(H),
+               Const(H_old),
+               Const(A),
+               DupNN(As, Ās),
+               Const(ρgn), Const(n),
+               Const(b), Const(ela), Const(mb_max), Const(mb_mask),
                Const(dt), Const(dx), Const(dy), Const(ComputeResidual()))
 
     return

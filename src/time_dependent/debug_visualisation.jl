@@ -3,10 +3,10 @@
 function create_debug_visualisation(model)
     # unpack
     (; H, B, As, V)    = model.fields
-    (; A, ρgn, npow)   = model.scalars
+    (; A, ρgn, n)       = model.scalars
     (; dx, dy, xc, yc) = model.numerics
 
-    surface_velocity!(V, H, B, As, A, ρgn, npow, dx, dy)
+    surface_velocity!(V, H, B, As, A, ρgn, n, dx, dy)
 
     vis_fields = (V  = Array(V),
                   H  = Array(H),
@@ -48,11 +48,11 @@ function update_debug_visualisation!(vis, model, iter, errs)
     (; fig, axs, hms, plt, vis_fields, conv_hist) = vis
 
     # unpack
-    (; H, B, As, V)  = model.fields
-    (; A, ρgn, npow) = model.scalars
-    (; dx, dy)       = model.numerics
+    (; H, B, As, V) = model.fields
+    (; A, ρgn, n)   = model.scalars
+    (; dx, dy)      = model.numerics
 
-    surface_velocity!(V, H, B, As, A, ρgn, npow, dx, dy)
+    surface_velocity!(V, H, B, As, A, ρgn, n, dx, dy)
 
     # update convergence history
     push!(conv_hist.err_abs, Point2(iter, errs.err_abs))

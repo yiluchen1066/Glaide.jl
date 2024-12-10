@@ -1,5 +1,5 @@
 ### A Pluto.jl notebook ###
-# v0.19.46
+# v0.20.3
 
 using Markdown
 using InteractiveUtils
@@ -49,7 +49,7 @@ Define the resolution of the computational grid in meters, note that the smaller
 """
 
 # ╔═╡ 62605691-13c4-4ed1-ba76-933f2aa8b9ba
-resolution = 25.0;
+resolution = 50.0;
 
 # ╔═╡ ea677e88-1ab2-47b4-89dc-bb9049658931
 md"""
@@ -120,9 +120,9 @@ where $z$ is the altitude, $\beta$ is the rate of change of mass balance, $\math
 
 # ╔═╡ f9dba7bb-a2a9-4b30-9fd2-5db2af34ef24
 begin
-    β     = 0.01 / SECONDS_IN_YEAR
-    b_max = 2.5  / SECONDS_IN_YEAR
-    ela   = 1800.0
+    b      = 0.01 / SECONDS_IN_YEAR
+    mb_max = 2.5  / SECONDS_IN_YEAR
+    ela    = 1800.0
 end;
 
 # ╔═╡ bcbf9797-6a71-4001-8ce9-ba045648308a
@@ -168,7 +168,7 @@ We generate the inputs for Glaide.jl with the following processing seqence:
 # ╔═╡ 052648a6-6197-4cd5-b7bb-bbfaa2958103
 model, V_old = let
     # default scalar parameters for a steady state (dt = ∞)
-    scalars = TimeDependentScalars(; lx, ly, dt=Inf, β, b_max, ela)
+    scalars = TimeDependentScalars(; lx, ly, dt=Inf, b, mb_max, ela)
 
     # default solver parameters
     numerics = TimeDependentNumerics(xc, yc)
@@ -193,7 +193,7 @@ model, V_old = let
     V_old 				= Array(model.fields.V)
 
     # sliding parameter perturbation
-    As_synthetic = @. 10^(log10(As_0) + As_a * cos(ω * xv  / lx) * sin(ω * yv' / ly))
+    As_synthetic = @. 10^(log10(As_0) + As_a * cos(ω * xc  / lx) * sin(ω * yc' / ly))
 
     copy!(model.fields.As, As_synthetic)
 
@@ -236,7 +236,7 @@ let
     fields = (; B, H, H_old, V, V_old, As, mb_mask)
 
     scalars = let
-        (; lx, ly, β, b_max, ela, dt, npow, A, ρgn) = model.scalars
+        (; lx, ly, b, mb_max, ela, dt, n, A, ρgn) = model.scalars
     end
 
     numerics = (; nx, ny, dx, dy, xc, yc)
@@ -356,14 +356,14 @@ with_theme(theme_latexfonts()) do
 end
 
 # ╔═╡ Cell order:
-# ╠═3b975e48-4794-11ef-3fc0-6deaeef86908
+# ╟─3b975e48-4794-11ef-3fc0-6deaeef86908
 # ╟─f0f3e0fa-d870-4ba8-84d8-bbe7f05035aa
 # ╠═0969205b-2d11-4ba2-b43a-f10fcd0dd85d
 # ╟─cef6480e-d715-42a8-93d7-fa676fad09c1
 # ╠═c4ebd113-cc41-4f66-87db-2b10383c03b9
 # ╟─3fa6bc48-1d64-4358-bc6b-086adab81805
 # ╠═62605691-13c4-4ed1-ba76-933f2aa8b9ba
-# ╟─ea677e88-1ab2-47b4-89dc-bb9049658931
+# ╠═ea677e88-1ab2-47b4-89dc-bb9049658931
 # ╟─e05e846a-58c2-40c7-aa0b-c25209296136
 # ╠═226790d3-127a-410c-9a7a-09ba01d85cf8
 # ╟─f50ce1aa-27f1-4fb3-8a27-e6550ddec3f4

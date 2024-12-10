@@ -1,16 +1,9 @@
-using Rasters, ArchGDAL, NCDatasets, Extents
-using CairoMakie
-using DelimitedFiles
-using JLD2
-using Glaide
-using Enzyme
-
-const DupNN = DuplicatedNoNeed
+using CairoMakie, Glaide
 
 function main()
     # geometry
     Lx, Ly     = 20e3, 20e3
-    resolution = 100.0
+    resolution = 50.0
 
     # ice flow parameters
     As_0 = 1e-22
@@ -29,8 +22,11 @@ function main()
     ela    = 1800.0
 
     # numerical parameters
-    dx, dy = resolution, resolution
-    nx, ny = ceil(Int, Lx / dx), ceil(Int, Ly / dy)
+    # dx, dy = resolution, resolution
+    nx, ny = ceil(Int, Lx / resolution), ceil(Int, Ly / resolution)
+    nx = cld(nx, 32) * 32
+    ny = cld(ny, 32) * 32
+    dx, dy = Lx / nx, Ly / ny
 
     # if the resolution is fixed, domain extents need to be corrected
     lx, ly = nx * dx, ny * dy
@@ -43,9 +39,9 @@ function main()
     scalars = TimeDependentScalars(; lx, ly, dt=Inf, b, mb_max, ela)
 
     # default solver parameters
-    numerics = TimeDependentNumerics(xc, yc)
+    numerics = TimeDependentNumerics(xc, yc; dmpswitch=2nx)
 
-    model = TimeDependentSIA(scalars, numerics; report=true)
+    model = TimeDependentSIA(scalars, numerics; report=true, debug_vis=false)
 
     # set the bed elevation
     copy!(model.fields.B, @. B_0 + 0.5 * B_a * (exp(-(xc / W_1)^2 - (yc' / W_2)^2) +
@@ -80,7 +76,10 @@ function main()
 
     Ās = zero(model.fields.As)
 
-    Glaide.solve_adjoint!(Ās, model)
+    @. model.adjoint_fields.H̄ = 1.0e0 * model.fields.H / $maximum(abs, model.fields.H)
+    @. model.adjoint_fields.V̄ = 1.0e6 * model.fields.V / $maximum(abs, model.fields.V)
+
+    @time Glaide.solve_adjoint!(Ās, model)
 
     with_theme(theme_latexfonts()) do
         B       = Array(model.fields.B)

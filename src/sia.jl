@@ -1,9 +1,10 @@
-struct ComputePreconditionedResidual end
-struct ComputePreconditioner end
 struct ComputeResidual end
+struct ComputePreconditionedResidual end
 
 # CUDA kernels
 Base.@propagate_inbounds function residual(B, H, H_old, A, Aₛ, ρgn, n, b, ela, mb_max, mb_mask, _dt, _dx, _dy)
+    LLVM.Interop.assume(n > 0)
+
     # average sliding coefficient
     Aₛˣ = avˣ(Aₛ)
     Aₛʸ = avʸ(Aₛ)
@@ -20,22 +21,22 @@ Base.@propagate_inbounds function residual(B, H, H_old, A, Aₛ, ρgn, n, b, ela
     ∇Sʸʸ = δʸₐ(S) .* _dy
 
     # surface gradient magnitude
-    ∇Sˣₙ = sqrt.(innʸ(∇Sˣˣ) .^ 2 + av4(∇Sʸʸ) .^ 2) .^ (n - 1)
-    ∇Sʸₙ = sqrt.(av4(∇Sˣˣ) .^ 2 + innˣ(∇Sʸʸ) .^ 2) .^ (n - 1)
+    ∇Sˣₙ = sqrt.(innʸ(∇Sˣˣ) .^ 2 .+ av4(∇Sʸʸ) .^ 2) .^ (n - 1)
+    ∇Sʸₙ = sqrt.(av4(∇Sˣˣ) .^ 2 .+ innˣ(∇Sʸʸ) .^ 2) .^ (n - 1)
 
-    Γˣ₁ = (2 / (n + 2) * A) .* ∇Sˣₙ
-    Γʸ₁ = (2 / (n + 2) * A) .* ∇Sʸₙ
+    Γˣ₁ = (2 * inv(n + 2) * A) .* ∇Sˣₙ
+    Γʸ₁ = (2 * inv(n + 2) * A) .* ∇Sʸₙ
 
     Γˣ₂ = Aₛˣ .* ∇Sˣₙ
     Γʸ₂ = Aₛʸ .* ∇Sʸₙ
 
     # diffusivity of the deformational component
-    Dˣ₁ = Γˣ₁ ./ (n + 3)
-    Dʸ₁ = Γʸ₁ ./ (n + 3)
+    Dˣ₁ = Γˣ₁ .* inv(n + 3)
+    Dʸ₁ = Γʸ₁ .* inv(n + 3)
 
     # diffusivity of the sliding component
-    Dˣ₂ = Γˣ₂ ./ (n + 2)
-    Dʸ₂ = Γʸ₂ ./ (n + 2)
+    Dˣ₂ = Γˣ₂ .* inv(n + 2)
+    Dʸ₂ = Γʸ₂ .* inv(n + 2)
 
     # velocity of the deformational component
     Wˣ₁ = .-Γˣ₁ .* ∇Bˣ
@@ -45,18 +46,31 @@ Base.@propagate_inbounds function residual(B, H, H_old, A, Aₛ, ρgn, n, b, ela
     Wˣ₂ = .-Γˣ₂ .* ∇Bˣ
     Wʸ₂ = .-Γʸ₂ .* ∇Bʸ
 
-    Hⁿ¹ = H .^ (n + 1)
+    Hⁿ⁰ = H .^ n
+    Hⁿ¹ = Hⁿ⁰ .* H
     Hⁿ² = Hⁿ¹ .* H
     Hⁿ³ = Hⁿ² .* H
 
+    Wˣ₁⁺ = max.(Wˣ₁, 0)
+    Wʸ₁⁺ = max.(Wʸ₁, 0)
+
+    Wˣ₂⁺ = max.(Wˣ₂, 0)
+    Wʸ₂⁺ = max.(Wʸ₂, 0)
+
+    Wˣ₁⁻ = min.(Wˣ₁, 0)
+    Wʸ₁⁻ = min.(Wʸ₁, 0)
+
+    Wˣ₂⁻ = min.(Wˣ₂, 0)
+    Wʸ₂⁻ = min.(Wʸ₂, 0)
+
     # fluxes
     qˣ = .-(Dˣ₁ .* δˣ(Hⁿ³) .* _dx .+ Dˣ₂ .* δˣ(Hⁿ²) .* _dx) .+
-         max.(Wˣ₁, 0) .* lˣ(Hⁿ²) .+ min.(Wˣ₁, 0) .* rˣ(Hⁿ²) .+
-         max.(Wˣ₂, 0) .* lˣ(Hⁿ¹) .+ min.(Wˣ₂, 0) .* rˣ(Hⁿ¹)
+         Wˣ₁⁺ .* lˣ(Hⁿ²) .+ Wˣ₁⁻ .* rˣ(Hⁿ²) .+
+         Wˣ₂⁺ .* lˣ(Hⁿ¹) .+ Wˣ₂⁻ .* rˣ(Hⁿ¹)
 
     qʸ = .-(Dʸ₁ .* δʸ(Hⁿ³) .* _dy .+ Dʸ₂ .* δʸ(Hⁿ²) .* _dy) .+
-         max.(Wʸ₁, 0) .* lʸ(Hⁿ²) .+ min.(Wʸ₁, 0) .* rʸ(Hⁿ²) .+
-         max.(Wʸ₂, 0) .* lʸ(Hⁿ¹) .+ min.(Wʸ₂, 0) .* rʸ(Hⁿ¹)
+         Wʸ₁⁺ .* lʸ(Hⁿ²) .+ Wʸ₁⁻ .* rʸ(Hⁿ²) .+
+         Wʸ₂⁺ .* lʸ(Hⁿ¹) .+ Wʸ₂⁻ .* rʸ(Hⁿ¹)
 
     ∇q = ρgn * (δˣ(qˣ) * _dx + δʸ(qʸ) * _dy)
 
@@ -66,7 +80,7 @@ Base.@propagate_inbounds function residual(B, H, H_old, A, Aₛ, ρgn, n, b, ela
 
     r = mb - dH_dt - ∇q
 
-    if H[2, 2] == 0 && r < 0
+    if (H[2, 2] == 0) && (r < 0)
         r = zero(r)
     end
 
@@ -75,27 +89,31 @@ end
 
 function _residual!(r, z, B, H, H_old, A, Aₛ, ρgn, n, b, ela, mb_max, mb_mask, _dt, _dx, _dy, mode)
     @get_indices
-    @inbounds if ix <= size(H, 1) && iy <= size(H, 2)
+    @inbounds begin
         Hₗ  = st3x3(H, ix, iy)
         Bₗ  = st3x3(B, ix, iy)
         Aₛₗ = st3x3(Aₛ, ix, iy)
 
-        H_o = H_old[ix, iy]
-        mbm = mb_mask[ix, iy]
-
-        ℜ(x) = @inbounds residual(Bₗ, x, H_o, A, Aₛₗ, ρgn, n, b, ela, mb_max, mbm, _dt, _dx, _dy)
-
         if mode == ComputeResidual()
-            r[ix, iy] = ℜ(Hₗ)
+            r[ix, iy] = residual(Bₗ, Hₗ, H_old[ix, iy], A, Aₛₗ, ρgn, n, b, ela, mb_max, mb_mask[ix, iy], _dt, _dx, _dy)
         elseif mode == ComputePreconditionedResidual()
-            result    = ForwardDiff.gradient!(DiffResults.GradientResult(Hₗ), ℜ, Hₗ)
-            r[ix, iy] = DiffResults.value(result)
-            q         = 0.5sum(abs.(DiffResults.gradient(result))) + 1e-8
+            r̄, r[ix, iy] = Enzyme.autodiff_deferred(Enzyme.ReverseWithPrimal, Const(residual), Active,
+                                                     Const(Bₗ),
+                                                     Active(Hₗ),
+                                                     Const(H_old[ix, iy]),
+                                                     Const(A),
+                                                     Const(Aₛₗ),
+                                                     Const(ρgn),
+                                                     Const(n),
+                                                     Const(b),
+                                                     Const(ela),
+                                                     Const(mb_max),
+                                                     Const(mb_mask[ix, iy]),
+                                                     Const(_dt),
+                                                     Const(_dx),
+                                                     Const(_dy))
+            q = 0.5sum(abs.(r̄[2])) + 1e-8
             z[ix, iy] = r[ix, iy] / q
-        elseif mode == ComputePreconditioner()
-            result    = ForwardDiff.gradient!(DiffResults.GradientResult(Hₗ), ℜ, Hₗ)
-            q         = 0.5sum(abs.(DiffResults.gradient(result))) + 1e-8
-            z[ix, iy] = inv(q)
         end
     end
     return
@@ -104,20 +122,18 @@ end
 # update ice thickness with constraint H > 0
 function _update_ice_thickness!(H, p, α)
     @get_indices
-    @inbounds if ix <= size(H, 1) && iy <= size(H, 2)
-        # update ice thickness
-        H[ix, iy] = max(H[ix, iy] + α * p[ix, iy], zero(H[ix, iy]))
-    end
+    # update ice thickness
+    @inbounds H[ix, iy] = max(H[ix, iy] + α * p[ix, iy], zero(H[ix, iy]))
     return
 end
 
-function _surface_velocity(H, B, Aₛ, A, ρgn, n, dx, dy)
+function _surface_velocity(H, B, Aₛ, A, ρgn, n, _dx, _dy)
     # surface elevation
     S = B .+ H
 
     # surface gradient
-    ∇Sˣ = δˣ(S) ./ dx
-    ∇Sʸ = δʸ(S) ./ dy
+    ∇Sˣ = δˣ(S) .* _dx
+    ∇Sʸ = δʸ(S) .* _dy
 
     ∇Sₙ = sqrt(avˣ(∇Sˣ)^2 + avʸ(∇Sʸ)^2)^n
 
@@ -127,10 +143,10 @@ end
 # surface velocity magnitude
 function _surface_velocity!(V, H, B, As, A, ρgn, n, dx, dy)
     @get_indices
-    @inbounds if ix <= size(V, 1) && iy <= size(V, 2)
+    @inbounds begin
         Hₗ = st3x3(H, ix, iy)
         Bₗ = st3x3(B, ix, iy)
-        V[ix, iy] = _surface_velocity(Hₗ, Bₗ, As[ix, iy], A, ρgn, n, dx, dy)
+        V[ix, iy] = _surface_velocity(Hₗ, Bₗ, As[ix, iy], A, ρgn, n, inv(dx), inv(dy))
     end
     return
 end
@@ -139,6 +155,14 @@ end
 function residual!(r, z, B, H, H_old, A, Aₛ, ρgn, n, b, ela, mb_max, mb_mask, dt, dx, dy, mode)
     nthreads, nblocks = launch_config(size(H))
     @cuda threads = nthreads blocks = nblocks _residual!(r, z, B, H, H_old, A, Aₛ, ρgn, n, b, ela, mb_max, mb_mask, inv(dt), inv(dx), inv(dy), mode)
+    return
+end
+
+function residual2!(r, z, B, H, H_old, A, Aₛ, ρgn, n, b, ela, mb_max, mb_mask, dt, dx, dy, mode)
+    nthreads, nblocks = launch_config(size(H))
+    nshmem = (prod(nthreads) * 4 + prod(nthreads .+ 2) * 3) * sizeof(Float64)
+    @cuda threads = nthreads blocks = nblocks shmem = nshmem _residual2!(r, z, B, H, H_old, A, Aₛ, ρgn, n, b, ela, mb_max, mb_mask, inv(dt), inv(dx), inv(dy),
+                                                                         mode)
     return
 end
 
