@@ -1,10 +1,10 @@
-struct TimeDependentFields{A<:AbstractMatrix{<:Real}}
+struct TimeDependentFields{A,B}
     B::A
     H::A
     H_old::A
     As::A
     V::A
-    mb_mask::A
+    mb_mask::B
     r::A
     r0::A
     z::A
@@ -76,10 +76,10 @@ end
 function TimeDependentNumerics(xc, yc;
                                εtol      = 1e-8,
                                α         = 1.0,
-                               dmpswitch = 2max(length(xc), length(yc)),
+                               dmpswitch = ceil(Int, 1max(length(xc), length(yc))),
                                ndmp      = 1,
                                maxiter   = 20max(length(xc), length(yc)),
-                               ncheck    = 1max(length(xc), length(yc)))
+                               ncheck    = ceil(Int, 0.25max(length(xc), length(yc))))
     nx, ny = length(xc), length(yc)
     dx, dy = step(xc), step(yc)
     return TimeDependentNumerics(nx, ny, dx, dy, xc, yc, εtol, α, dmpswitch, ndmp, maxiter, ncheck)
@@ -92,9 +92,9 @@ mutable struct TimeDependentAdjointNumerics{T<:Real,I<:Integer}
     ncheck::I
 end
 function TimeDependentAdjointNumerics(xc, yc;
-                                      εtol    = 1e-14,
-                                      α       = 2.5e-11,
+                                      εtol    = 1e-8,
+                                      α       = 1.0,
                                       maxiter = 20max(length(xc), length(yc)),
-                                      ncheck  = ceil(Int, 0.5 * max(length(xc), length(yc))))
+                                      ncheck  = ceil(Int, 0.25max(length(xc), length(yc))))
     return TimeDependentAdjointNumerics(εtol, α, maxiter, ncheck)
 end

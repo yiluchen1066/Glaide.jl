@@ -20,11 +20,11 @@ function SnapshotSIA(path::AbstractString)
 
     dfields = data["fields"]
 
-    (; nx, ny, xc, yc)       = data["numerics"]
-    (; lx, ly, npow, A, ρgn) = data["scalars"]
+    (; nx, ny, xc, yc)    = data["numerics"]
+    (; lx, ly, n, A, ρgn) = data["scalars"]
 
     fields   = SnapshotFields(nx, ny)
-    scalars  = SnapshotScalars(lx, ly, npow, A, ρgn)
+    scalars  = SnapshotScalars(lx, ly, n, A, ρgn)
     numerics = SnapshotNumerics(xc, yc)
 
     adjoint_fields = SnapshotAdjointFields(nx, ny)
@@ -37,25 +37,24 @@ function SnapshotSIA(path::AbstractString)
 end
 
 function solve!(model::SnapshotSIA; kwargs...)
-    (; H, B, As, V)  = model.fields
-    (; A, ρgn, npow) = model.scalars
-    (; dx, dy)       = model.numerics
+    (; H, B, As, V) = model.fields
+    (; A, ρgn, n)   = model.scalars
+    (; dx, dy)      = model.numerics
 
-    surface_velocity!(V, H, B, As, A, ρgn, npow, dx, dy)
+    surface_velocity!(V, H, B, As, A, ρgn, n, dx, dy)
 
     return
 end
 
 function solve_adjoint!(Ās, model::SnapshotSIA; kwargs...)
-    (; H, B, As, V)  = model.fields
-    (; A, ρgn, npow) = model.scalars
-    (; dx, dy)       = model.numerics
-    (; V̄)            = model.adjoint_fields
+    (; H, B, As, V) = model.fields
+    (; A, ρgn, n)   = model.scalars
+    (; dx, dy)      = model.numerics
+    (; V̄)          = model.adjoint_fields
 
     ∇surface_velocity!(DupNN(V, V̄), Const(H),
-                       Const(B), DupNN(As, Ās), Const(A),
-                       Const(ρgn), Const(npow),
-                       Const(dx), Const(dy))
+                       Const(B), DupNN(As, Ās),
+                       A, ρgn, n, dx, dy)
 
     return
 end

@@ -3,7 +3,7 @@
 function create_debug_visualisation(model)
     # unpack
     (; H, B, As, V)    = model.fields
-    (; A, ρgn, n)       = model.scalars
+    (; A, ρgn, n)      = model.scalars
     (; dx, dy, xc, yc) = model.numerics
 
     surface_velocity!(V, H, B, As, A, ρgn, n, dx, dy)
@@ -83,7 +83,7 @@ end
 
 function create_adjoint_debug_visualisation(model)
     # unpack
-    (; ψ, H̄)   = model.adjoint_fields
+    (; ψ, H̄) = model.adjoint_fields
     (; xc, yc) = model.numerics
 
     vis_fields = (ψ=Array(ψ),

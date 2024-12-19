@@ -82,7 +82,7 @@ function solve!(model::TimeDependentSIA)
     end
 
     # initialise search direction
-    residual!(r, z, B, H, H_old, A, As, ρgn, n, b, ela, mb_max, mb_mask, dt, dx, dy, ComputePreconditionedResidual())
+    residual!(r, z, B, H, H_old, As, mb_mask, A, ρgn, n, b, mb_max, ela, dt, dx, dy, ComputePreconditionedResidual())
     copy!(p, z)
 
     # iterative loop
@@ -96,11 +96,12 @@ function solve!(model::TimeDependentSIA)
 
         update_ice_thickness!(H, p, α)
 
-        # residual
+        # save previous residual
         if (iter > dmpswitch) && (iter % ndmp == 0)
             copy!(r0, r)
         end
-        residual!(r, z, B, H, H_old, A, As, ρgn, n, b, ela, mb_max, mb_mask, dt, dx, dy, ComputePreconditionedResidual())
+
+        residual!(r, z, B, H, H_old, As, mb_mask, A, ρgn, n, b, mb_max, ela, dt, dx, dy, ComputePreconditionedResidual())
 
         if (iter > dmpswitch) && (iter % ndmp == 0)
             dkyk, yy = mapreduce((_r, _r0, _p) -> (_p * (_r - _r0), (_r - _r0)^2), (x, y) -> x .+ y, r, r0, p; init=(0.0, 0.0))
@@ -180,29 +181,26 @@ function solve_adjoint!(Ās, model::TimeDependentSIA)
 
     # first propagate partial velocity derivatives
     ∇surface_velocity!(DupNN(V, V̄), DupNN(H, H̄),
-                       Const(B), DupNN(As, Ās), Const(A),
-                       Const(ρgn), Const(n),
-                       Const(dx), Const(dy))
+                       Const(B), DupNN(As, Ās),
+                       A, ρgn, n, dx, dy)
 
     # Enzyme overwrites memory, save array
     copy!(∂J_∂H, H̄)
 
+    # compute preconditioner
+    residual!(r, z, B, H, H_old, As, mb_mask, A, ρgn, n, b, mb_max, ela, dt, dx, dy, ComputePreconditioner())
+
     # initialize shadow variables (Enzyme accumulates derivatives in-place)
     copy!(r̄, ψ)
-    copy!(H̄, ∂J_∂H)
 
-    ∇residual!(DupNN(r, r̄),
-               Const(z),
-               Const(B),
-               DupNN(H, H̄),
-               Const(H_old),
-               Const(A),
-               Const(As),
-               Const(ρgn), Const(n),
-               Const(b), Const(ela), Const(mb_max), Const(mb_mask),
-               Const(dt), Const(dx), Const(dy), Const(ComputeResidual()))
+    ∇residual!(DupNN(r, r̄), Const(z),
+               Const(B), DupNN(H, H̄), Const(H_old),
+               Const(As), Const(mb_mask),
+               A, ρgn, n, b, mb_max, ela, dt, dx, dy,
+               ComputeResidual())
 
-    copy!(p, H̄)
+    @. z̄ = z * H̄
+    copy!(p, z̄)
 
     # iterative loop
     iter            = 1
@@ -224,24 +222,21 @@ function solve_adjoint!(Ās, model::TimeDependentSIA)
         copy!(r̄, ψ)
         copy!(H̄, ∂J_∂H)
 
-        ∇residual!(DupNN(r, r̄),
-                   Const(z),
-                   Const(B),
-                   DupNN(H, H̄),
-                   Const(H_old),
-                   Const(A),
-                   Const(As),
-                   Const(ρgn), Const(n),
-                   Const(b), Const(ela), Const(mb_max), Const(mb_mask),
-                   Const(dt), Const(dx), Const(dy), Const(ComputeResidual()))
+        ∇residual!(DupNN(r, r̄), Const(z),
+                   Const(B), DupNN(H, H̄), Const(H_old),
+                   Const(As), Const(mb_mask),
+                   A, ρgn, n, b, mb_max, ela, dt, dx, dy,
+                   ComputeResidual())
+
+        @. z̄ = z * H̄
 
         if (iter > dmpswitch) && (iter % ndmp == 0)
             dkyk, yy = mapreduce((_r, _r0, _p) -> (_p * (_r - _r0), (_r - _r0)^2), (x, y) -> x .+ y, H̄, r0, p; init=(0.0, 0.0))
-            β₀       = mapreduce((_r, _r0, _p, _z) -> (_r - _r0 + (2yy / dkyk) * _p) * _z, +, H̄, r0, p, H̄) / dkyk
+            β₀       = mapreduce((_r, _r0, _p, _z) -> (_r - _r0 + (2yy / dkyk) * _p) * _z, +, H̄, r0, p, z̄) / dkyk
             β        = clamp(β₀, 0, 1)
         end
 
-        @. p = p * β + H̄
+        @. p = p * β + z̄
 
         if iter % ncheck == 0
             # difference in the adjoint state between iterations
@@ -275,17 +270,14 @@ function solve_adjoint!(Ās, model::TimeDependentSIA)
         @warn("adjoint solver not converged: iter > maxiter")
     end
 
+    copy!(r̄, ψ)
+
     # propagate derivatives w.r.t. sliding parameter
-    ∇residual!(DupNN(r, r̄),
-               Const(z),
-               Const(B),
-               Const(H),
-               Const(H_old),
-               Const(A),
-               DupNN(As, Ās),
-               Const(ρgn), Const(n),
-               Const(b), Const(ela), Const(mb_max), Const(mb_mask),
-               Const(dt), Const(dx), Const(dy), Const(ComputeResidual()))
+    ∇residual!(DupNN(r, r̄), Const(z),
+               Const(B), Const(H), Const(H_old),
+               DupNN(As, Ās), Const(mb_mask),
+               A, ρgn, n, b, mb_max, ela, dt, dx, dy,
+               ComputeResidual())
 
     return
 end

@@ -28,12 +28,14 @@ Base.@propagate_inbounds lʸ(S::StaticMatrix{3,3}) = S[SVector(2), SVector(1, 2)
 Base.@propagate_inbounds rʸ(S::StaticMatrix{3,3}) = S[SVector(2), SVector(2, 3)]
 
 Base.@propagate_inbounds function st3x3(M, ix, iy)
-    nx, ny = size(M)
-    # # neighbor indices
-    iW = max(ix - 1, 1)
-    iE = min(ix + 1, nx)
-    iS = max(iy - 1, 1)
-    iN = min(iy + 1, ny)
+    nx, ny = oftype.((ix, iy), size(M))
+    # neighbor indices
+    di = oneunit(ix)
+    dj = oneunit(iy)
+    iW = max(ix - di, di)
+    iE = min(ix + di, nx)
+    iS = max(iy - dj, dj)
+    iN = min(iy + dj, ny)
     return SMatrix{3,3}(M[iW, iS], M[ix, iS], M[iE, iS],
                         M[iW, iy], M[ix, iy], M[iE, iy],
                         M[iW, iN], M[ix, iN], M[iE, iN])

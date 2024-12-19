@@ -7,24 +7,24 @@ end
 function SnapshotFields(nx, ny, T=Float64)
     SnapshotFields(CUDA.zeros(T, nx, ny),
                    CUDA.zeros(T, nx, ny),
-                   CUDA.zeros(T, nx - 1, ny - 1),
-                   CUDA.zeros(T, nx - 1, ny - 1))
+                   CUDA.zeros(T, nx, ny),
+                   CUDA.zeros(T, nx, ny))
 end
 
 struct SnapshotAdjointFields{A<:AbstractArray{<:Real}}
     V̄::A
 end
-SnapshotAdjointFields(nx, ny, T=Float64) = SnapshotAdjointFields(CUDA.zeros(T, nx - 1, ny - 1))
+SnapshotAdjointFields(nx, ny, T=Float64) = SnapshotAdjointFields(CUDA.zeros(T, nx, ny))
 
 mutable struct SnapshotScalars{T<:Real,NP<:Real}
     lx::T
     ly::T
-    npow::NP
+    n::NP
     A::T
     ρgn::T
 end
-function SnapshotScalars(; lx, ly, npow=GLEN_N, A0=GLEN_A, E=1.0, ρgn=RHOG_N)
-    return SnapshotScalars(lx, ly, npow, A0 * E, ρgn)
+function SnapshotScalars(; lx, ly, n=GLEN_N, A0=GLEN_A, E=1.0, ρgn=RHOG_N)
+    return SnapshotScalars(lx, ly, n, A0 * E, ρgn)
 end
 
 struct SnapshotNumerics{T<:Real,I<:Integer,R}

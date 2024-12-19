@@ -68,26 +68,26 @@ function remove_components!(A; threshold=0.0, min_length=1)
     return A
 end
 
-function tikhonov_regularisation!(Ā, A, β, dx, dy)
-    @. Ā[2:end-1, :] -= β * (A[1:end-2, :] - 2.0 * A[2:end-1, :] + A[3:end, :]) / dx^2
-    @. Ā[:, 2:end-1] -= β * (A[:, 1:end-2] - 2.0 * A[:, 2:end-1] + A[:, 3:end]) / dy^2
+function tikhonov_regularisation!(Ā, A, γ_reg, dx, dy)
+    @. Ā[2:end-1, :] -= γ_reg * (A[1:end-2, :] - 2.0 * A[2:end-1, :] + A[3:end, :]) / dx^2
+    @. Ā[:, 2:end-1] -= γ_reg * (A[:, 1:end-2] - 2.0 * A[:, 2:end-1] + A[:, 3:end]) / dy^2
     #! format: off
-    @. Ā[1  , :] -= β * (-A[1    , :] + A[2  , :]) / dx^2
-    @. Ā[end, :] -= β * ( A[end-1, :] - A[end, :]) / dx^2
-    @. Ā[:,   1] -= β * (-A[:,     1] + A[:,   2]) / dy^2
-    @. Ā[:, end] -= β * ( A[:, end-1] - A[:, end]) / dy^2
+    @. Ā[1  , :] -= γ_reg * (-A[1    , :] + A[2  , :]) / dx^2
+    @. Ā[end, :] -= γ_reg * ( A[end-1, :] - A[end, :]) / dx^2
+    @. Ā[:,   1] -= γ_reg * (-A[:,     1] + A[:,   2]) / dy^2
+    @. Ā[:, end] -= γ_reg * ( A[:, end-1] - A[:, end]) / dy^2
     #! format: on
     return
 end
 
-function laplacian_smoothing!(A, β, dx, dy)
+function laplacian_smoothing!(A, γ_reg, dx, dy)
     S      = similar(A)
     α      = min(dx, dy)^2 / 4
-    nsteps = ceil(Int, β / α)
-    β      = -β / nsteps
+    nsteps = ceil(Int, γ_reg / α)
+    γ_reg  = -γ_reg / nsteps
     for _ in 1:nsteps
         copy!(S, A)
-        tikhonov_regularisation!(A, S, β, dx, dy)
+        tikhonov_regularisation!(A, S, γ_reg, dx, dy)
     end
     return A
 end

@@ -1,8 +1,4 @@
-using Glaide
-using CUDA
-using CairoMakie
-using Printf
-using JLD2
+using CUDA, Glaide, CairoMakie, Printf, JLD2
 
 Base.@kwdef struct InversionScenarioTimeDependent{LS}
     input_file::String
@@ -23,18 +19,17 @@ Base.@kwdef struct InversionScenarioTimeDependent{LS}
     line_search::LS
 end
 
-function time_dependent_inversion(scenario::InversionScenarioTimeDependent)
+function main(scenario::InversionScenarioTimeDependent)
     # unpack params
     (; input_file, output_dir, As_init, E, γ_reg, ωᵥ, ωₕ, maxiter, line_search) = scenario
 
     if ispath(output_dir)
-        @warn "path \"$(output_dir)\" already exists, skipping simulation; delete the directory to re-run"
-        return
+        rm(output_dir; recursive=true)
     end
 
     mkpath(output_dir)
 
-    model = TimeDependentSIA(input_file; debug_vis=false)
+    model = TimeDependentSIA(input_file; report=true, debug_vis=false)
 
     (; As, V, H, H_old) = model.fields
 
@@ -52,7 +47,7 @@ function time_dependent_inversion(scenario::InversionScenarioTimeDependent)
 
     fill!(As0, As_init)
     copy!(H, H_old)
-    
+
     solve!(model)
 
     objective = TimeDependentObjective(ωᵥ, ωₕ, V_obs, H_obs, γ_reg)
@@ -96,21 +91,10 @@ function time_dependent_inversion(scenario::InversionScenarioTimeDependent)
     return
 end
 
-for (ωᵥ, ωₕ) in ((0, 1), (1, 0), (1, 1))
-    synthetic_params = InversionScenarioTimeDependent(;
-                                                      input_file="../datasets/synthetic_50m.jld2",
-                                                      output_dir="../output/time_dependent_synthetic_50m_$(ωᵥ)_$(ωₕ)",
-                                                      ωᵥ=float(ωᵥ),
-                                                      ωₕ=float(ωₕ),
-                                                      line_search=BacktrackingLineSearch(; α_min=1e1, α_max=1e6))
-    time_dependent_inversion(synthetic_params)
-end
-
-for res in (200, 100, 50, 25)
-    aletsch_params = InversionScenarioTimeDependent(;
-                                                    input_file  = "../datasets/aletsch_$(res)m.jld2",
-                                                    output_dir  = "../output/time_dependent_aletsch_$(res)m",
-                                                    E           = 2.5e-1,
-                                                    line_search = BacktrackingLineSearch(; α_min=1e1, α_max=1e6))
-    time_dependent_inversion(aletsch_params)
-end
+synthetic_params = InversionScenarioTimeDependent(;
+                                                  input_file="datasets/synthetic_50m.jld2",
+                                                  output_dir="output/test_inversion",
+                                                  ωᵥ=1.0,
+                                                  ωₕ=0.0,
+                                                  line_search=BacktrackingLineSearch(; α_min=1e1, α_max=1e6))
+main(synthetic_params)

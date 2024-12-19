@@ -1,4 +1,4 @@
-using CairoMakie, Glaide
+using Glaide, CairoMakie
 
 function main()
     # geometry
@@ -24,8 +24,6 @@ function main()
     # numerical parameters
     # dx, dy = resolution, resolution
     nx, ny = ceil(Int, Lx / resolution), ceil(Int, Ly / resolution)
-    nx = cld(nx, 32) * 32
-    ny = cld(ny, 32) * 32
     dx, dy = Lx / nx, Ly / ny
 
     # if the resolution is fixed, domain extents need to be corrected
@@ -39,7 +37,7 @@ function main()
     scalars = TimeDependentScalars(; lx, ly, dt=Inf, b, mb_max, ela)
 
     # default solver parameters
-    numerics = TimeDependentNumerics(xc, yc; dmpswitch=2nx)
+    numerics = TimeDependentNumerics(xc, yc; dmpswitch=5nx)
 
     model = TimeDependentSIA(scalars, numerics; report=true, debug_vis=false)
 
@@ -76,8 +74,8 @@ function main()
 
     Ās = zero(model.fields.As)
 
-    @. model.adjoint_fields.H̄ = 1.0e0 * model.fields.H / $maximum(abs, model.fields.H)
-    @. model.adjoint_fields.V̄ = 1.0e6 * model.fields.V / $maximum(abs, model.fields.V)
+    @. model.adjoint_fields.H̄ = 1.0e-2 * model.fields.H / $maximum(abs, model.fields.H)
+    @. model.adjoint_fields.V̄ = 1.0e-2 * model.fields.V / $maximum(abs, model.fields.V)
 
     @time Glaide.solve_adjoint!(Ās, model)
 

@@ -1,4 +1,4 @@
-using Glaide, CairoMakie, BenchmarkTools, CUDA, Printf
+using Glaide, BenchmarkTools, CUDA, Printf
 
 function run(resolution)
     Lx, Ly = 20e3, 20e3
@@ -36,7 +36,7 @@ function run(resolution)
     scalars = TimeDependentScalars(; lx, ly, dt=Inf, b, mb_max, ela)
 
     # default solver parameters
-    numerics = TimeDependentNumerics(xc, yc; dmpswitch=5nx)
+    numerics = TimeDependentNumerics(xc, yc; dmpswitch=1nx)
 
     model = TimeDependentSIA(scalars, numerics; report=true, debug_vis=true)
 
@@ -48,38 +48,38 @@ function run(resolution)
 
     # set As to the background value
     fill!(model.fields.As, As_0)
-    
+
     # accumulation allowed everywhere
     fill!(model.fields.mb_mask, 1.0)
 
     (; r, z, B, H, H_old, As, mb_mask) = model.fields
     (; ρgn, A, n, b, mb_max, ela, dt) = model.scalars
-    
+
     # @time Glaide.residual!(r, z, B, H, H_old, A, As, ρgn, n, b, ela, mb_max, mb_mask, dt, dx, dy, Glaide.ComputeResidual())
     # @time Glaide.residual2!(r, z, B, H, H_old, A, As, ρgn, n, b, ela, mb_max, mb_mask, dt, dx, dy, Glaide.ComputeResidual())
 
+    A2_n2 = 2 / (n + 2) * A
+    _n3   = inv(n + 3)
+    _n2   = inv(n + 2)
+    _dt   = inv(dt)
+    _dx   = inv(dx)
+    _dy   = inv(dy)
+    nm1   = n - oneunit(n)
+
+    mode = Glaide.ComputeResidual()
+    # mode = Glaide.ComputePreconditionedResidual()
+    # mode = Glaide.ComputePreconditioner()
+
+    fun = @cuda launch = false Glaide._residual!(r, z, B, H, H_old, As, mb_mask, A2_n2, ρgn, b, mb_max, ela, _dt, _dx, _dy, _n3, _n2, n, nm1, mode)
+
+    @show CUDA.registers(fun)
+
     tt = @belapsed begin
-        Glaide.residual!($r,
-                         $z,
-                         $B,
-                         $H,
-                         $H_old,
-                         $A,
-                         $As,
-                         $ρgn,
-                         $n,
-                         $b,
-                         $ela,
-                         $mb_max,
-                         $mb_mask,
-                         $dt,
-                         $dx,
-                         $dy,
-                         Glaide.ComputeResidual())
+        Glaide.residual!($r, $z, $B, $H, $H_old, $As, $mb_mask, $A, $ρgn, $n, $b, $mb_max, $ela, $dt, $dx, $dy, $mode)
         CUDA.synchronize()
     end
 
-    Aeff = nx * ny * 6 * sizeof(Float64) / 1e9
+    Aeff = nx * ny * (6 * sizeof(Float64)) / 1e9
     Teff = Aeff / tt
 
     @printf("   resolution: %.0f m, time: %g s, effective memory bandwidth: %.3f GB/s\n", resolution, tt, Teff)
@@ -87,4 +87,4 @@ function run(resolution)
     return
 end
 
-run(10.0)
+run(5.0)

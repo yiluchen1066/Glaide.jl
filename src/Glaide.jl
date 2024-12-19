@@ -32,8 +32,6 @@ using Printf
 using CairoMakie
 using CUDA
 using Enzyme
-using ForwardDiff
-using DiffResults
 using StaticArrays
 using JLD2
 using ZipArchives
@@ -51,16 +49,9 @@ const RHOG_N          = (910 * 9.81)^3
 # surface mass balance model
 @inline ela_mass_balance(z, b, ela, mb_max) = min(b * (z - ela), mb_max)
 
-# CUDA launch configuration heuristics in 1D
-function launch_config(sz::Integer)
-    nthreads = 256
-    nblocks  = cld(sz, nthreads)
-    return nthreads, nblocks
-end
-
-# CUDA launch configuration heuristics in 2D
-function launch_config(sz::NTuple{2,Integer})
-    nthreads = 32, 8
+# CUDA launch configuration heuristics
+function launch_config(sz::NTuple{2,Integer}, ty=4)
+    nthreads = 32, ty
     nblocks  = cld.(sz, nthreads)
     return nthreads, nblocks
 end
@@ -77,9 +68,6 @@ include("macros.jl")
 
 # finite difference operators
 include("finite_difference.jl")
-
-# homogeneous and non-homogeneous Neumann boundary conditions
-include("boundary_conditions.jl")
 
 # SIA model and adjoint calls
 include("sia.jl")

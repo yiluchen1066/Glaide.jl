@@ -1,12 +1,12 @@
 struct SnapshotObjective{T<:Real,A<:AbstractMatrix{T}}
     ωᵥ::T
     V_obs::A
-    β_reg::T
+    γ_reg::T
 end
 
 function J(logAs, objective::SnapshotObjective, model::SnapshotSIA)
     # unpack
-    (; ωᵥ, V_obs, β_reg) = objective
+    (; ωᵥ, V_obs, γ_reg) = objective
     (; V)                = model.fields
     (; dx, dy)           = model.numerics
 
@@ -21,12 +21,12 @@ function J(logAs, objective::SnapshotObjective, model::SnapshotSIA)
                        sum(@. ((logAs[:, 2:end] - logAs[:, 1:end-1]) / dy)^2))
 
     # normalise and weight misfit
-    return ωᵥ * 0.5 * sum((V .- V_obs) .^ 2) + β_reg * 0.5 * J_reg
+    return ωᵥ * 0.5 * sum((V .- V_obs) .^ 2) + γ_reg * 0.5 * J_reg
 end
 
 function ∇J!(logĀs, logAs, objective::SnapshotObjective, model::SnapshotSIA)
     # unpack
-    (; ωᵥ, V_obs, β_reg) = objective
+    (; ωᵥ, V_obs, γ_reg) = objective
     (; V)                = model.fields
     (; V̄)                = model.adjoint_fields
     (; dx, dy)           = model.numerics
@@ -48,7 +48,7 @@ function ∇J!(logĀs, logAs, objective::SnapshotObjective, model::SnapshotSIA)
     # convert gradient to log-space
     @. logĀs *= model.fields.As
 
-    tikhonov_regularisation!(logĀs, logAs, dx * dy * β_reg, dx, dy)
+    tikhonov_regularisation!(logĀs, logAs, dx * dy * γ_reg, dx, dy)
 
     return
 end

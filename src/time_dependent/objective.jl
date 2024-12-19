@@ -3,12 +3,12 @@ struct TimeDependentObjective{T<:Real,A<:AbstractMatrix{T}}
     ωₕ::T
     V_obs::A
     H_obs::A
-    β_reg::T
+    γ_reg::T
 end
 
 function J(logAs, objective::TimeDependentObjective, model::TimeDependentSIA)
     # unpack
-    (; ωₕ, ωᵥ, H_obs, V_obs, β_reg) = objective
+    (; ωₕ, ωᵥ, H_obs, V_obs, γ_reg) = objective
     (; H, V)                        = model.fields
     (; dx, dy)                      = model.numerics
 
@@ -24,12 +24,12 @@ function J(logAs, objective::TimeDependentObjective, model::TimeDependentSIA)
 
     # normalise and weight misfit
     return ωₕ * 0.5 * sum((H .- H_obs) .^ 2) +
-           ωᵥ * 0.5 * sum((V .- V_obs) .^ 2) + β_reg * 0.5 * J_reg
+           ωᵥ * 0.5 * sum((V .- V_obs) .^ 2) + γ_reg * 0.5 * J_reg
 end
 
 function ∇J!(logĀs, logAs, objective::TimeDependentObjective, model::TimeDependentSIA)
     # unpack
-    (; ωₕ, ωᵥ, H_obs, V_obs, β_reg) = objective
+    (; ωₕ, ωᵥ, H_obs, V_obs, γ_reg) = objective
     (; H, V)                        = model.fields
     (; H̄, V̄)                        = model.adjoint_fields
     (; dx, dy)                      = model.numerics
@@ -49,7 +49,7 @@ function ∇J!(logĀs, logAs, objective::TimeDependentObjective, model::TimeDep
     # convert gradient to log-space
     @. logĀs *= model.fields.As
 
-    tikhonov_regularisation!(logĀs, logAs, dx * dy * β_reg, dx, dy)
+    tikhonov_regularisation!(logĀs, logAs, dx * dy * γ_reg, dx, dy)
 
     return
 end
