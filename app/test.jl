@@ -1,6 +1,13 @@
 using Glaide, CairoMakie
 
 function main()
+    # reference scales
+    Tref = SECONDS_IN_HOUR
+
+    # our scales
+    Tsc = 1.0
+    Lsc = 1.0
+
     # geometry
     Lx, Ly     = 20e3, 20e3
     resolution = 50.0
@@ -72,12 +79,12 @@ function main()
     # solve again
     @time solve!(model)
 
-    Ās = zero(model.fields.As)
+    # Ās = zero(model.fields.As)
 
-    @. model.adjoint_fields.H̄ = 1.0e-2 * model.fields.H / $maximum(abs, model.fields.H)
-    @. model.adjoint_fields.V̄ = 1.0e-2 * model.fields.V / $maximum(abs, model.fields.V)
+    # @. model.adjoint_fields.H̄ = 1.0e-2 * model.fields.H / $maximum(abs, model.fields.H)
+    # @. model.adjoint_fields.V̄ = 1.0e-2 * model.fields.V / $maximum(abs, model.fields.V)
 
-    @time Glaide.solve_adjoint!(Ās, model)
+    # @time Glaide.solve_adjoint!(Ās, model)
 
     with_theme(theme_latexfonts()) do
         B       = Array(model.fields.B)

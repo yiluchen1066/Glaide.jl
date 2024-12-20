@@ -21,6 +21,7 @@ PlutoUI = "7f904dfe-b85e-4ff6-b463-dae2292396a8"
 Printf = "de0858da-6303-5e67-8744-51eddeeeb8d7"
 Rasters = "a3a2b9e3-a471-40c9-b274-f788e487c689"
 StaticArrays = "90137ffa-7385-5640-81b9-e52037218182"
+Unitful = "1986cc42-f94f-5a68-af5c-568840ba703d"
 ZipArchives = "49080126-0e18-4c2a-b176-c102e4b3760c"
 
 [compat]

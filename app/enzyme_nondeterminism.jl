@@ -23,6 +23,11 @@ end
 innˣ(S::StaticMatrix{3,<:Any}) = S[SVector(2), :]
 innʸ(S::StaticMatrix{<:Any,3}) = S[:, SVector(2)]
 
+lˣ(S::StaticMatrix{3,3}) = S[SVector(1, 2), SVector(2)]
+rˣ(S::StaticMatrix{3,3}) = S[SVector(2, 3), SVector(2)]
+lʸ(S::StaticMatrix{3,3}) = S[SVector(2), SVector(1, 2)]
+rʸ(S::StaticMatrix{3,3}) = S[SVector(2), SVector(2, 3)]
+
 # extract 3x3 stencil
 function st3x3(M, ix, iy)
     nx, ny = oftype.((ix, iy), size(M))
@@ -42,38 +47,42 @@ end
 ∇(fun, args::Vararg{Any,N}) where {N} = (Enzyme.autodiff_deferred(Enzyme.Reverse, Const(fun), Const, args...); return)
 const DupNN = DuplicatedNoNeed
 
-function residual(H, n, d)
+function residual(H, B, n, d)
+    S = B .+ H
+
     # surface gradient
-    ∇Hˣ = δˣₐ(H)
-    ∇Hʸ = δʸₐ(H)
+    ∇Sˣ = δˣₐ(S)
+    ∇Sʸ = δʸₐ(S)
 
     # surface gradient magnitude
-    ∇Sˣ = sqrt.(innʸ(∇Hˣ) .^ 2 .+ av4(∇Hʸ) .^ 2) .^ (n - 1)
-    ∇Sʸ = sqrt.(av4(∇Hˣ) .^ 2 .+ innˣ(∇Hʸ) .^ 2) .^ (n - 1)
+    ∇Sⁿˣ = sqrt.(innʸ(∇Sˣ) .^ 2 .+ av4(∇Sʸ) .^ 2) .^ (n - 1)
+    ∇Sⁿʸ = sqrt.(av4(∇Sˣ) .^ 2 .+ innˣ(∇Sʸ) .^ 2) .^ (n - 1)
 
-    qˣ = ∇Sˣ .* δˣ(H .^ (n + 3))
-    qʸ = ∇Sʸ .* δʸ(H .^ (n + 3))
+    qˣ = ∇Sⁿˣ .* δˣ(H .^ (n + 3)) .+ δˣ(B) .* lˣ(H .^ (n + 2))
+    qʸ = ∇Sⁿʸ .* δʸ(H .^ (n + 3)) .+ δʸ(B) .* lʸ(H .^ (n + 2))
 
     r = d * (δˣ(qˣ) + δʸ(qʸ)) + H[2, 2]
 
     return r
 end
 
-function gpu_residual!(r, H, n, d)
+function gpu_residual!(r, H, B, n, d)
     ix = (blockIdx().x - Int32(1)) * blockDim().x + threadIdx().x
     iy = (blockIdx().y - Int32(1)) * blockDim().y + threadIdx().y
 
     Hₗ        = st3x3(H, ix, iy)
-    r[ix, iy] = residual(Hₗ, n, d)
+    Bₗ        = st3x3(B, ix, iy)
+    r[ix, iy] = residual(Hₗ, Bₗ, n, d)
 
     return
 end
 
-function cpu_residual!(r, H, n, d)
+function cpu_residual!(r, H, B, n, d)
     nx, ny = size(H)
     for ix in 1:nx, iy in 1:ny
         Hₗ        = st3x3(H, ix, iy)
-        r[ix, iy] = residual(Hₗ, n, d)
+        Bₗ        = st3x3(B, ix, iy)
+        r[ix, iy] = residual(Hₗ, Bₗ, n, d)
     end
     return
 end
@@ -85,26 +94,30 @@ function gpu_runme()
     n = 3
     d = 1e0
     # arrays
-    H1 = [Float64(i/nx + j/ny) for i in 1:nx, j in 1:ny]
+    H1 = [(i/nx + 0*j/ny) for i in 1:nx, j in 1:ny]
+    B1 = [sin(4π * (i/nx + 0*j/ny)) for i in 1:nx, j in 1:ny]
     r1 = zeros(Float64, nx, ny)
     H2 = CuArray(H1)
+    B2 = CuArray(B1)
     r2 = CuArray(r1)
     # shadows
-    r̄1 = ones(Float64, nx, ny)
+    r̄1 = rand(Float64, nx, ny)
     H̄1 = zeros(Float64, nx, ny)
-    r̄2 = CUDA.ones(Float64, nx, ny)
+    r̄2 = CuArray(r̄1)
     H̄2 = CUDA.zeros(Float64, nx, ny)
 
-    cpu_residual!(r1, H1, n, d)
-    Enzyme.autodiff(Enzyme.Reverse, Const(cpu_residual!), DupNN(r1, r̄1), DupNN(H1, H̄1), Const(n), Const(d))
+    cpu_residual!(r1, H1, B1, n, d)
+    Enzyme.autodiff(Enzyme.Reverse, Const(cpu_residual!), DupNN(r1, r̄1), DupNN(H1, H̄1), Const(B1), Const(n), Const(d))
 
     H̄1 = CuArray(H̄1)
+    
+    r̄ = copy(r̄2)
 
     for i in 1:1000
-        r̄2 .= 1.0
+        r̄2 .= r̄
         H̄2 .= 0.0
-        @cuda threads = nthreads gpu_residual!(r2, H2, n, d)
-        @cuda threads = nthreads ∇(gpu_residual!, DupNN(r2, r̄2), DupNN(H2, H̄2), Const(n), Const(d))
+        @cuda threads = nthreads gpu_residual!(r2, H2, B2, n, d)
+        @cuda threads = nthreads ∇(gpu_residual!, DupNN(r2, r̄2), DupNN(H2, H̄2), Const(B2), Const(n), Const(d))
 
         if H̄1 != H̄2
             println("r1:")
