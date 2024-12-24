@@ -10,9 +10,6 @@ Base.@propagate_inbounds function residual(B, H, H_old, Aₛ, mb_mask, A2_n2, ρ
     # surface elevation
     S = B .+ H
 
-    # bedrock gradient
-    ∇Bˣ = δˣ(B) .* _dx
-    ∇Bʸ = δʸ(B) .* _dy
 
     # surface gradient
     ∇Sˣˣ = δˣₐ(S) .* _dx
@@ -35,6 +32,10 @@ Base.@propagate_inbounds function residual(B, H, H_old, Aₛ, mb_mask, A2_n2, ρ
     # diffusivity of the sliding component
     Dˣ₂ = Γˣ₂ .* _n2
     Dʸ₂ = Γʸ₂ .* _n2
+
+    # bedrock gradient
+    ∇Bˣ = δˣ(B) .* _dx
+    ∇Bʸ = δʸ(B) .* _dy
 
     # velocity of the deformational component
     Wˣ₁ = .-Γˣ₁ .* ∇Bˣ
