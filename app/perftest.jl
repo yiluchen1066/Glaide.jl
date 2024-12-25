@@ -1,6 +1,6 @@
 using Glaide, BenchmarkTools, CUDA, Printf
 
-function run(resolution)
+function runme(resolution)
     Lx, Ly = 20e3, 20e3
 
     # ice flow parameters
@@ -87,4 +87,4 @@ function run(resolution)
     return
 end
 
-run(5.0)
+runme(5.0)
