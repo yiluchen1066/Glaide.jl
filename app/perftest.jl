@@ -58,27 +58,19 @@ function run(resolution)
     # @time Glaide.residual!(r, z, B, H, H_old, A, As, ρgn, n, b, ela, mb_max, mb_mask, dt, dx, dy, Glaide.ComputeResidual())
     # @time Glaide.residual2!(r, z, B, H, H_old, A, As, ρgn, n, b, ela, mb_max, mb_mask, dt, dx, dy, Glaide.ComputeResidual())
 
-    ρgnA2_n2        = 2 / (n + 2) * ρgnA
-    _n3             = inv(n + 3)
-    _n2             = inv(n + 2)
-    _dt             = inv(dt)
-    _dx             = inv(dx)
-    _dy             = inv(dy)
-    _n3_dx          = _n3 * _dx
-    _n3_dy          = _n3 * _dy
-    _n2_dx          = _n2 * _dx
-    _n2_dy          = _n2 * _dy
-    _dx2            = _dx^2
-    _dy2            = _dy^2
-    nm1             = n - oneunit(n)
-    ρgnA2_n2_dx_nm1 = ρgnA2_n2 * _dx^nm1
-    ρgnA2_n2_dy_nm1 = ρgnA2_n2 * _dy^nm1
+    ρgnA2_n2 = 2 / (n + 2) * ρgnA
+    _n3      = inv(n + 3)
+    _n2      = inv(n + 2)
+    _dt      = inv(dt)
+    _dx      = inv(dx)
+    _dy      = inv(dy)
+    nm1      = n - oneunit(n)
 
     mode = Glaide.ComputeResidual()
     # mode = Glaide.ComputePreconditionedResidual()
     # mode = Glaide.ComputePreconditioner()
 
-    fun = @cuda launch = false Glaide._residual!(r, z, B, H, H_old, ρgnAs, mb_mask, ρgnA2_n2_dx_nm1, ρgnA2_n2_dy_nm1, b, mb_max, ela, _dt, _dx2, _dy2, _n3_dx, _n3_dy, _n2_dx, _n2_dy, n, nm1, mode)
+    fun = @cuda launch = false Glaide._residual!(r, z, B, H, H_old, ρgnAs, mb_mask, ρgnA2_n2, b, mb_max, ela, _dt, _n3, _n2, _dx, _dy, n, nm1, mode)
 
     @show CUDA.registers(fun)
 

@@ -21,7 +21,7 @@ function ∇residual!(r, z, B, H, H_old, ρgnAₛ, mb_mask, ρgnA, n, b, mb_max,
     nm1      = n - oneunit(n)
 
     @cuda threads = nthreads blocks = nblocks ∇(_residual!, r, z, B, H, H_old, ρgnAₛ, mb_mask,
-                                                Const.((ρgnA2_n2, b, mb_max, ela, _dt, _dx, _dy, _n3, _n2, n, nm1, mode))...)
+                                                Const.((ρgnA2_n2, b, mb_max, ela, _dt, _n3, _n2, _dx, _dy, n, nm1, mode))...)
 
     return
 end
