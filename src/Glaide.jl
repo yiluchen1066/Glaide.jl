@@ -25,7 +25,7 @@ export laplacian_smoothing, laplacian_smoothing!
 export remove_components, remove_components!
 
 # constants
-export SECONDS_IN_YEAR, GLEN_A, GLEN_N, RHOG_N
+export SECONDS_IN_YEAR, GLEN_A, GLEN_N, RHOGN
 
 using LinearAlgebra
 using Printf
@@ -42,9 +42,9 @@ using LLVM
 
 # define consntants
 const SECONDS_IN_YEAR = 3600 * 24 * 365
-const GLEN_A          = 2.5e-24
 const GLEN_N          = 3
-const RHOG_N          = (910 * 9.81)^3
+const RHOGN           = (910 * 9.81)^GLEN_N
+const RHOGNA          = RHOGN * 2.5e-24
 
 # surface mass balance model
 @inline ela_mass_balance(z, b, ela, mb_max) = min(b * (z - ela), mb_max)

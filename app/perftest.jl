@@ -4,7 +4,7 @@ function run(resolution)
     Lx, Ly = 20e3, 20e3
 
     # ice flow parameters
-    As_0 = 1e-22
+    ρgnAs_0 = RHOGN * 1e-22
 
     # bed elevation parameters
     B_0 = 1000.0
@@ -47,35 +47,43 @@ function run(resolution)
     copy!(model.fields.B, B_h)
 
     # set As to the background value
-    fill!(model.fields.As, As_0)
+    fill!(model.fields.ρgnAs, ρgnAs_0)
 
     # accumulation allowed everywhere
     fill!(model.fields.mb_mask, 1.0)
 
-    (; r, z, B, H, H_old, As, mb_mask) = model.fields
-    (; ρgn, A, n, b, mb_max, ela, dt) = model.scalars
+    (; r, z, B, H, H_old, ρgnAs, mb_mask) = model.fields
+    (; ρgnA, n, b, mb_max, ela, dt)       = model.scalars
 
     # @time Glaide.residual!(r, z, B, H, H_old, A, As, ρgn, n, b, ela, mb_max, mb_mask, dt, dx, dy, Glaide.ComputeResidual())
     # @time Glaide.residual2!(r, z, B, H, H_old, A, As, ρgn, n, b, ela, mb_max, mb_mask, dt, dx, dy, Glaide.ComputeResidual())
 
-    A2_n2 = 2 / (n + 2) * A
-    _n3   = inv(n + 3)
-    _n2   = inv(n + 2)
-    _dt   = inv(dt)
-    _dx   = inv(dx)
-    _dy   = inv(dy)
-    nm1   = n - oneunit(n)
+    ρgnA2_n2        = 2 / (n + 2) * ρgnA
+    _n3             = inv(n + 3)
+    _n2             = inv(n + 2)
+    _dt             = inv(dt)
+    _dx             = inv(dx)
+    _dy             = inv(dy)
+    _n3_dx          = _n3 * _dx
+    _n3_dy          = _n3 * _dy
+    _n2_dx          = _n2 * _dx
+    _n2_dy          = _n2 * _dy
+    _dx2            = _dx^2
+    _dy2            = _dy^2
+    nm1             = n - oneunit(n)
+    ρgnA2_n2_dx_nm1 = ρgnA2_n2 * _dx^nm1
+    ρgnA2_n2_dy_nm1 = ρgnA2_n2 * _dy^nm1
 
     mode = Glaide.ComputeResidual()
     # mode = Glaide.ComputePreconditionedResidual()
     # mode = Glaide.ComputePreconditioner()
 
-    fun = @cuda launch = false Glaide._residual!(r, z, B, H, H_old, As, mb_mask, A2_n2, ρgn, b, mb_max, ela, _dt, _dx, _dy, _n3, _n2, n, nm1, mode)
+    fun = @cuda launch = false Glaide._residual!(r, z, B, H, H_old, ρgnAs, mb_mask, ρgnA2_n2_dx_nm1, ρgnA2_n2_dy_nm1, b, mb_max, ela, _dt, _dx2, _dy2, _n3_dx, _n3_dy, _n2_dx, _n2_dy, n, nm1, mode)
 
     @show CUDA.registers(fun)
 
     tt = @belapsed begin
-        Glaide.residual!($r, $z, $B, $H, $H_old, $As, $mb_mask, $A, $ρgn, $n, $b, $mb_max, $ela, $dt, $dx, $dy, $mode)
+        Glaide.residual!($r, $z, $B, $H, $H_old, $ρgnAs, $mb_mask, $ρgnA, $n, $b, $mb_max, $ela, $dt, $dx, $dy, $mode)
         CUDA.synchronize()
     end
 

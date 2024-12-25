@@ -38,11 +38,11 @@ function TimeDependentSIA(path::AbstractString, adjoint_numerics=nothing; report
 
     dfields = data["fields"]
 
-    (; nx, ny, xc, yc)                        = data["numerics"]
-    (; lx, ly, n, A, ρgn, b, mb_max, ela, dt) = data["scalars"]
+    (; nx, ny, xc, yc)                      = data["numerics"]
+    (; lx, ly, n, ρgnA, b, mb_max, ela, dt) = data["scalars"]
 
     fields   = TimeDependentFields(nx, ny)
-    scalars  = TimeDependentScalars(lx, ly, n, A, ρgn, b, mb_max, ela, dt)
+    scalars  = TimeDependentScalars(lx, ly, n, ρgnA, b, mb_max, ela, dt)
     numerics = TimeDependentNumerics(xc, yc; numeric_overrides...)
 
     adjoint_fields = TimeDependentAdjointFields(nx, ny)
@@ -68,8 +68,8 @@ The surface velocity is also computed.
 """
 function solve!(model::TimeDependentSIA)
     # unpack SIA parameters
-    (; B, H, H_old, V, mb_mask, As, r, r0, z, p, d) = model.fields
-    (; ρgn, A, n, b, mb_max, ela, dt)               = model.scalars
+    (; B, H, H_old, V, mb_mask, ρgnAs, r, r0, z, p, d) = model.fields
+    (; ρgnA, n, b, mb_max, ela, dt)                    = model.scalars
 
     # unpack numerical parameters
     (; nx, ny, dx, dy, α, dmpswitch, ndmp, maxiter, ncheck, εtol) = model.numerics
@@ -82,7 +82,7 @@ function solve!(model::TimeDependentSIA)
     end
 
     # initialise search direction
-    residual!(r, z, B, H, H_old, As, mb_mask, A, ρgn, n, b, mb_max, ela, dt, dx, dy, ComputePreconditionedResidual())
+    residual!(r, z, B, H, H_old, ρgnAs, mb_mask, ρgnA, n, b, mb_max, ela, dt, dx, dy, ComputePreconditionedResidual())
     copy!(p, z)
 
     # iterative loop
@@ -101,7 +101,7 @@ function solve!(model::TimeDependentSIA)
             copy!(r0, r)
         end
 
-        residual!(r, z, B, H, H_old, As, mb_mask, A, ρgn, n, b, mb_max, ela, dt, dx, dy, ComputePreconditionedResidual())
+        residual!(r, z, B, H, H_old, ρgnAs, mb_mask, ρgnA, n, b, mb_max, ela, dt, dx, dy, ComputePreconditionedResidual())
 
         if (iter > dmpswitch) && (iter % ndmp == 0)
             dkyk, yy = mapreduce((_r, _r0, _p) -> (_p * (_r - _r0), (_r - _r0)^2), (x, y) -> x .+ y, r, r0, p; init=(0.0, 0.0))
@@ -117,7 +117,7 @@ function solve!(model::TimeDependentSIA)
 
             # characteristic length and velocity scales
             lsc = maximum(H)
-            vsc = ρgn * (2 / (n + 2) * A * lsc^(n + 1) + maximum(As) * lsc^(n - 1))
+            vsc = 2 / (n + 2) * ρgnA * lsc^(n + 1) + maximum(ρgnAs) * lsc^(n - 1)
 
             # compute absolute and relative errors
             err_abs = maximum(abs, r) / vsc
@@ -148,15 +148,15 @@ function solve!(model::TimeDependentSIA)
     end
 
     # compute surface velocity
-    surface_velocity!(V, H, B, As, A, ρgn, n, dx, dy)
+    surface_velocity!(V, H, B, ρgnAs, ρgnA, n, dx, dy)
 
     return
 end
 
-function solve_adjoint!(Ās, model::TimeDependentSIA)
+function solve_adjoint!(ρgnĀs, model::TimeDependentSIA)
     # unpack forward parameters
-    (; B, H, H_old, V, mb_mask, As, r, r0, z, p, d) = model.fields
-    (; ρgn, A, n, b, mb_max, ela, dt)               = model.scalars
+    (; B, H, H_old, V, mb_mask, ρgnAs, r, r0, z, p, d) = model.fields
+    (; ρgnA, n, b, mb_max, ela, dt)                    = model.scalars
 
     # unpack adjoint state and shadows
     (; ψ, r̄, z̄, H̄, V̄, ∂J_∂H) = model.adjoint_fields
@@ -177,26 +177,26 @@ function solve_adjoint!(Ās, model::TimeDependentSIA)
     fill!(p, 0.0)
 
     # Enzyme accumulates results in-place, initialise with zeros
-    fill!(Ās, 0.0)
+    fill!(ρgnĀs, 0.0)
 
     # first propagate partial velocity derivatives
     ∇surface_velocity!(DupNN(V, V̄), DupNN(H, H̄),
-                       Const(B), DupNN(As, Ās),
-                       A, ρgn, n, dx, dy)
+                       Const(B), DupNN(ρgnAs, ρgnĀs),
+                       ρgnA, n, dx, dy)
 
     # Enzyme overwrites memory, save array
     copy!(∂J_∂H, H̄)
 
     # compute preconditioner
-    residual!(r, z, B, H, H_old, As, mb_mask, A, ρgn, n, b, mb_max, ela, dt, dx, dy, ComputePreconditioner())
+    residual!(r, z, B, H, H_old, ρgnAs, mb_mask, ρgnA, n, b, mb_max, ela, dt, dx, dy, ComputePreconditioner())
 
     # initialize shadow variables (Enzyme accumulates derivatives in-place)
     copy!(r̄, ψ)
 
     ∇residual!(DupNN(r, r̄), Const(z),
                Const(B), DupNN(H, H̄), Const(H_old),
-               Const(As), Const(mb_mask),
-               A, ρgn, n, b, mb_max, ela, dt, dx, dy,
+               Const(ρgnAs), Const(mb_mask),
+               ρgnA, n, b, mb_max, ela, dt, dx, dy,
                ComputeResidual())
 
     @. z̄ = z * H̄
@@ -224,8 +224,8 @@ function solve_adjoint!(Ās, model::TimeDependentSIA)
 
         ∇residual!(DupNN(r, r̄), Const(z),
                    Const(B), DupNN(H, H̄), Const(H_old),
-                   Const(As), Const(mb_mask),
-                   A, ρgn, n, b, mb_max, ela, dt, dx, dy,
+                   Const(ρgnAs), Const(mb_mask),
+                   ρgnA, n, b, mb_max, ela, dt, dx, dy,
                    ComputeResidual())
 
         @. z̄ = z * H̄
@@ -275,8 +275,8 @@ function solve_adjoint!(Ās, model::TimeDependentSIA)
     # propagate derivatives w.r.t. sliding parameter
     ∇residual!(DupNN(r, r̄), Const(z),
                Const(B), Const(H), Const(H_old),
-               DupNN(As, Ās), Const(mb_mask),
-               A, ρgn, n, b, mb_max, ela, dt, dx, dy,
+               DupNN(ρgnAs, ρgnĀs), Const(mb_mask),
+               ρgnA, n, b, mb_max, ela, dt, dx, dy,
                ComputeResidual())
 
     return

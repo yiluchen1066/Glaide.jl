@@ -2,15 +2,15 @@
 
 function create_debug_visualisation(model)
     # unpack
-    (; H, B, As, V)    = model.fields
-    (; A, ρgn, n)      = model.scalars
+    (; H, B, ρgnAs, V) = model.fields
+    (; ρgnA, n)        = model.scalars
     (; dx, dy, xc, yc) = model.numerics
 
-    surface_velocity!(V, H, B, As, A, ρgn, n, dx, dy)
+    surface_velocity!(V, H, B, ρgnAs, ρgnA, n, dx, dy)
 
     vis_fields = (V  = Array(V),
                   H  = Array(H),
-                  As = Array(log10.(As)))
+                  As = Array(log10.(ρgnAs)))
 
     conv_hist = (err_abs = Point2{Float64}[],
                  err_rel = Point2{Float64}[])
@@ -28,7 +28,7 @@ function create_debug_visualisation(model)
     # make heatmaps
     hms = (heatmap!(axs[1], xc, yc, vis_fields.H; colormap=:turbo),
            heatmap!(axs[2], xc, yc, vis_fields.V; colormap=:turbo, colorrange=(0, 1e-5)),
-           heatmap!(axs[3], xc, yc, vis_fields.As; colormap=:turbo))
+           heatmap!(axs[3], xc, yc, vis_fields.ρgnAs; colormap=:turbo))
 
     # make line plots
     plt = (scatterlines!(axs[4], conv_hist.err_abs; label="absolute"),
@@ -48,11 +48,11 @@ function update_debug_visualisation!(vis, model, iter, errs)
     (; fig, axs, hms, plt, vis_fields, conv_hist) = vis
 
     # unpack
-    (; H, B, As, V) = model.fields
-    (; A, ρgn, n)   = model.scalars
-    (; dx, dy)      = model.numerics
+    (; H, B, ρgnAs, V) = model.fields
+    (; ρgnA, n)        = model.scalars
+    (; dx, dy)         = model.numerics
 
-    surface_velocity!(V, H, B, As, A, ρgn, n, dx, dy)
+    surface_velocity!(V, H, B, ρgnAs, ρgnA, n, dx, dy)
 
     # update convergence history
     push!(conv_hist.err_abs, Point2(iter, errs.err_abs))
@@ -61,12 +61,12 @@ function update_debug_visualisation!(vis, model, iter, errs)
     # copy data from GPU to CPU for visualisation
     copy!(vis_fields.H, H)
     copy!(vis_fields.V, V)
-    copy!(vis_fields.As, log10.(As))
+    copy!(vis_fields.As, log10.(ρgnAs))
 
     # update heatmaps
     hms[1][3] = vis_fields.H
     hms[2][3] = vis_fields.V
-    hms[3][3] = vis_fields.As
+    hms[3][3] = vis_fields.ρgnAs
 
     # update plots
     plt[1][1] = conv_hist.err_abs

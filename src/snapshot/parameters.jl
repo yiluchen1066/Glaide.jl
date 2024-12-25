@@ -1,7 +1,7 @@
 struct SnapshotFields{A<:AbstractArray{<:Real}}
     B::A
     H::A
-    As::A
+    ρgnAs::A
     V::A
 end
 function SnapshotFields(nx, ny, T=Float64)
@@ -20,11 +20,10 @@ mutable struct SnapshotScalars{T<:Real,NP<:Real}
     lx::T
     ly::T
     n::NP
-    A::T
-    ρgn::T
+    ρgnA::T
 end
-function SnapshotScalars(; lx, ly, n=GLEN_N, A0=GLEN_A, E=1.0, ρgn=RHOG_N)
-    return SnapshotScalars(lx, ly, n, A0 * E, ρgn)
+function SnapshotScalars(; lx, ly, n=GLEN_N, A0=RHOGNA, E=1.0)
+    return SnapshotScalars(lx, ly, n, A0 * E)
 end
 
 struct SnapshotNumerics{T<:Real,I<:Integer,R}

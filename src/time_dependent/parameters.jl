@@ -2,7 +2,7 @@ struct TimeDependentFields{A,B}
     B::A
     H::A
     H_old::A
-    As::A
+    ρgnAs::A
     V::A
     mb_mask::B
     r::A
@@ -47,15 +47,14 @@ mutable struct TimeDependentScalars{T<:Real,NP<:Real}
     lx::T
     ly::T
     n::NP
-    A::T
-    ρgn::T
+    ρgnA::T
     b::T
     mb_max::T
     ela::T
     dt::T
 end
-function TimeDependentScalars(; lx, ly, n=GLEN_N, A0=GLEN_A, E=1.0, ρgn=RHOG_N, b, mb_max, ela, dt)
-    return TimeDependentScalars(lx, ly, n, A0 * E, ρgn, b, mb_max, ela, dt)
+function TimeDependentScalars(; lx, ly, n=GLEN_N, ρgnA0=RHOGNA, E=1.0, b, mb_max, ela, dt)
+    return TimeDependentScalars(lx, ly, n, ρgnA0 * E, b, mb_max, ela, dt)
 end
 
 # numerics

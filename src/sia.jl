@@ -3,39 +3,38 @@ struct ComputePreconditionedResidual end
 struct ComputePreconditioner end
 
 # CUDA kernels
-Base.@propagate_inbounds function residual(B, H, H_old, Aₛ, mb_mask, A2_n2, ρgn, b, mb_max, ela, _dt, _dx, _dy, _n3, _n2, n, nm1, mode)
+Base.@propagate_inbounds function residual(B, H, H_old, ρgnAₛ, mb_mask, ρgnA2_n2_dx_nm1, ρgnA2_n2_dy_nm1, b, mb_max, ela, _dt, _dx2, _dy2, _n3_dx, _n3_dy, _n2_dx, _n2_dy, n, nm1, mode)
     # contract
     LLVM.Interop.assume(n > 0 && nm1 > 0)
 
     # surface elevation
     S = B .+ H
 
-
     # surface gradient
-    ∇Sˣˣ = δˣₐ(S) .* _dx
-    ∇Sʸʸ = δʸₐ(S) .* _dy
+    ∇Sˣˣ = δˣₐ(S)
+    ∇Sʸʸ = δʸₐ(S)
 
     # surface gradient magnitude
     ∇Sˣₙ = sqrt.(innʸ(∇Sˣˣ) .^ 2 .+ av4(∇Sʸʸ) .^ 2) .^ nm1
     ∇Sʸₙ = sqrt.(av4(∇Sˣˣ) .^ 2 .+ innˣ(∇Sʸʸ) .^ 2) .^ nm1
 
-    Γˣ₁ = A2_n2 .* ∇Sˣₙ
-    Γʸ₁ = A2_n2 .* ∇Sʸₙ
+    Γˣ₁ = ρgnA2_n2_dx_nm1 .* ∇Sˣₙ
+    Γʸ₁ = ρgnA2_n2_dy_nm1 .* ∇Sʸₙ
 
-    Γˣ₂ = avˣ(Aₛ) .* ∇Sˣₙ
-    Γʸ₂ = avʸ(Aₛ) .* ∇Sʸₙ
+    Γˣ₂ = avˣ(ρgnAₛ) .* ∇Sˣₙ
+    Γʸ₂ = avʸ(ρgnAₛ) .* ∇Sʸₙ
 
     # diffusivity of the deformational component
-    Dˣ₁ = Γˣ₁ .* _n3
-    Dʸ₁ = Γʸ₁ .* _n3
+    Dˣ₁ = Γˣ₁ .* (_n3_dx)
+    Dʸ₁ = Γʸ₁ .* (_n3_dy)
 
     # diffusivity of the sliding component
-    Dˣ₂ = Γˣ₂ .* _n2
-    Dʸ₂ = Γʸ₂ .* _n2
+    Dˣ₂ = Γˣ₂ .* (_n2_dx)
+    Dʸ₂ = Γʸ₂ .* (_n2_dy)
 
     # bedrock gradient
-    ∇Bˣ = δˣ(B) .* _dx
-    ∇Bʸ = δʸ(B) .* _dy
+    ∇Bˣ = δˣ(B)
+    ∇Bʸ = δʸ(B)
 
     # velocity of the deformational component
     Wˣ₁ = .-Γˣ₁ .* ∇Bˣ
@@ -63,16 +62,16 @@ Base.@propagate_inbounds function residual(B, H, H_old, Aₛ, mb_mask, A2_n2, ρ
     Wʸ₂⁻ = min.(Wʸ₂, 0)
 
     # fluxes
-    qˣ = .-(Dˣ₁ .* δˣ(Hⁿ³) .* _dx .+ Dˣ₂ .* δˣ(Hⁿ²) .* _dx) .+
+    qˣ = .-(Dˣ₁ .* δˣ(Hⁿ³) .+ Dˣ₂ .* δˣ(Hⁿ²)) .+
          Wˣ₁⁺ .* lˣ(Hⁿ²) .+ Wˣ₁⁻ .* rˣ(Hⁿ²) .+
          Wˣ₂⁺ .* lˣ(Hⁿ¹) .+ Wˣ₂⁻ .* rˣ(Hⁿ¹)
 
-    qʸ = .-(Dʸ₁ .* δʸ(Hⁿ³) .* _dy .+ Dʸ₂ .* δʸ(Hⁿ²) .* _dy) .+
+    qʸ = .-(Dʸ₁ .* δʸ(Hⁿ³) .+ Dʸ₂ .* δʸ(Hⁿ²)) .+
          Wʸ₁⁺ .* lʸ(Hⁿ²) .+ Wʸ₁⁻ .* rʸ(Hⁿ²) .+
          Wʸ₂⁺ .* lʸ(Hⁿ¹) .+ Wʸ₂⁻ .* rʸ(Hⁿ¹)
 
     r = -(H[2, 2] - H_old) * _dt
-    r += -ρgn * (δˣ(qˣ) * _dx + δʸ(qʸ) * _dy)
+    r += -(δˣ(qˣ) * _dx2 + δʸ(qʸ) * _dy2)
     r += ela_mass_balance(S[2, 2], b, ela, mb_max) * mb_mask
 
     if (mode == ComputePreconditionedResidual()) && (H[2, 2] == 0) && (r < 0)
@@ -82,20 +81,20 @@ Base.@propagate_inbounds function residual(B, H, H_old, Aₛ, mb_mask, A2_n2, ρ
     return r
 end
 
-function _residual!(r, z, B, H, H_old, Aₛ, mb_mask, A2_n2, ρgn, b, mb_max, ela, _dt, _dx, _dy, _n3, _n2, n, nm1, mode)
+function _residual!(r, z, B, H, H_old, ρgnAₛ, mb_mask, ρgnA2_n2_dx_nm1, ρgnA2_n2_dy_nm1, b, mb_max, ela, _dt, _dx2, _dy2, _n3_dx, _n3_dy, _n2_dx, _n2_dy, n, nm1, mode)
     @get_indices
     @inbounds if ix <= oftype(ix, size(r, 1)) && iy <= oftype(iy, size(r, 2))
         Hₗ  = st3x3(H, ix, iy)
         Bₗ  = st3x3(B, ix, iy)
-        Aₛₗ = st3x3(Aₛ, ix, iy)
+        Aₛₗ = st3x3(ρgnAₛ, ix, iy)
 
         H_o  = H_old[ix, iy]
         mb_m = mb_mask[ix, iy]
 
-        R(x) = residual(Bₗ, x, H_o, Aₛₗ, mb_m, A2_n2, ρgn, b, mb_max, ela, _dt, _dx, _dy, _n3, _n2, n, nm1, mode)
+        R(x) = residual(Bₗ, x, H_o, Aₛₗ, mb_m, ρgnA2_n2_dx_nm1, ρgnA2_n2_dy_nm1, b, mb_max, ela, _dt, _dx2, _dy2, _n3_dx, _n3_dy, _n2_dx, _n2_dy, n, nm1, mode)
 
         if mode == ComputeResidual()
-            r[ix, iy] = residual(Bₗ, Hₗ, H_o, Aₛₗ, mb_m, A2_n2, ρgn, b, mb_max, ela, _dt, _dx, _dy, _n3, _n2, n, nm1, mode)
+            r[ix, iy] = residual(Bₗ, Hₗ, H_o, Aₛₗ, mb_m, ρgnA2_n2_dx_nm1, ρgnA2_n2_dy_nm1, b, mb_max, ela, _dt, _dx2, _dy2, _n3_dx, _n3_dy, _n2_dx, _n2_dy, n, nm1, mode)
         elseif mode == ComputePreconditionedResidual()
             r̄, r[ix, iy] = Enzyme.autodiff_deferred(Enzyme.ReverseWithPrimal, Const(R), Active, Active(Hₗ))
             q             = 0.5sum(abs.(r̄[1])) + 1e-8
@@ -118,7 +117,7 @@ function _update_ice_thickness!(H, p, α)
     return
 end
 
-function _surface_velocity(H, B, Aₛ, A2_n1, ρgn, _dx, _dy, n, n1)
+function _surface_velocity(H, B, ρgnAₛ, ρgnA2_n1, _dx, _dy, n, n1)
     # contract
     LLVM.Interop.assume(n > 0 && n1 > 0)
 
@@ -131,34 +130,42 @@ function _surface_velocity(H, B, Aₛ, A2_n1, ρgn, _dx, _dy, n, n1)
 
     ∇Sₙ = sqrt(avˣ(∇Sˣ)^2 + avʸ(∇Sʸ)^2)^n
 
-    return ρgn * (A2_n1 * H[2, 2]^n1 + Aₛ * H[2, 2]^n) * ∇Sₙ
+    return (ρgnA2_n1 * H[2, 2]^n1 + ρgnAₛ * H[2, 2]^n) * ∇Sₙ
 end
 
 # surface velocity magnitude
-function _surface_velocity!(V, H, B, As, A2_n1, ρgn, _dx, _dy, n, n1)
+function _surface_velocity!(V, H, B, ρgnAs, ρgnA2_n1, _dx, _dy, n, n1)
     @get_indices
     @inbounds if ix <= size(V, 1) && iy <= size(V, 2)
         Hₗ = st3x3(H, ix, iy)
         Bₗ = st3x3(B, ix, iy)
-        V[ix, iy] = _surface_velocity(Hₗ, Bₗ, As[ix, iy], A2_n1, ρgn, _dx, _dy, n, n1)
+        V[ix, iy] = _surface_velocity(Hₗ, Bₗ, ρgnAs[ix, iy], ρgnA2_n1, _dx, _dy, n, n1)
     end
     return
 end
 
 # wrappers
-function residual!(r, z, B, H, H_old, Aₛ, mb_mask, A, ρgn, n, b, mb_max, ela, dt, dx, dy, mode)
+function residual!(r, z, B, H, H_old, ρgnAₛ, mb_mask, ρgnA, n, b, mb_max, ela, dt, dx, dy, mode)
     nthreads, nblocks = launch_config(size(H))
 
     # precompute constants
-    A2_n2 = 2 / (n + 2) * A
-    _n3   = inv(n + 3)
-    _n2   = inv(n + 2)
-    _dt   = inv(dt)
-    _dx   = inv(dx)
-    _dy   = inv(dy)
-    nm1   = n - oneunit(n)
+    ρgnA2_n2        = 2 / (n + 2) * ρgnA
+    _n3             = inv(n + 3)
+    _n2             = inv(n + 2)
+    _dt             = inv(dt)
+    _dx             = inv(dx)
+    _dy             = inv(dy)
+    _n3_dx          = _n3 * _dx
+    _n3_dy          = _n3 * _dy
+    _n2_dx          = _n2 * _dx
+    _n2_dy          = _n2 * _dy
+    _dx2            = _dx^2
+    _dy2            = _dy^2
+    nm1             = n - oneunit(n)
+    ρgnA2_n2_dx_nm1 = ρgnA2_n2 * _dx^nm1
+    ρgnA2_n2_dy_nm1 = ρgnA2_n2 * _dy^nm1
 
-    @cuda threads = nthreads blocks = nblocks _residual!(r, z, B, H, H_old, Aₛ, mb_mask, A2_n2, ρgn, b, mb_max, ela, _dt, _dx, _dy, _n3, _n2, n, nm1, mode)
+    @cuda threads = nthreads blocks = nblocks _residual!(r, z, B, H, H_old, ρgnAₛ, mb_mask, ρgnA2_n2_dx_nm1, ρgnA2_n2_dy_nm1, b, mb_max, ela, _dt, _dx2, _dy2, _n3_dx, _n3_dy, _n2_dx, _n2_dy, n, nm1, mode)
     return
 end
 
@@ -168,14 +175,14 @@ function update_ice_thickness!(H, p, α)
     return
 end
 
-function surface_velocity!(V, H, B, As, A, ρgn, n, dx, dy)
+function surface_velocity!(V, H, B, ρgnAs, ρgnA, n, dx, dy)
     nthreads, nblocks = launch_config(size(H))
 
     # precompute constants
-    A2_n1 = 2 / (n + 1) * A
-    n1    = n + oneunit(n)
-    _dx   = inv(dx)
-    _dy   = inv(dy)
+    ρgnA2_n1 = 2 / (n + 1) * ρgnA
+    n1       = n + oneunit(n)
+    _dx      = inv(dx)
+    _dy      = inv(dy)
 
-    @cuda threads = nthreads blocks = nblocks _surface_velocity!(V, H, B, As, A2_n1, ρgn, _dx, _dy, n, n1)
+    @cuda threads = nthreads blocks = nblocks _surface_velocity!(V, H, B, ρgnAs, ρgnA2_n1, _dx, _dy, n, n1)
 end

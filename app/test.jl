@@ -2,20 +2,19 @@ using Glaide, CairoMakie
 
 function main()
     # reference scales
-    Tref = SECONDS_IN_HOUR
+    Lref = 100.0
+    Tref = 3600.0 * 24.0 * 365.0
 
-    # our scales
-    Tsc = 1.0
-    Lsc = 1.0
+    # rescaled units
 
     # geometry
     Lx, Ly     = 20e3, 20e3
-    resolution = 50.0
+    resolution = 25.0
 
     # ice flow parameters
-    As_0 = 1e-22
-    As_a = 2.0
-    ω    = 3π
+    ρgnAs_0 = RHOGN * 1e-22
+    ρgnAs_a = 2.0
+    ω       = 3π
 
     # bed elevation parameters
     B_0 = 1000.0
@@ -53,7 +52,7 @@ function main()
                                                 exp(-(xc / W_2)^2 - (yc' / W_1)^2)))
 
     # set As to the background value
-    fill!(model.fields.As, As_0)
+    fill!(model.fields.ρgnAs, ρgnAs_0)
 
     # accumulation allowed everywhere
     fill!(model.fields.mb_mask, 1.0)
@@ -66,9 +65,9 @@ function main()
     V_old = Array(model.fields.V)
 
     # sliding parameter perturbation
-    As_synthetic = @. 10^(log10(As_0) + As_a * cos(ω * xc / lx) * sin(ω * yc' / ly))
+    ρgnAs_synthetic = @. 10^(log10(ρgnAs_0) + ρgnAs_a * cos(ω * xc / lx) * sin(ω * yc' / ly))
 
-    copyto!(model.fields.As, As_synthetic)
+    copyto!(model.fields.ρgnAs, ρgnAs_synthetic)
 
     # step change in mass balance (ELA +20%)
     model.scalars.ela = ela * 1.2
@@ -91,7 +90,7 @@ function main()
         H       = Array(model.fields.H)
         H_old   = Array(model.fields.H_old)
         V       = Array(model.fields.V)
-        As      = Array(model.fields.As)
+        ρgnAs   = Array(model.fields.ρgnAs)
         mb_mask = Array(model.fields.mb_mask)
 
         ice_mask_old = H_old .== 0
@@ -99,7 +98,7 @@ function main()
 
         H_old_v = copy(H_old)
         H_v     = copy(H)
-        As_v    = copy(As)
+        ρgnAs_v = copy(ρgnAs)
         # convert to m/a
         V_old_v = copy(V_old) .* SECONDS_IN_YEAR
         V_v     = copy(V) .* SECONDS_IN_YEAR
@@ -108,9 +107,9 @@ function main()
         H_old_v[ice_mask_old] .= NaN
         V_old_v[ice_mask_old] .= NaN
 
-        H_v[ice_mask]  .= NaN
-        As_v[ice_mask] .= NaN
-        V_v[ice_mask]  .= NaN
+        H_v[ice_mask]     .= NaN
+        ρgnAs_v[ice_mask] .= NaN
+        V_v[ice_mask]     .= NaN
 
         fig = Figure(; size=(800, 450), fontsize=16)
 
@@ -138,7 +137,7 @@ function main()
         axs[6].xlabel = L"x~\mathrm{[km]}"
 
         axs[1].title = L"B~\mathrm{[m]}"
-        axs[2].title = L"\log_{10}(As)"
+        axs[2].title = L"\log_{10}((\rho g)^n A_\mathrm{s})"
         axs[3].title = L"H_\mathrm{old}~\mathrm{[m]}"
         axs[4].title = L"H~\mathrm{[m]}"
         axs[5].title = L"V_\mathrm{old}~\mathrm{[m/a]}"
@@ -148,7 +147,7 @@ function main()
         xc_km, yc_km = xc / 1e3, yc / 1e3
 
         hms = (heatmap!(axs[1], xc_km, yc_km, B),
-               heatmap!(axs[2], xc_km, yc_km, log10.(As_v)),
+               heatmap!(axs[2], xc_km, yc_km, log10.(ρgnAs_v)),
                heatmap!(axs[3], xc_km, yc_km, H_old_v),
                heatmap!(axs[4], xc_km, yc_km, H_v),
                heatmap!(axs[5], xc_km, yc_km, V_old_v),
