@@ -98,7 +98,7 @@ function main()
 
         H_old_v = copy(H_old)
         H_v     = copy(H)
-        ρgnAs_v = copy(ρgnAs)
+        As_v    = copy(ρgnAs ./ RHOGN)
         # convert to m/a
         V_old_v = copy(V_old) .* SECONDS_IN_YEAR
         V_v     = copy(V) .* SECONDS_IN_YEAR
@@ -108,7 +108,7 @@ function main()
         V_old_v[ice_mask_old] .= NaN
 
         H_v[ice_mask]     .= NaN
-        ρgnAs_v[ice_mask] .= NaN
+        As_v[ice_mask] .= NaN
         V_v[ice_mask]     .= NaN
 
         fig = Figure(; size=(800, 450), fontsize=16)
@@ -147,7 +147,7 @@ function main()
         xc_km, yc_km = xc / 1e3, yc / 1e3
 
         hms = (heatmap!(axs[1], xc_km, yc_km, B),
-               heatmap!(axs[2], xc_km, yc_km, log10.(ρgnAs_v)),
+               heatmap!(axs[2], xc_km, yc_km, log10.(As_v)),
                heatmap!(axs[3], xc_km, yc_km, H_old_v),
                heatmap!(axs[4], xc_km, yc_km, H_v),
                heatmap!(axs[5], xc_km, yc_km, V_old_v),
