@@ -1,5 +1,5 @@
 ### A Pluto.jl notebook ###
-# v0.20.3
+# v0.20.4
 
 using Markdown
 using InteractiveUtils
@@ -11,7 +11,7 @@ begin
     Pkg.activate(Base.current_project())
     Pkg.instantiate()
 
-	using Glaide, JLD2, CairoMakie
+	using Glaide, JLD2, CairoMakie, Unitful
 
     using PlutoUI; TableOfContents()
 end
@@ -30,13 +30,34 @@ Define the path where the resulting input file will be saved, relative to the lo
 # ╔═╡ 3a5bf3aa-12c4-40d6-9235-ff530037e6da
 datasets_dir = "../datasets"; mkpath(datasets_dir);
 
+# ╔═╡ dd5196d7-cfc0-4111-9c80-56ffa76cac0e
+md"""
+Define basic physical constants, i.e., the power law exponent $n$, the ice density $\rho$, gravitational acceleration $g$, and the Glen's flow law parameter $A$:
+"""
+
+# ╔═╡ f6539cbb-119d-4fe9-97e6-c0549dd833fa
+begin
+	n  = 3
+    ρ  = 910.0u"kg/m^3"
+    g  = 9.81u"m/s^2"
+	A₀ = 2.5e-24u"Pa^-3*s^-1"
+end;
+
+# ╔═╡ 8543d050-36c4-43ad-9a67-2508aaa96a26
+md"""
+Define characteristic scales to non-dimensionalise the problem. The results shouldn't generally change depending on the values of these scales, but appropriately scaled problems is numerically more stable. In this case, we choose hectameters as units of length and years and units of time:
+"""
+
 # ╔═╡ 66eb63b7-41f5-481f-88b7-8c71e9f148b2
 md"""
 Define the extents of the computational domain in meters:
 """
 
 # ╔═╡ 0d5f918b-383e-464f-a965-df84a73251ba
-Lx, Ly = 20e3, 20e3;
+begin
+	Lx = 20u"km" / L_REF |> NoUnits
+	Ly = 20u"km" / L_REF |> NoUnits
+end;
 
 # ╔═╡ 0bd8bf4f-983c-4659-813e-750cbec30e25
 md"""
@@ -44,7 +65,7 @@ Define the resolution of the computational grid in meters, note that the smaller
 """
 
 # ╔═╡ c0ed33ff-6279-443f-8300-b3ed3f95576e
-resolution = 50.0;
+resolution = 50u"m" / L_REF |> NoUnits;
 
 # ╔═╡ bd264944-6101-4935-9023-608f44ce267a
 md"""
@@ -58,14 +79,25 @@ We will create a synthetic distribution of the sliding parameter:
                             \cos\left(\omega\frac{X}{L_x}\right)
                             \sin\left(\omega\frac{Y}{L_y}\right)~,
 ```
-where $A_{\mathrm{s}_0}$ is the background value, $A_{\mathrm{s}_\mathrm{a}}$ is the perturbations amplitude, and $\omega$ is the perturbations wavelength:
+where $A_{\mathrm{s}_0}$ is the background value, $A_{\mathrm{s}_\mathrm{a}}$ is the dimensionless perturbations amplitude, and $\omega$ is the perturbations wavelength:
 """
 
 # ╔═╡ b226f26c-2929-4a27-a465-62ab966806d4
 begin
-    As_0 = 1e-22
-    As_a = 2.0
-    ω    = 3π
+    Aₛ₀ = 1e-22u"Pa^-3*s^-1*m"
+    Aₛₐ = 2
+    ω   = 3π
+end;
+
+# ╔═╡ e2ae11d5-a587-4175-aaf4-09fae85048ce
+md"""
+The solver expects the values of $A$ and $A_\mathrm{s}$ to be premultiplied by $(\rho g)^n$:
+"""
+
+# ╔═╡ de9c71e5-d9b4-41d9-ab52-ba555b7a5781
+begin
+	ρgnA   = ((ρ * g)^n * A₀)  * (L_REF^n       * T_REF) |> NoUnits
+    ρgnAₛ₀ = ((ρ * g)^n * Aₛ₀) * (L_REF^(n - 1) * T_REF) |> NoUnits
 end;
 
 # ╔═╡ 80895b27-5f32-46ff-bb4e-fcc5436172c8
@@ -88,10 +120,10 @@ where $B_0$ is the background elevation, $B_\mathrm{A}$ is the mountain height, 
 
 # ╔═╡ d2b31e07-282d-470e-b96f-676e09a0b70d
 begin
-    B_0 = 1000.0
-    B_a = 3000.0
-    W_1 = 1e4
-    W_2 = 3e3
+    B_0 = 1u"km"  / L_REF |> NoUnits
+    B_a = 3u"km"  / L_REF |> NoUnits
+    W_1 = 10u"km" / L_REF |> NoUnits
+    W_2 = 3u"km"  / L_REF |> NoUnits
 end;
 
 # ╔═╡ 9012c142-0570-4794-8ba8-2601ad2bd876
@@ -109,9 +141,9 @@ where $z$ is the altitude, $\beta$ is the rate of change of mass balance, $\math
 
 # ╔═╡ 0a6ac215-6a0f-47ce-b2f6-93ba0302b1bc
 begin
-    b      = 0.01 / SECONDS_IN_YEAR
-    mb_max = 2.5  / SECONDS_IN_YEAR
-    ela    = 1800.0
+    b      = 0.01u"yr^-1"  * T_REF              |> NoUnits
+    mb_max = 2.5u"m*yr^-1" * L_REF^(-1) * T_REF |> NoUnits
+    ela    = 1.8u"km"      * L_REF^(-1)         |> NoUnits
 end;
 
 # ╔═╡ 0b42a811-ac66-426a-9054-1ed18ce45707
@@ -157,10 +189,11 @@ We generate the inputs for Glaide.jl with the following processing seqence:
 # ╔═╡ f9ab79f0-e826-402d-a61e-2e96b07be806
 model, V_old = let
     # default scalar parameters for a steady state (dt = ∞)
-    scalars = TimeDependentScalars(; lx, ly, dt=Inf, b, mb_max, ela)
+    scalars = TimeDependentScalars(; n, ρgnA, lx, ly, dt=Inf, b, mb_max, ela)
 
     # default solver parameters
-    numerics = TimeDependentNumerics(xc, yc)
+	reg      = 5e-8u"s^-1" * T_REF |> NoUnits
+    numerics = TimeDependentNumerics(xc, yc; reg)
 
     model = TimeDependentSIA(scalars, numerics)
 
@@ -169,7 +202,7 @@ model, V_old = let
                                                 exp(-(xc / W_2)^2 - (yc' / W_1)^2)));
 
     # set As to the background value
-    fill!(model.fields.As, As_0)
+    fill!(model.fields.ρgnAs, ρgnAₛ₀)
 
     # accumulation allowed everywhere
     fill!(model.fields.mb_mask, 1.0)
@@ -182,15 +215,15 @@ model, V_old = let
     V_old 				= Array(model.fields.V)
 
     # sliding parameter perturbation
-    As_synthetic = @. 10^(log10(As_0) + As_a * cos(ω * xc  / lx) * sin(ω * yc' / ly))
+    ρgnAₛˢʸⁿ = @. 10^(log10(ρgnAₛ₀) + Aₛₐ * cos(ω * xc  / lx) * sin(ω * yc' / ly))
 
-    copy!(model.fields.As, As_synthetic)
+    copy!(model.fields.ρgnAs, ρgnAₛˢʸⁿ)
 
     # step change in mass balance (ELA +20%)
     model.scalars.ela = ela * 1.2
 
     # finite time step (15y)
-    model.scalars.dt  = 15 * SECONDS_IN_YEAR
+    model.scalars.dt  = 15u"yr" / T_REF |> NoUnits
 
     # solve again
     solve!(model)
@@ -211,7 +244,7 @@ begin
     H       = Array(model.fields.H)
     H_old   = Array(model.fields.H_old)
     V       = Array(model.fields.V)
-    As      = Array(model.fields.As)
+    ρgnAs   = Array(model.fields.ρgnAs)
     mb_mask = Array(model.fields.mb_mask)
 end;
 
@@ -222,15 +255,17 @@ Then, we save the fields, scalars, and numerical parameters as a JLD2 file in a 
 
 # ╔═╡ f4b05b52-1ea1-48be-93f1-cce7f476319f
 let
-    fields = (; B, H, H_old, V, V_old, As, mb_mask)
+    fields = (; B, H, H_old, V, V_old, ρgnAs, mb_mask)
 
     scalars = let
-        (; lx, ly, b, mb_max, ela, dt, n, A, ρgn) = model.scalars
+        (; lx, ly, b, mb_max, ela, dt, n, ρgnA) = model.scalars
     end
 
     numerics = (; nx, ny, dx, dy, xc, yc)
 
-    output_path = joinpath(datasets_dir, "synthetic_$(Int(resolution))m.jld2")
+	resolution_m = resolution * ustrip(u"m", L_REF)
+
+    output_path = joinpath(datasets_dir, "synthetic_$(Int(resolution_m))m.jld2")
 
     jldsave(output_path; fields, scalars, numerics)
 end
@@ -247,15 +282,19 @@ with_theme(theme_latexfonts()) do
     ice_mask_old = H_old .== 0
     ice_mask     = H     .== 0
 
-    H_old_v = copy(H_old)
-    H_v     = copy(H)
-    As_v    = copy(As)
+	# convert to m
+	B_v     = copy(B)     .* ustrip(u"m", L_REF)
+    H_old_v = copy(H_old) .* ustrip(u"m", L_REF)
+    H_v     = copy(H)     .* ustrip(u"m", L_REF)
+	# convert to Pa^-3*s^-1*m
+    As_v    = copy(ρgnAs) .* ustrip.(u"Pa^-3*s^-1*m",
+		(L_REF^(-2) * T_REF^(-1) / (ρ * g)^n))
     # convert to m/a
-    V_old_v = copy(V_old) .* SECONDS_IN_YEAR
-    V_v     = copy(V)     .* SECONDS_IN_YEAR
+    V_old_v = copy(V_old) .* ustrip(u"m*yr^-1", L_REF / T_REF)
+    V_v     = copy(V)     .* ustrip(u"m*yr^-1", L_REF / T_REF)
 
     # mask out ice-free pixels
-    H_old_v[ice_mask_old]   .= NaN
+    H_old_v[ice_mask_old] .= NaN
     V_old_v[ice_mask_old] .= NaN
 
     H_v[ice_mask]  .= NaN
@@ -295,9 +334,10 @@ with_theme(theme_latexfonts()) do
     axs[6].title = L"V~\mathrm{[m/a]}"
 
     # convert to km for plotting
-    xc_km, yc_km = xc / 1e3, yc / 1e3
+    xc_km = xc .* ustrip(u"km", L_REF)
+	yc_km = yc .* ustrip(u"km", L_REF)
 
-    hms = (heatmap!(axs[1], xc_km, yc_km, B),
+    hms = (heatmap!(axs[1], xc_km, yc_km, B_v),
            heatmap!(axs[2], xc_km, yc_km, log10.(As_v)),
            heatmap!(axs[3], xc_km, yc_km, H_old_v),
            heatmap!(axs[4], xc_km, yc_km, H_v),
@@ -337,15 +377,20 @@ with_theme(theme_latexfonts()) do
 end
 
 # ╔═╡ Cell order:
-# ╟─be4c2496-b7be-11ef-37b6-9d1804244625
+# ╠═be4c2496-b7be-11ef-37b6-9d1804244625
 # ╟─9a39fbd3-752a-4e8c-91c2-e51333015325
 # ╠═3a5bf3aa-12c4-40d6-9235-ff530037e6da
+# ╟─dd5196d7-cfc0-4111-9c80-56ffa76cac0e
+# ╠═f6539cbb-119d-4fe9-97e6-c0549dd833fa
+# ╟─8543d050-36c4-43ad-9a67-2508aaa96a26
 # ╟─66eb63b7-41f5-481f-88b7-8c71e9f148b2
 # ╠═0d5f918b-383e-464f-a965-df84a73251ba
 # ╟─0bd8bf4f-983c-4659-813e-750cbec30e25
 # ╠═c0ed33ff-6279-443f-8300-b3ed3f95576e
 # ╟─bd264944-6101-4935-9023-608f44ce267a
 # ╠═b226f26c-2929-4a27-a465-62ab966806d4
+# ╟─e2ae11d5-a587-4175-aaf4-09fae85048ce
+# ╠═de9c71e5-d9b4-41d9-ab52-ba555b7a5781
 # ╟─80895b27-5f32-46ff-bb4e-fcc5436172c8
 # ╠═d2b31e07-282d-470e-b96f-676e09a0b70d
 # ╟─9012c142-0570-4794-8ba8-2601ad2bd876
@@ -359,4 +404,4 @@ end
 # ╟─d5ea40bf-c1e2-4689-a980-d0dc1cac2203
 # ╠═f4b05b52-1ea1-48be-93f1-cce7f476319f
 # ╟─27360bfc-9862-478e-803c-6e104f77d318
-# ╟─f12ad11c-538a-4236-860e-e7d0b3528918
+# ╠═f12ad11c-538a-4236-860e-e7d0b3528918

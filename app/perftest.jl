@@ -55,9 +55,6 @@ function runme(resolution)
     (; r, z, B, H, H_old, ρgnAs, mb_mask) = model.fields
     (; ρgnA, n, b, mb_max, ela, dt)       = model.scalars
 
-    # @time Glaide.residual!(r, z, B, H, H_old, A, As, ρgn, n, b, ela, mb_max, mb_mask, dt, dx, dy, Glaide.ComputeResidual())
-    # @time Glaide.residual2!(r, z, B, H, H_old, A, As, ρgn, n, b, ela, mb_max, mb_mask, dt, dx, dy, Glaide.ComputeResidual())
-
     ρgnA2_n2 = 2 / (n + 2) * ρgnA
     _n3      = inv(n + 3)
     _n2      = inv(n + 2)

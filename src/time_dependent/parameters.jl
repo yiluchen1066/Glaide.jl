@@ -43,7 +43,7 @@ function TimeDependentAdjointFields(nx, ny, T=Float64)
 end
 
 # scalars
-mutable struct TimeDependentScalars{T<:Real,NP<:Real}
+@kwdef mutable struct TimeDependentScalars{T<:Real,NP<:Real}
     lx::T
     ly::T
     n::NP
@@ -52,9 +52,6 @@ mutable struct TimeDependentScalars{T<:Real,NP<:Real}
     mb_max::T
     ela::T
     dt::T
-end
-function TimeDependentScalars(; lx, ly, n=GLEN_N, ρgnA0=RHOGNA, E=1.0, b, mb_max, ela, dt)
-    return TimeDependentScalars(lx, ly, n, ρgnA0 * E, b, mb_max, ela, dt)
 end
 
 # numerics
@@ -67,12 +64,14 @@ mutable struct TimeDependentNumerics{T<:Real,I<:Integer,R}
     yc::R
     εtol::T
     α::T
+    reg::T
     dmpswitch::I
     ndmp::I
     maxiter::I
     ncheck::I
 end
 function TimeDependentNumerics(xc, yc;
+                               reg,
                                εtol      = 1e-8,
                                α         = 1.0,
                                dmpswitch = ceil(Int, 1max(length(xc), length(yc))),
@@ -81,7 +80,7 @@ function TimeDependentNumerics(xc, yc;
                                ncheck    = ceil(Int, 0.25max(length(xc), length(yc))))
     nx, ny = length(xc), length(yc)
     dx, dy = step(xc), step(yc)
-    return TimeDependentNumerics(nx, ny, dx, dy, xc, yc, εtol, α, dmpswitch, ndmp, maxiter, ncheck)
+    return TimeDependentNumerics(nx, ny, dx, dy, xc, yc, εtol, α, reg, dmpswitch, ndmp, maxiter, ncheck)
 end
 
 mutable struct TimeDependentAdjointNumerics{T<:Real,I<:Integer}

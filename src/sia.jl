@@ -81,7 +81,7 @@ Base.@propagate_inbounds function residual(B, H, H_old, ρgnAₛ, mb_mask, ρgnA
     return r
 end
 
-function _residual!(r, z, B, H, H_old, ρgnAₛ, mb_mask, ρgnA2_n2, b, mb_max, ela, _dt, _n3, _n2, _dx, _dy, n, nm1, mode)
+function _residual!(r, z, B, H, H_old, ρgnAₛ, mb_mask, ρgnA2_n2, b, mb_max, ela, _dt, _n3, _n2, _dx, _dy, n, nm1, reg, mode)
     @get_indices
     @inbounds if ix <= oftype(ix, size(r, 1)) && iy <= oftype(iy, size(r, 2))
         Hₗ  = st3x3(H, ix, iy)
@@ -97,11 +97,11 @@ function _residual!(r, z, B, H, H_old, ρgnAₛ, mb_mask, ρgnA2_n2, b, mb_max, 
             r[ix, iy] = residual(Bₗ, Hₗ, H_o, Aₛₗ, mb_m, ρgnA2_n2, b, mb_max, ela, _dt, _n3, _n2, _dx, _dy, n, nm1, mode)
         elseif mode == ComputePreconditionedResidual()
             r̄, r[ix, iy] = Enzyme.autodiff_deferred(Enzyme.ReverseWithPrimal, Const(R), Active, Active(Hₗ))
-            q             = 0.5sum(abs.(r̄[1])) + 1e-8
+            q             = 0.5sum(abs.(r̄[1])) + reg
             z[ix, iy]     = r[ix, iy] / q
         elseif mode == ComputePreconditioner()
             r̄        = Enzyme.autodiff_deferred(Enzyme.Reverse, Const(R), Active, Active(Hₗ))
-            q         = 0.5sum(abs.(r̄[1][1])) + 1e-8
+            q         = 0.5sum(abs.(r̄[1][1])) + reg
             z[ix, iy] = inv(q)
         end
     end
@@ -145,11 +145,11 @@ function _surface_velocity!(V, H, B, ρgnAs, ρgnA2_n1, _dx, _dy, n, n1)
 end
 
 # wrappers
-function residual!(r, z, B, H, H_old, ρgnAₛ, mb_mask, ρgnA, n, b, mb_max, ela, dt, dx, dy, mode)
+function residual!(r, z, B, H, H_old, ρgnAₛ, mb_mask, ρgnA, n, b, mb_max, ela, dt, dx, dy, reg, mode)
     nthreads, nblocks = launch_config(size(H))
 
     # precompute constants
-    ρgnA2_n2 = 2 / (n + 2) * ρgnA
+    ρgnA2_n2 = ρgnA * 2 / (n + 2)
     _n3      = inv(n + 3)
     _n2      = inv(n + 2)
     _dt      = inv(dt)
@@ -157,7 +157,7 @@ function residual!(r, z, B, H, H_old, ρgnAₛ, mb_mask, ρgnA, n, b, mb_max, el
     _dy      = inv(dy)
     nm1      = n - oneunit(n)
 
-    @cuda threads = nthreads blocks = nblocks _residual!(r, z, B, H, H_old, ρgnAₛ, mb_mask, ρgnA2_n2, b, mb_max, ela, _dt, _n3, _n2, _dx, _dy, n, nm1, mode)
+    @cuda threads = nthreads blocks = nblocks _residual!(r, z, B, H, H_old, ρgnAₛ, mb_mask, ρgnA2_n2, b, mb_max, ela, _dt, _n3, _n2, _dx, _dy, n, nm1, reg, mode)
     return
 end
 
@@ -171,7 +171,7 @@ function surface_velocity!(V, H, B, ρgnAs, ρgnA, n, dx, dy)
     nthreads, nblocks = launch_config(size(H))
 
     # precompute constants
-    ρgnA2_n1 = 2 / (n + 1) * ρgnA
+    ρgnA2_n1 = ρgnA * 2 / (n + 1)
     n1       = n + oneunit(n)
     _dx      = inv(dx)
     _dy      = inv(dy)

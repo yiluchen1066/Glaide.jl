@@ -16,14 +16,11 @@ struct SnapshotAdjointFields{A<:AbstractArray{<:Real}}
 end
 SnapshotAdjointFields(nx, ny, T=Float64) = SnapshotAdjointFields(CUDA.zeros(T, nx, ny))
 
-mutable struct SnapshotScalars{T<:Real,NP<:Real}
+@kwdef mutable struct SnapshotScalars{T<:Real,NP<:Real}
     lx::T
     ly::T
     n::NP
     ρgnA::T
-end
-function SnapshotScalars(; lx, ly, n=GLEN_N, A0=RHOGNA, E=1.0)
-    return SnapshotScalars(lx, ly, n, A0 * E)
 end
 
 struct SnapshotNumerics{T<:Real,I<:Integer,R}

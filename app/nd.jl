@@ -10,6 +10,8 @@ const g  = 9.81u"m/s^2"
 const A  = 2.5e-24u"Pa^-3*s^-1"
 const As = 1.0e-22u"Pa^-3*s^-1*m"
 
+ustrip(uconvert(u"hm^-3*yr^-1", (ρ * g)^n * E * A))
+
 # derived dimensional constants
 ρgn   = uconvert(u"MPa^3/hm^3", (ρ * g)^n)
 ρgnA  = uconvert(u"hm^-3*yr^-1", ρgn * E * A)

@@ -25,7 +25,7 @@ export laplacian_smoothing, laplacian_smoothing!
 export remove_components, remove_components!
 
 # constants
-export SECONDS_IN_YEAR, GLEN_A, GLEN_N, RHOGN
+export L_REF, T_REF, GLEN_N, GLEN_A, RHOG
 
 using LinearAlgebra
 using Printf
@@ -39,12 +39,14 @@ using Downloads
 using Rasters
 using ImageMorphology
 using LLVM
+using Unitful
 
-# define consntants
-const SECONDS_IN_YEAR = 3600 * 24 * 365
-const GLEN_N          = 3
-const RHOGN           = (910 * 9.81)^GLEN_N
-const RHOGNA          = RHOGN * 2.5e-24
+# characteristic scales
+const L_REF  = 1u"hm"
+const T_REF  = 1u"yr"
+const GLEN_N = 3
+const GLEN_A = 2.5e-24u"Pa^-3*s^-1"
+const RHOG   = 910u"kg/m^3" * 9.81u"m/s^2"
 
 # surface mass balance model
 @inline ela_mass_balance(z, b, ela, mb_max) = min(b * (z - ela), mb_max)

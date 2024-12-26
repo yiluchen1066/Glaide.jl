@@ -1,5 +1,5 @@
 ### A Pluto.jl notebook ###
-# v0.20.3
+# v0.20.4
 
 using Markdown
 using InteractiveUtils
@@ -11,7 +11,7 @@ begin
     Pkg.activate(Base.current_project())
     Pkg.instantiate()
 
-    using Glaide, CairoMakie, Printf, JLD2, CUDA
+    using Glaide, CairoMakie, Printf, JLD2, CUDA, Unitful
 	
     using PlutoUI; TableOfContents()
 end
@@ -62,7 +62,7 @@ Define the initial guess for the sliding parameter:
 """
 
 # ╔═╡ a19c5990-1d62-4349-84c1-4cf2522b0eb4
-As_init = 1e-22;
+As_init = 1e-22u"Pa^-3*s^-1*m"
 
 # ╔═╡ 5206fc60-6bcd-444a-82bb-f8c2f336c393
 md"""
@@ -173,12 +173,21 @@ begin
             axs[5].xlabel = "Iteration";
             axs[5].ylabel = "J"
 
-            xc_km, yc_km = model.numerics.xc ./ 1e3, model.numerics.yc ./ 1e3;
+            xc_km = ustrip.(u"km", model.numerics.xc .* L_REF)
+			yc_km = ustrip.(u"km", model.numerics.yc .* L_REF)
 
-            hms = (heatmap!(axs[1], xc_km, yc_km, Array(log10.(model.fields.As))),
-                   heatmap!(axs[2], xc_km, yc_km, Array(log10.(model.fields.As))),
-                   heatmap!(axs[3], xc_km, yc_km, Array(V_obs)),
-                   heatmap!(axs[4], xc_km, yc_km, Array(model.fields.V)))
+			n     = model.scalars.n
+			ρgnAs = model.fields.ρgnAs
+			V     = model.fields.V
+
+			As_v    = ustrip.(u"Pa^-3*s^-1*m", ρgnAs .* (L_REF^(1-n) * T_REF^(-1) / RHOG^n))
+			V_obs_v = ustrip.(u"m/yr", V_obs .* (L_REF / T_REF))
+			V_v     = ustrip.(u"m/yr", V     .* (L_REF / T_REF))
+
+            hms = (heatmap!(axs[1], xc_km, yc_km, Array(log10.(As_v))),
+                   heatmap!(axs[2], xc_km, yc_km, Array(log10.(As_v))),
+                   heatmap!(axs[3], xc_km, yc_km, Array(V_obs_v)),
+                   heatmap!(axs[4], xc_km, yc_km, Array(V_v)))
 
             hms[1].colormap = Reverse(:roma)
             hms[2].colormap = Reverse(:roma)
@@ -187,8 +196,8 @@ begin
 
             hms[1].colorrange = (-24, -20)
             hms[2].colorrange = (-1e-8, 1e-8)
-            hms[3].colorrange = (0, 1e-5)
-            hms[4].colorrange = (0, 1e-5)
+            hms[3].colorrange = (0, 300)
+            hms[4].colorrange = (0, 300)
 
             lns = (lines!(axs[5], Point2{Float64}[]), )
 
@@ -198,14 +207,14 @@ begin
                    Colorbar(fig[2, 2][1, 2], hms[4]))
 
             new{typeof(model), typeof(scenario), typeof(j_hist)}(model,
-                                                                                 scenario,
-                                                                    j_hist,
-                                                                    fig,
-                                                                    axs,
-                                                                    hms,
-                                                                    lns,
-                                                                    cbs,
-                                                                    nothing, 0)
+                                                                 scenario,
+                                                                 j_hist,
+                                                                 fig,
+                                                                 axs,
+                                                                 hms,
+                                                                 lns,
+                                                                 cbs,
+                                                                 nothing, 0)
         end
     end
 
@@ -227,9 +236,19 @@ begin
                       state.x_change,
                       state.α)
 
-            cb.hms[1][3] = Array(state.X .* log10(ℯ))
+			n     = cb.model.scalars.n
+			ρgnAs = cb.model.fields.ρgnAs
+			V     = cb.model.fields.V
+
+			coef = (L_REF^(1-n) * T_REF^(-1) / RHOG^n)
+
+		    As_v = ustrip.(u"Pa^-3*s^-1*m", ρgnAs .* coef)
+			V_v  = ustrip.(u"m/yr", V .* (L_REF / T_REF))
+			
+
+            cb.hms[1][3] = Array(log10.(As_v))
             cb.hms[2][3] = Array(state.X̄ ./ log10(ℯ))
-            cb.hms[4][3] = Array(cb.model.fields.V)
+            cb.hms[4][3] = Array(V_v)
             cb.lns[1][1] = cb.j_hist
             autolimits!(cb.axs[5])
             recordframe!(cb.video_stream)
@@ -258,7 +277,7 @@ end
 function run_inversion(scenario::InversionScenarioSnapshot)
     model = SnapshotSIA(scenario.input_file)
 
-    model.scalars.A *= scenario.E
+    model.scalars.ρgnA *= scenario.E
 
     V_obs = copy(model.fields.V)
 
@@ -270,11 +289,14 @@ function run_inversion(scenario::InversionScenarioSnapshot)
     callback = Callback(model, scenario, V_obs)
     options  = OptimisationOptions(; line_search, callback, maxiter)
 
+	n = model.scalars.n
+	
     # initial guess
-    logAs0 = CUDA.fill(log(As_init), size(V_obs))
+	ρgnAs_init = RHOG^n * As_init * (L_REF^(n-1) * T_REF) |> NoUnits
+    log_ρgnAs0 = CUDA.fill(log(ρgnAs_init), size(V_obs))
 
     # inversion
-    optimise(model, objective, logAs0, options)
+    optimise(model, objective, log_ρgnAs0, options)
 
     # show animation
     return callback.video_stream
@@ -324,4 +346,4 @@ run_inversion(InversionScenarioSnapshot(; input_file="../datasets/aletsch_50m.jl
 # ╠═61a9f3ae-a6f6-4f12-a7d7-fdd8c7b6c29d
 # ╟─756ccb69-dd09-4f43-a8a5-fd7a9c2ec500
 # ╟─4e3d8f5c-974b-442a-9267-67ff53121872
-# ╟─7dd6f707-c723-4666-977b-efec92b2a5f0
+# ╠═7dd6f707-c723-4666-977b-efec92b2a5f0

@@ -3,12 +3,13 @@ using CUDA
 using CairoMakie
 using Printf
 using JLD2
+using Unitful
 
-Base.@kwdef struct InversionScenarioTimeDependent{LS}
+Base.@kwdef struct InversionScenarioTimeDependent{LS,AT}
     input_file::String
     output_dir::String
     # initial sliding parameter value
-    As_init::Float64 = 1e-22
+    As_init::AT = 1e-22u"Pa^-3*s^-1*m"
     # ice flow enhancement factor
     E::Float64 = 1.0
     # regularisation parameter
@@ -18,7 +19,7 @@ Base.@kwdef struct InversionScenarioTimeDependent{LS}
     # weight for ice thickness matching
     ωₕ::Float64 = 1.0
     # maximum number of iterations in the optimisation algorithm
-    maxiter::Int = 1000
+    maxiter::Int = 500
     # line search algorithm
     line_search::LS
 end
@@ -27,20 +28,23 @@ function time_dependent_inversion(scenario::InversionScenarioTimeDependent)
     # unpack params
     (; input_file, output_dir, As_init, E, γ_reg, ωᵥ, ωₕ, maxiter, line_search) = scenario
 
-    if ispath(output_dir)
-        @warn "path \"$(output_dir)\" already exists, skipping simulation; delete the directory to re-run"
-        return
-    end
+    # if ispath(output_dir)
+    #     @warn "path \"$(output_dir)\" already exists, skipping simulation; delete the directory to re-run"
+    #     return
+    # end
 
     mkpath(output_dir)
 
-    model = TimeDependentSIA(input_file; debug_vis=false)
+    reg = 5e-8u"s^-1" * T_REF |> NoUnits
 
-    (; As, V, H, H_old) = model.fields
+    model = TimeDependentSIA(input_file; report=false, debug_vis=false, reg)
 
-    As0 = As
+    (; ρgnAs, V, H, H_old) = model.fields
+    n = model.scalars.n
 
-    model.scalars.A *= E
+    ρgnAs0 = ρgnAs
+
+    model.scalars.ρgnA *= E
 
     V_obs = copy(V)
     H_obs = copy(H)
@@ -50,9 +54,11 @@ function time_dependent_inversion(scenario::InversionScenarioTimeDependent)
     ωᵥ *= inv(ωn * sum(V_obs .^ 2))
     ωₕ *= inv(ωn * sum(H_obs .^ 2))
 
-    fill!(As0, As_init)
+    ρgnAs_init = RHOG^n * As_init * (L_REF^(n - 1) * T_REF) |> NoUnits
+
+    fill!(ρgnAs0, ρgnAs_init)
     copy!(H, H_old)
-    
+
     solve!(model)
 
     objective = TimeDependentObjective(ωᵥ, ωₕ, V_obs, H_obs, γ_reg)
@@ -91,7 +97,7 @@ function time_dependent_inversion(scenario::InversionScenarioTimeDependent)
 
     options = OptimisationOptions(; line_search, callback, maxiter)
 
-    optimise(model, objective, log.(As0), options)
+    optimise(model, objective, log.(ρgnAs0), options)
 
     return
 end
@@ -102,7 +108,7 @@ for (ωᵥ, ωₕ) in ((0, 1), (1, 0), (1, 1))
                                                       output_dir="../output/time_dependent_synthetic_50m_$(ωᵥ)_$(ωₕ)",
                                                       ωᵥ=float(ωᵥ),
                                                       ωₕ=float(ωₕ),
-                                                      line_search=BacktrackingLineSearch(; α_min=1e1, α_max=1e6))
+                                                      line_search=BacktrackingLineSearch(; α_min=1e2, α_max=1e6, c=0.2))
     time_dependent_inversion(synthetic_params)
 end
 
@@ -110,7 +116,16 @@ for res in (200, 100, 50, 25)
     aletsch_params = InversionScenarioTimeDependent(;
                                                     input_file  = "../datasets/aletsch_$(res)m.jld2",
                                                     output_dir  = "../output/time_dependent_aletsch_$(res)m",
-                                                    E           = 2.5e-1,
-                                                    line_search = BacktrackingLineSearch(; α_min=1e1, α_max=1e6))
+                                                    E           = 0.25,
+                                                    line_search = BacktrackingLineSearch(; α_min=1e2, α_max=1e6, c=0.2))
+    time_dependent_inversion(aletsch_params)
+end
+
+for (ωᵥ, ωₕ) in ((1, 2), (1, 5), (1, 10))
+    aletsch_params = InversionScenarioTimeDependent(;
+                                                    input_file  = "../datasets/aletsch_50m.jld2",
+                                                    output_dir  = "../output/time_dependent_aletsch_50m_$(ωᵥ)_$(ωₕ)",
+                                                    E           = 0.25,
+                                                    line_search = BacktrackingLineSearch(; α_min=1e1, α_max=1e6, c=0.2))
     time_dependent_inversion(aletsch_params)
 end

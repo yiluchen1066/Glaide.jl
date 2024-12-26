@@ -72,7 +72,7 @@ function solve!(model::TimeDependentSIA)
     (; ρgnA, n, b, mb_max, ela, dt)                    = model.scalars
 
     # unpack numerical parameters
-    (; nx, ny, dx, dy, α, dmpswitch, ndmp, maxiter, ncheck, εtol) = model.numerics
+    (; nx, ny, dx, dy, α, reg, dmpswitch, ndmp, maxiter, ncheck, εtol) = model.numerics
 
     N = max(nx, ny)
 
@@ -82,7 +82,7 @@ function solve!(model::TimeDependentSIA)
     end
 
     # initialise search direction
-    residual!(r, z, B, H, H_old, ρgnAs, mb_mask, ρgnA, n, b, mb_max, ela, dt, dx, dy, ComputePreconditionedResidual())
+    residual!(r, z, B, H, H_old, ρgnAs, mb_mask, ρgnA, n, b, mb_max, ela, dt, dx, dy, reg, ComputePreconditionedResidual())
     copy!(p, z)
 
     # iterative loop
@@ -101,7 +101,7 @@ function solve!(model::TimeDependentSIA)
             copy!(r0, r)
         end
 
-        residual!(r, z, B, H, H_old, ρgnAs, mb_mask, ρgnA, n, b, mb_max, ela, dt, dx, dy, ComputePreconditionedResidual())
+        residual!(r, z, B, H, H_old, ρgnAs, mb_mask, ρgnA, n, b, mb_max, ela, dt, dx, dy, reg, ComputePreconditionedResidual())
 
         if (iter > dmpswitch) && (iter % ndmp == 0)
             dkyk, yy = mapreduce((_r, _r0, _p) -> (_p * (_r - _r0), (_r - _r0)^2), (x, y) -> x .+ y, r, r0, p; init=(0.0, 0.0))
@@ -117,7 +117,7 @@ function solve!(model::TimeDependentSIA)
 
             # characteristic length and velocity scales
             lsc = maximum(H)
-            vsc = 2 / (n + 2) * ρgnA * lsc^(n + 1) + maximum(ρgnAs) * lsc^(n - 1)
+            vsc = 2 / (n + 2) * ρgnA * lsc^(n + 1) + maximum(ρgnAs) * lsc^n
 
             # compute absolute and relative errors
             err_abs = maximum(abs, r) / vsc
@@ -162,8 +162,8 @@ function solve_adjoint!(ρgnĀs, model::TimeDependentSIA)
     (; ψ, r̄, z̄, H̄, V̄, ∂J_∂H) = model.adjoint_fields
 
     # unpack numerical parameters
-    (; nx, ny, dx, dy, dmpswitch, ndmp) = model.numerics
-    (; α, maxiter, ncheck, εtol)        = model.adjoint_numerics
+    (; nx, ny, dx, dy, reg, dmpswitch, ndmp) = model.numerics
+    (; α, maxiter, ncheck, εtol)             = model.adjoint_numerics
 
     N = max(nx, ny)
 
@@ -179,24 +179,26 @@ function solve_adjoint!(ρgnĀs, model::TimeDependentSIA)
     # Enzyme accumulates results in-place, initialise with zeros
     fill!(ρgnĀs, 0.0)
 
+    # Enzyme overwrites memory, save array
+    copy!(∂J_∂H, H̄)
+
     # first propagate partial velocity derivatives
     ∇surface_velocity!(DupNN(V, V̄), DupNN(H, H̄),
                        Const(B), DupNN(ρgnAs, ρgnĀs),
                        ρgnA, n, dx, dy)
 
-    # Enzyme overwrites memory, save array
-    copy!(∂J_∂H, H̄)
 
     # compute preconditioner
-    residual!(r, z, B, H, H_old, ρgnAs, mb_mask, ρgnA, n, b, mb_max, ela, dt, dx, dy, ComputePreconditioner())
+    residual!(r, z, B, H, H_old, ρgnAs, mb_mask, ρgnA, n, b, mb_max, ela, dt, dx, dy, reg, ComputePreconditioner())
 
     # initialize shadow variables (Enzyme accumulates derivatives in-place)
     copy!(r̄, ψ)
+    copy!(H̄, ∂J_∂H)
 
     ∇residual!(DupNN(r, r̄), Const(z),
                Const(B), DupNN(H, H̄), Const(H_old),
                Const(ρgnAs), Const(mb_mask),
-               ρgnA, n, b, mb_max, ela, dt, dx, dy,
+               ρgnA, n, b, mb_max, ela, dt, dx, dy, reg,
                ComputeResidual())
 
     @. z̄ = z * H̄
@@ -225,7 +227,7 @@ function solve_adjoint!(ρgnĀs, model::TimeDependentSIA)
         ∇residual!(DupNN(r, r̄), Const(z),
                    Const(B), DupNN(H, H̄), Const(H_old),
                    Const(ρgnAs), Const(mb_mask),
-                   ρgnA, n, b, mb_max, ela, dt, dx, dy,
+                   ρgnA, n, b, mb_max, ela, dt, dx, dy, reg,
                    ComputeResidual())
 
         @. z̄ = z * H̄
@@ -276,7 +278,7 @@ function solve_adjoint!(ρgnĀs, model::TimeDependentSIA)
     ∇residual!(DupNN(r, r̄), Const(z),
                Const(B), Const(H), Const(H_old),
                DupNN(ρgnAs, ρgnĀs), Const(mb_mask),
-               ρgnA, n, b, mb_max, ela, dt, dx, dy,
+               ρgnA, n, b, mb_max, ela, dt, dx, dy, reg,
                ComputeResidual())
 
     return

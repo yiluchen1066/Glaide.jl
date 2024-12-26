@@ -11,7 +11,7 @@ function J(log_ρgnAs, objective::SnapshotObjective, model::SnapshotSIA)
     (; dx, dy)           = model.numerics
 
     # set the parameter in the model state
-    @. model.fields.As = exp(log_ρgnAs)
+    @. model.fields.ρgnAs = exp(log_ρgnAs)
 
     # forward model run
     solve!(model)
