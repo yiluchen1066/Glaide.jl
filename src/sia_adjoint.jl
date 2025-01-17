@@ -13,15 +13,13 @@ function ∇residual!(r, z, B, H, H_old, ρgnAₛ, mb_mask, ρgnA, n, b, mb_max,
 
     # precompute constants
     ρgnA2_n2 = ρgnA * 2 / (n + 2)
-    _n3      = inv(n + 3)
-    _n2      = inv(n + 2)
     _dt      = inv(dt)
     _dx      = inv(dx)
     _dy      = inv(dy)
     nm1      = n - oneunit(n)
 
     @cuda threads = nthreads blocks = nblocks ∇(_residual!, r, z, B, H, H_old, ρgnAₛ, mb_mask,
-                                                Const.((ρgnA2_n2, b, mb_max, ela, _dt, _n3, _n2, _dx, _dy, n, nm1, reg, mode))...)
+                                                Const.((ρgnA2_n2, b, mb_max, ela, _dt, _dx, _dy, n, nm1, reg, mode))...)
 
     return
 end

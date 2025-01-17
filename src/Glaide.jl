@@ -40,6 +40,7 @@ using Rasters
 using ImageMorphology
 using LLVM
 using Unitful
+using Logging
 
 # characteristic scales
 const L_REF  = 1u"hm"

@@ -442,7 +442,7 @@ With all preparations done, let's generate the input files:
 
 # ╔═╡ b5624ea5-cd19-4b87-9634-8ab3682e2912
 for resolution in resolutions
-    @info "generating input files for resolution $resolution m"
+    @info "generating input file for resolution $resolution m"
     create_input_file(resolution)
 end;
 

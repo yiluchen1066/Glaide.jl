@@ -1,10 +1,12 @@
-using Glaide, BenchmarkTools, CUDA, Printf
+using Glaide, BenchmarkTools, CUDA, Printf, Unitful
 
 function runme(resolution)
     Lx, Ly = 20e3, 20e3
 
     # ice flow parameters
-    ρgnAs_0 = RHOGN * 1e-22
+    ρgnAs_0 = ustrip(RHOG^GLEN_N * 1e-22)
+    ρgnA = ustrip(RHOG^GLEN_N * GLEN_A)
+    SECONDS_IN_YEAR = 31556926.0
 
     # bed elevation parameters
     B_0 = 1000.0
@@ -33,10 +35,11 @@ function runme(resolution)
     yc = LinRange(-ly / 2 + dy / 2, ly / 2 - dy / 2, ny)
 
     # default scalar parameters for a steady state (dt = ∞)
-    scalars = TimeDependentScalars(; lx, ly, dt=Inf, b, mb_max, ela)
+    scalars = TimeDependentScalars(; n=GLEN_N, ρgnA, lx, ly, dt=Inf, b, mb_max, ela)
 
     # default solver parameters
-    numerics = TimeDependentNumerics(xc, yc; dmpswitch=1nx)
+    reg = eps()
+    numerics = TimeDependentNumerics(xc, yc; dmpswitch=1nx, reg)
 
     model = TimeDependentSIA(scalars, numerics; report=true, debug_vis=true)
 
@@ -67,12 +70,12 @@ function runme(resolution)
     # mode = Glaide.ComputePreconditionedResidual()
     # mode = Glaide.ComputePreconditioner()
 
-    fun = @cuda launch = false Glaide._residual!(r, z, B, H, H_old, ρgnAs, mb_mask, ρgnA2_n2, b, mb_max, ela, _dt, _n3, _n2, _dx, _dy, n, nm1, mode)
+    fun = @cuda launch = false Glaide._residual!(r, z, B, H, H_old, ρgnAs, mb_mask, ρgnA2_n2, b, mb_max, ela, _dt, _n3, _n2, _dx, _dy, n, nm1, reg, mode)
 
     @show CUDA.registers(fun)
 
     tt = @belapsed begin
-        Glaide.residual!($r, $z, $B, $H, $H_old, $ρgnAs, $mb_mask, $ρgnA, $n, $b, $mb_max, $ela, $dt, $dx, $dy, $mode)
+        Glaide.residual!($r, $z, $B, $H, $H_old, $ρgnAs, $mb_mask, $ρgnA, $n, $b, $mb_max, $ela, $dt, $dx, $dy, $reg, $mode)
         CUDA.synchronize()
     end
 

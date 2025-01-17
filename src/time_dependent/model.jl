@@ -13,7 +13,6 @@ mutable struct TimeDependentSIA{F<:TimeDependentFields,
     numerics::N
     adjoint_fields::AF
     adjoint_numerics::AN
-    report::Bool
     debug_vis::Bool
 end
 
@@ -22,7 +21,7 @@ end
 
 Constructs a time-dependent forward solver object.
 """
-function TimeDependentSIA(scalars, numerics, adjoint_numerics=nothing; report=false, debug_vis=false)
+function TimeDependentSIA(scalars, numerics, adjoint_numerics=nothing; debug_vis=false)
     if isnothing(adjoint_numerics)
         adjoint_numerics = TimeDependentAdjointNumerics(numerics.xc, numerics.yc)
     end
@@ -30,10 +29,10 @@ function TimeDependentSIA(scalars, numerics, adjoint_numerics=nothing; report=fa
     fields         = TimeDependentFields(numerics.nx, numerics.ny)
     adjoint_fields = TimeDependentAdjointFields(numerics.nx, numerics.ny)
 
-    return TimeDependentSIA(fields, scalars, numerics, adjoint_fields, adjoint_numerics, report, debug_vis)
+    return TimeDependentSIA(fields, scalars, numerics, adjoint_fields, adjoint_numerics, debug_vis)
 end
 
-function TimeDependentSIA(path::AbstractString, adjoint_numerics=nothing; report=false, debug_vis=false, numeric_overrides...)
+function TimeDependentSIA(path::AbstractString, adjoint_numerics=nothing; debug_vis=false, numeric_overrides...)
     data = load(path)
 
     dfields = data["fields"]
@@ -57,7 +56,7 @@ function TimeDependentSIA(path::AbstractString, adjoint_numerics=nothing; report
     copy!(fields.H_old, dfields.H_old)
     copy!(fields.mb_mask, dfields.mb_mask)
 
-    return TimeDependentSIA(fields, scalars, numerics, adjoint_fields, adjoint_numerics, report, debug_vis)
+    return TimeDependentSIA(fields, scalars, numerics, adjoint_fields, adjoint_numerics, debug_vis)
 end
 
 """
@@ -124,7 +123,7 @@ function solve!(model::TimeDependentSIA)
             err_rel = maximum(abs, d) / (lsc + (lsc == 0))
 
             # print convergence status
-            model.report && @printf("    iter = %.2f × N, error: [abs = %1.3e, rel = %1.3e]\n", iter / N, err_abs, err_rel)
+            @debug @sprintf("    iter = %.2f × N, error: [abs = %1.3e, rel = %1.3e]\n", iter / N, err_abs, err_rel)
 
             # check if simulation has failed
             if !isfinite(err_abs) || !isfinite(err_rel)
@@ -142,9 +141,9 @@ function solve!(model::TimeDependentSIA)
     end
 
     if converged
-        model.report && println("forward solver converged")
+        @debug "forward solver converged"
     else
-        @warn("forward solver not converged: iter > maxiter")
+        @warn "forward solver not converged: iter > maxiter (= $maxiter)"
     end
 
     # compute surface velocity
@@ -249,12 +248,10 @@ function solve_adjoint!(ρgnĀs, model::TimeDependentSIA)
             err_rel = maximum(abs, d) / (maximum(abs, ψ) + eps())
 
             # print convergence status
-            model.report && @printf("    iter = %.2f × N, error: [abs = %1.3e, rel = %1.3e]\n", iter / N, err_abs, err_rel)
+            @debug @sprintf("    iter = %.2f × N, error: [abs = %1.3e, rel = %1.3e]\n", iter / N, err_abs, err_rel)
 
             # check if simulation has failed
-            if !isfinite(err_rel)
-                error("adjoint solver failed: detected NaNs at iter #$iter")
-            end
+            isfinite(err_rel) || error("adjoint solver failed: detected NaNs at iter #$iter")
 
             model.debug_vis && update_adjoint_debug_visualisation!(vis, model, iter / N, (; err_rel))
 
@@ -267,9 +264,9 @@ function solve_adjoint!(ρgnĀs, model::TimeDependentSIA)
     end
 
     if converged
-        model.report && println("adjoint solver converged")
+        @debug "adjoint solver converged"
     else
-        @warn("adjoint solver not converged: iter > maxiter")
+        @warn "adjoint solver not converged: iter > maxiter (= $maxiter)"
     end
 
     copy!(r̄, ψ)

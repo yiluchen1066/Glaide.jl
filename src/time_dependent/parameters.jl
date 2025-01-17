@@ -74,9 +74,9 @@ function TimeDependentNumerics(xc, yc;
                                reg,
                                εtol      = 1e-8,
                                α         = 1.0,
-                               dmpswitch = ceil(Int, 1max(length(xc), length(yc))),
+                               dmpswitch = ceil(Int, 5max(length(xc), length(yc))),
                                ndmp      = 1,
-                               maxiter   = 20max(length(xc), length(yc)),
+                               maxiter   = 100max(length(xc), length(yc)),
                                ncheck    = ceil(Int, 0.25max(length(xc), length(yc))))
     nx, ny = length(xc), length(yc)
     dx, dy = step(xc), step(yc)
@@ -92,7 +92,7 @@ end
 function TimeDependentAdjointNumerics(xc, yc;
                                       εtol    = 1e-8,
                                       α       = 1.0,
-                                      maxiter = 20max(length(xc), length(yc)),
+                                      maxiter = 100max(length(xc), length(yc)),
                                       ncheck  = ceil(Int, 0.25max(length(xc), length(yc))))
     return TimeDependentAdjointNumerics(εtol, α, maxiter, ncheck)
 end

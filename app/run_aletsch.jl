@@ -1,4 +1,4 @@
-using Glaide, CairoMakie, Unitful
+using Glaide, CairoMakie, Unitful, JLD2
 
 function main(input_file)
     reg   = 5e-6u"s^-1" * T_REF |> NoUnits
@@ -13,7 +13,7 @@ function main(input_file)
     H_old = copy(model.fields.H_old)
 
     # set As to the background value
-    Aₛ₀     = 1e-23u"Pa^-3*s^-1*m"
+    Aₛ₀     = 1e-22u"Pa^-3*s^-1*m"
     ρgnAs_0 = ((RHOG)^GLEN_N * Aₛ₀) * (L_REF^(GLEN_N - 1) * T_REF) |> NoUnits
 
     X = load("../output/snapshot_aletsch_25m/step_0100.jld2", "X")
@@ -23,7 +23,6 @@ function main(input_file)
 
     # solve the model to steady state
     @time solve!(model)
-    # Glaide.surface_velocity!(model.fields.V, model.fields.H, model.fields.B, model.fields.ρgnAs, model.scalars.ρgnA, model.scalars.n, model.numerics.dx, model.numerics.dy)
 
     with_theme(theme_latexfonts()) do
         ofunit(ut, x, ref) = x * ustrip(ut, ref)

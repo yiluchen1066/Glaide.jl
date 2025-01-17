@@ -346,4 +346,4 @@ run_inversion(InversionScenarioSnapshot(; input_file="../datasets/aletsch_50m.jl
 # ╠═61a9f3ae-a6f6-4f12-a7d7-fdd8c7b6c29d
 # ╟─756ccb69-dd09-4f43-a8a5-fd7a9c2ec500
 # ╟─4e3d8f5c-974b-442a-9267-67ff53121872
-# ╠═7dd6f707-c723-4666-977b-efec92b2a5f0
+# ╟─7dd6f707-c723-4666-977b-efec92b2a5f0

@@ -3,7 +3,7 @@ struct ComputePreconditionedResidual end
 struct ComputePreconditioner end
 
 # CUDA kernels
-Base.@propagate_inbounds function residual(B, H, H_old, ρgnAₛ, mb_mask, ρgnA2_n2, b, mb_max, ela, _dt, _n3, _n2, _dx, _dy, n, nm1, mode)
+Base.@propagate_inbounds function residual(B, H, H_old, ρgnAₛ, mb_mask, ρgnA2_n2, b, mb_max, ela, _dt, _dx, _dy, n, nm1, mode)
     # contract
     LLVM.Interop.assume(n > 0 && nm1 > 0)
 
@@ -14,61 +14,20 @@ Base.@propagate_inbounds function residual(B, H, H_old, ρgnAₛ, mb_mask, ρgnA
     ∇Sˣˣ = δˣₐ(S) .* _dx
     ∇Sʸʸ = δʸₐ(S) .* _dy
 
-    # surface gradient magnitude
-    ∇Sˣₙ = sqrt.(innʸ(∇Sˣˣ) .^ 2 .+ av4(∇Sʸʸ) .^ 2) .^ nm1
-    ∇Sʸₙ = sqrt.(av4(∇Sˣˣ) .^ 2 .+ innˣ(∇Sʸʸ) .^ 2) .^ nm1
+    ∇Sˣᵥ = avʸ(∇Sˣˣ)
+    ∇Sʸᵥ = avˣ(∇Sʸʸ)
 
-    Γˣ₁ = ρgnA2_n2 .* ∇Sˣₙ
-    Γʸ₁ = ρgnA2_n2 .* ∇Sʸₙ
+    ∇Sₙ = sqrt.(∇Sˣᵥ .^ 2 .+ ∇Sʸᵥ .^ 2) .^ nm1
 
-    Γˣ₂ = avˣ(ρgnAₛ) .* ∇Sˣₙ
-    Γʸ₂ = avʸ(ρgnAₛ) .* ∇Sʸₙ
+    Hᵥ   = av4(H)
+    Hᵥⁿ⁰ = Hᵥ .^ n # directly computing H^(n+1) results in a 2x performance penalty
+    Hᵥⁿ¹ = Hᵥⁿ⁰ .* Hᵥ
+    Hᵥⁿ² = Hᵥⁿ¹ .* Hᵥ
 
-    # diffusivity of the deformational component
-    Dˣ₁ = Γˣ₁ .* _n3
-    Dʸ₁ = Γʸ₁ .* _n3
+    Dᵥ = (ρgnA2_n2 .* Hᵥⁿ² .+ av4(ρgnAₛ) .* Hᵥⁿ¹) .* ∇Sₙ
 
-    # diffusivity of the sliding component
-    Dˣ₂ = Γˣ₂ .* _n2
-    Dʸ₂ = Γʸ₂ .* _n2
-
-    # bedrock gradient
-    ∇Bˣ = δˣ(B) .* _dx
-    ∇Bʸ = δʸ(B) .* _dy
-
-    # velocity of the deformational component
-    Wˣ₁ = .-Γˣ₁ .* ∇Bˣ
-    Wʸ₁ = .-Γʸ₁ .* ∇Bʸ
-
-    # velocity of the sliding component
-    Wˣ₂ = .-Γˣ₂ .* ∇Bˣ
-    Wʸ₂ = .-Γʸ₂ .* ∇Bʸ
-
-    Hⁿ⁰ = H .^ n # directly computing H^(n+1) results in a 2x performance penalty
-    Hⁿ¹ = Hⁿ⁰ .* H
-    Hⁿ² = Hⁿ¹ .* H
-    Hⁿ³ = Hⁿ² .* H
-
-    Wˣ₁⁺ = max.(Wˣ₁, 0)
-    Wʸ₁⁺ = max.(Wʸ₁, 0)
-
-    Wˣ₂⁺ = max.(Wˣ₂, 0)
-    Wʸ₂⁺ = max.(Wʸ₂, 0)
-
-    Wˣ₁⁻ = min.(Wˣ₁, 0)
-    Wʸ₁⁻ = min.(Wʸ₁, 0)
-
-    Wˣ₂⁻ = min.(Wˣ₂, 0)
-    Wʸ₂⁻ = min.(Wʸ₂, 0)
-
-    # fluxes
-    qˣ = .-(Dˣ₁ .* δˣ(Hⁿ³) .+ Dˣ₂ .* δˣ(Hⁿ²)) .* _dx .+
-         Wˣ₁⁺ .* lˣ(Hⁿ²) .+ Wˣ₁⁻ .* rˣ(Hⁿ²) .+
-         Wˣ₂⁺ .* lˣ(Hⁿ¹) .+ Wˣ₂⁻ .* rˣ(Hⁿ¹)
-
-    qʸ = .-(Dʸ₁ .* δʸ(Hⁿ³) .+ Dʸ₂ .* δʸ(Hⁿ²)) .* _dy .+
-         Wʸ₁⁺ .* lʸ(Hⁿ²) .+ Wʸ₁⁻ .* rʸ(Hⁿ²) .+
-         Wʸ₂⁺ .* lʸ(Hⁿ¹) .+ Wʸ₂⁻ .* rʸ(Hⁿ¹)
+    qˣ = .-avʸ(Dᵥ) .* δˣ(S) .* _dx
+    qʸ = .-avˣ(Dᵥ) .* δʸ(S) .* _dy
 
     r = -(H[2, 2] - H_old) * _dt
     r += -(δˣ(qˣ) * _dx + δʸ(qʸ) * _dy)
@@ -81,7 +40,7 @@ Base.@propagate_inbounds function residual(B, H, H_old, ρgnAₛ, mb_mask, ρgnA
     return r
 end
 
-function _residual!(r, z, B, H, H_old, ρgnAₛ, mb_mask, ρgnA2_n2, b, mb_max, ela, _dt, _n3, _n2, _dx, _dy, n, nm1, reg, mode)
+function _residual!(r, z, B, H, H_old, ρgnAₛ, mb_mask, ρgnA2_n2, b, mb_max, ela, _dt, _dx, _dy, n, nm1, reg, mode)
     @get_indices
     @inbounds if ix <= oftype(ix, size(r, 1)) && iy <= oftype(iy, size(r, 2))
         Hₗ  = st3x3(H, ix, iy)
@@ -91,17 +50,17 @@ function _residual!(r, z, B, H, H_old, ρgnAₛ, mb_mask, ρgnA2_n2, b, mb_max, 
         H_o  = H_old[ix, iy]
         mb_m = mb_mask[ix, iy]
 
-        R(x) = residual(Bₗ, x, H_o, Aₛₗ, mb_m, ρgnA2_n2, b, mb_max, ela, _dt, _n3, _n2, _dx, _dy, n, nm1, mode)
+        R(x) = residual(Bₗ, x, H_o, Aₛₗ, mb_m, ρgnA2_n2, b, mb_max, ela, _dt, _dx, _dy, n, nm1, mode)
 
         if mode == ComputeResidual()
-            r[ix, iy] = residual(Bₗ, Hₗ, H_o, Aₛₗ, mb_m, ρgnA2_n2, b, mb_max, ela, _dt, _n3, _n2, _dx, _dy, n, nm1, mode)
+            r[ix, iy] = residual(Bₗ, Hₗ, H_o, Aₛₗ, mb_m, ρgnA2_n2, b, mb_max, ela, _dt, _dx, _dy, n, nm1, mode)
         elseif mode == ComputePreconditionedResidual()
             r̄, r[ix, iy] = Enzyme.autodiff_deferred(Enzyme.ReverseWithPrimal, Const(R), Active, Active(Hₗ))
-            q             = 0.5sum(abs.(r̄[1])) + reg
+            q             = max(0.5sum(abs.(r̄[1])), reg)
             z[ix, iy]     = r[ix, iy] / q
         elseif mode == ComputePreconditioner()
             r̄        = Enzyme.autodiff_deferred(Enzyme.Reverse, Const(R), Active, Active(Hₗ))
-            q         = 0.5sum(abs.(r̄[1][1])) + reg
+            q         = max(0.5sum(abs.(r̄[1][1])), reg)
             z[ix, iy] = inv(q)
         end
     end
@@ -150,14 +109,12 @@ function residual!(r, z, B, H, H_old, ρgnAₛ, mb_mask, ρgnA, n, b, mb_max, el
 
     # precompute constants
     ρgnA2_n2 = ρgnA * 2 / (n + 2)
-    _n3      = inv(n + 3)
-    _n2      = inv(n + 2)
     _dt      = inv(dt)
     _dx      = inv(dx)
     _dy      = inv(dy)
     nm1      = n - oneunit(n)
 
-    @cuda threads = nthreads blocks = nblocks _residual!(r, z, B, H, H_old, ρgnAₛ, mb_mask, ρgnA2_n2, b, mb_max, ela, _dt, _n3, _n2, _dx, _dy, n, nm1, reg, mode)
+    @cuda threads = nthreads blocks = nblocks _residual!(r, z, B, H, H_old, ρgnAₛ, mb_mask, ρgnA2_n2, b, mb_max, ela, _dt, _dx, _dy, n, nm1, reg, mode)
     return
 end
 

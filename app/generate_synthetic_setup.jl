@@ -43,14 +43,9 @@ begin
 	A₀ = 2.5e-24u"Pa^-3*s^-1"
 end;
 
-# ╔═╡ 8543d050-36c4-43ad-9a67-2508aaa96a26
-md"""
-Define characteristic scales to non-dimensionalise the problem. The results shouldn't generally change depending on the values of these scales, but appropriately scaled problems is numerically more stable. In this case, we choose hectameters as units of length and years and units of time:
-"""
-
 # ╔═╡ 66eb63b7-41f5-481f-88b7-8c71e9f148b2
 md"""
-Define the extents of the computational domain in meters:
+Define the extents of the computational domain:
 """
 
 # ╔═╡ 0d5f918b-383e-464f-a965-df84a73251ba
@@ -61,7 +56,7 @@ end;
 
 # ╔═╡ 0bd8bf4f-983c-4659-813e-750cbec30e25
 md"""
-Define the resolution of the computational grid in meters, note that the smaller the number is, the longer the simulation will take:
+Define the resolution of the computational grid, note that the smaller the number is, the longer the simulation will take:
 """
 
 # ╔═╡ c0ed33ff-6279-443f-8300-b3ed3f95576e
@@ -377,12 +372,11 @@ with_theme(theme_latexfonts()) do
 end
 
 # ╔═╡ Cell order:
-# ╠═be4c2496-b7be-11ef-37b6-9d1804244625
+# ╟─be4c2496-b7be-11ef-37b6-9d1804244625
 # ╟─9a39fbd3-752a-4e8c-91c2-e51333015325
 # ╠═3a5bf3aa-12c4-40d6-9235-ff530037e6da
 # ╟─dd5196d7-cfc0-4111-9c80-56ffa76cac0e
 # ╠═f6539cbb-119d-4fe9-97e6-c0549dd833fa
-# ╟─8543d050-36c4-43ad-9a67-2508aaa96a26
 # ╟─66eb63b7-41f5-481f-88b7-8c71e9f148b2
 # ╠═0d5f918b-383e-464f-a965-df84a73251ba
 # ╟─0bd8bf4f-983c-4659-813e-750cbec30e25
@@ -404,4 +398,4 @@ end
 # ╟─d5ea40bf-c1e2-4689-a980-d0dc1cac2203
 # ╠═f4b05b52-1ea1-48be-93f1-cce7f476319f
 # ╟─27360bfc-9862-478e-803c-6e104f77d318
-# ╠═f12ad11c-538a-4236-860e-e7d0b3528918
+# ╟─f12ad11c-538a-4236-860e-e7d0b3528918
