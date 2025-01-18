@@ -58,9 +58,9 @@ function main()
     scalars = TimeDependentScalars(; n, ρgnA, lx, ly, dt=Inf, b, mb_max, ela)
 
     # default solver parameters
-    numerics = TimeDependentNumerics(xc, yc; dmpswitch=2nx, reg)
+    numerics = TimeDependentNumerics(nx, ny; reg)
 
-    model = TimeDependentSIA(scalars, numerics; report=true, debug_vis=false)
+    model = TimeDependentSIA(scalars, numerics; debug_vis=false)
 
     # set the bed elevation
     copy!(model.fields.B, @. B_0 + 0.5 * B_a * (exp(-(xc / W_1)^2 - (yc' / W_2)^2) +

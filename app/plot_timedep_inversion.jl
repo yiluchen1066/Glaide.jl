@@ -4,8 +4,8 @@ using Glaide, CairoMakie, JLD2, Printf
 resolution = 50
 setup      = "synthetic"
 # setup      = "aletsch"
-ωᵥ         = 1
-ωₕ         = 1
+ωᵥ = 1
+ωₕ = 0
 
 # outdir = "../output/time_dependent_$(setup)_$(resolution)m"
 # outdir = "../output/time_dependent_$(setup)_$(resolution)m_1_10"
@@ -17,7 +17,7 @@ setup      = "synthetic"
 outdir = "../output/time_dependent_$(setup)_$(resolution)m_$(ωᵥ)_$(ωₕ)"
 # outdir = "../output/time_dependent_$(setup)_$(resolution)m_test"
 
-let fig = Figure(; size=(850, 600))
+let fig = Figure(; size=(850, 450))
     axs = (Axis(fig[1, 1][1, 1]; aspect=DataAspect(), xlabel="x", ylabel="y", title="H"),
            Axis(fig[1, 2][1, 1]; aspect=DataAspect(), xlabel="x", ylabel="y", title="V"),
            Axis(fig[1, 3][1, 1]; aspect=DataAspect(), xlabel="x", ylabel="y", title="As"),
@@ -32,10 +32,10 @@ let fig = Figure(; size=(850, 600))
 
     (; xc, yc) = numerics
 
-    dV = (V .- fields.V) ./ fields.V .* 100
+    dV = abs.(V .- fields.V) ./ maximum(fields.V)
     dV[fields.H.<0.01] .= NaN
 
-    dH = (H .- fields.H) ./ fields.H .* 100
+    dH = abs.(H .- fields.H) ./ maximum(fields.H)
 
     hms = (heatmap!(axs[1], xc, yc, H .* 100),
            heatmap!(axs[2], xc, yc, V),
@@ -45,19 +45,23 @@ let fig = Figure(; size=(850, 600))
            heatmap!(axs[5], xc, yc, dV),
            heatmap!(axs[6], xc, yc, fields.V))
 
-    hms[1].colorrange = (0, 900)
+    hms[1].colorrange = (0, 150)
     hms[2].colorrange = (0, 3)
     hms[3].colorrange = (-1, 4)
     hms[6].colorrange = (0, 3)
-    hms[4].colorrange = (-25, 25)
-    hms[5].colorrange = (-65, 65)
+    #     hms[4].colorrange = (-25, 25)
+    #     hms[5].colorrange = (-65, 65)
+    hms[4].colorrange = (1e-6, 1)
+    hms[5].colorrange = (1e-6, 1)
+
+    hms[4].colorscale = log10
+    hms[5].colorscale = log10
 
     hms[1].colormap = Reverse(:ice)
-    hms[4].colormap = :diverging_bwg_20_95_c41_n256
-
+    hms[4].colormap = Reverse(:ice)
     hms[2].colormap = :matter
     # hms[5].colormap = :matter
-    hms[5].colormap = :BrBG_9
+    hms[5].colormap = :matter
 
     hms[3].colormap = Reverse(:roma)
     hms[6].colormap = :matter
@@ -77,10 +81,10 @@ let fig = Figure(; size=(850, 600))
 
         mask = fields.H .<= 0.0 .|| fields.V .<= 0.0
 
-        dV = (V .- fields.V) ./ fields.V .* 100
+        dV = abs.(V .- fields.V) ./ maximum(fields.V)
         dV[mask] .= NaN
 
-        dH = (H .- fields.H) ./ fields.H .* 100
+        dH = abs.(H .- fields.H) ./ maximum(fields.H)
         dH[mask] .= NaN
         dH[mask] .= NaN
 
