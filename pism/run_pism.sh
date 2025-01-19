@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Run PISM for 50000 years to approximate the steady state.
+# Run PISM for 100 years for benchmark purpose with Glaide.jl
 
 variables=thk,usurf
 
@@ -18,7 +18,7 @@ pismr \
   -output.extra.file ex.nc \
   -output.extra.times 1 \
   -output.extra.vars ${variables} \
-  -output.file bedrock_glaide.nc \
+  -output.file pism_output.nc \
   -output.timeseries.filename ts.nc \
   -output.timeseries.times 100 \
   -stress_balance.ice_free_thickness_standard 0.01 \
@@ -27,5 +27,5 @@ pismr \
   -stress_balance.sia.bed_smoother.range 0 \
   -stress_balance.sia.flow_law isothermal_glen \
   -y 100 \
-  > bedrock_glaide.log \
+  > pism_output.log \
   ;

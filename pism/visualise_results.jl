@@ -1,7 +1,7 @@
 using CairoMakie
 using NCDatasets
 
-include("bedrock_glaide.jl")
+include("generate_synthetic_setup.jl")
 
 function visualise(input, filename::String, output::String)
 
@@ -25,9 +25,9 @@ function visualise(input, filename::String, output::String)
 
     # Plotting
     fig = Figure(size = (500, 800))
-    axs = (Axis(fig[1, 1][1, 1]; aspect=DataAspect(), xlabel="x", ylabel="y"),
-           Axis(fig[2, 1][1, 1]; aspect=DataAspect(), xlabel="x", ylabel="y"),
-           Axis(fig[3, 1][1, 1]; aspect=DataAspect(), xlabel="x", ylabel="y"))
+    axs = (Axis(fig[1, 1][1, 1]; aspect=DataAspect(), title="Bedrock elevation", ylabel="y"),
+           Axis(fig[2, 1][1, 1]; aspect=DataAspect(), title="Sirface elevation", ylabel="y"),
+           Axis(fig[3, 1][1, 1]; aspect=DataAspect(), title="Ice thickness", xlabel="x", ylabel="y"))
     hms = (heatmap!(axs[1], xc, yc, B; colormap=:roma),
            heatmap!(axs[2], xc, yc, S; colormap=:davos),
            heatmap!(axs[3], xc, yc, H; colormap=:turbo))

@@ -5,57 +5,16 @@ const SECONDS_IN_YEAR = 60 * 60 * 24 * 365
 
 define_input() = (Lx  = 20e3,    # meters
                   Ly  = 20e3,    # meters
-                  res = 25.0,   # meters
+                  res = 25.0,    # meters
                   B_0 = 1000.0,  # meters
                   B_a = 3000.0,  # meters
                   W_1 = 1e4,
                   W_2 = 3e3)
 
-# sliding-related
-# As_0 = 1e-22
-# As_a = 2.0
-# ω    = 3π
-
 # SMB - directly passed as input to PISM exe
 # β     = 0.01 / SECONDS_IN_YEAR
 # b_max = 2.5  / SECONDS_IN_YEAR
 # ela   = 1800.0
-
-# z = 1000:4000
-# mdot = @. min(β * (z - ela), b_max)
-
-# dmabl_dh = -mmin / (hela - hmin)
-
-# mmin = -13.0 / SECONDS_IN_YEAR
-# mmax = 2.5  / SECONDS_IN_YEAR
-# hmin = 500.0
-# hmax = 2050.0
-# hela = 1800.0
-
-
-# # set As to the background value
-# As = As_0
-
-# sliding parameter perturbation
-# As_synthetic = @. 10^(log10(As_0) + As_a * cos(ω * xv  / lx) * sin(ω * yv' / ly))
-
-# As = As_synthetic
-
-# # step change in mass balance (ELA +20%)
-# ela = ela * 1.2
-
-# # finite time step (15y)
-# dt  = 15 * SECONDS_IN_YEAR
-
-# fig = Figure(size = (800, 400))
-# axs = (Axis(fig[1, 1][1, 1]; aspect=DataAspect(), xlabel="x", ylabel="y", title="Bedrock"),
-#        Axis(fig[1, 2][1, 1]; aspect=DataAspect(), xlabel="x", ylabel="y", title="Ice thickness"))
-# hms = (heatmap!(axs[1], xc, yc, B; colormap=:roma),
-#        heatmap!(axs[2], xc, yc, As; colormap=:turbo))
-# cbs = (Colorbar(fig[1, 1][1, 2], hms[1]),
-#        Colorbar(fig[1, 2][1, 2], hms[2]))
-
-# display(fig)
 
 "Create a NetCDF file that can be used with PISM"
 function create_pism_input(input, filename::String)
@@ -109,5 +68,3 @@ function (@main)(ARGS)
 
     return
 end
-
-# main(["test.nc"])
