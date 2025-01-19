@@ -1,27 +1,22 @@
 ### A Pluto.jl notebook ###
-# v0.19.46
+# v0.20.4
 
 using Markdown
 using InteractiveUtils
 
-# ╔═╡ 3b975e48-4794-11ef-3fc0-6deaeef86908
+# ╔═╡ be4c2496-b7be-11ef-37b6-9d1804244625
 # ╠═╡ show_logs = false
 begin
-    import Pkg
+	import Pkg
     Pkg.activate(Base.current_project())
     Pkg.instantiate()
 
-    using Rasters, ArchGDAL, NCDatasets, Extents
-    using CairoMakie
-    using DelimitedFiles
-    using JLD2
-    using Glaide
+	using Glaide, JLD2, CairoMakie, Unitful
 
-    using PlutoUI
-    TableOfContents()
+    using PlutoUI; TableOfContents()
 end
 
-# ╔═╡ f0f3e0fa-d870-4ba8-84d8-bbe7f05035aa
+# ╔═╡ 9a39fbd3-752a-4e8c-91c2-e51333015325
 md"""
 # Generating the input for the synthetic glacier
 
@@ -32,32 +27,42 @@ In this notebook, we will generate synthetic data to test how well the inversion
 Define the path where the resulting input file will be saved, relative to the location of the notebook:
 """
 
-# ╔═╡ 0969205b-2d11-4ba2-b43a-f10fcd0dd85d
+# ╔═╡ 3a5bf3aa-12c4-40d6-9235-ff530037e6da
 datasets_dir = "../datasets"; mkpath(datasets_dir);
 
-# ╔═╡ cef6480e-d715-42a8-93d7-fa676fad09c1
+# ╔═╡ dd5196d7-cfc0-4111-9c80-56ffa76cac0e
 md"""
-Define the extents of the computational domain in meters:
+Define basic physical constants, i.e., the power law exponent $n$, the ice density $\rho$, gravitational acceleration $g$, and the Glen's flow law parameter $A$:
 """
 
-# ╔═╡ c4ebd113-cc41-4f66-87db-2b10383c03b9
-Lx, Ly = 20e3, 20e3;
+# ╔═╡ f6539cbb-119d-4fe9-97e6-c0549dd833fa
+begin
+	n  = 3
+    ρ  = 910.0u"kg/m^3"
+    g  = 9.81u"m/s^2"
+	A₀ = 2.5e-24u"Pa^-3*s^-1"
+end;
 
-# ╔═╡ 3fa6bc48-1d64-4358-bc6b-086adab81805
+# ╔═╡ 66eb63b7-41f5-481f-88b7-8c71e9f148b2
 md"""
-Define the resolution of the computational grid in meters, note that the smaller the number is, the longer the simulation will take:
+Define the extents of the computational domain:
 """
 
-# ╔═╡ 62605691-13c4-4ed1-ba76-933f2aa8b9ba
-resolution = 25.0;
+# ╔═╡ 0d5f918b-383e-464f-a965-df84a73251ba
+begin
+	Lx = 20u"km" / L_REF |> NoUnits
+	Ly = 20u"km" / L_REF |> NoUnits
+end;
 
-# ╔═╡ ea677e88-1ab2-47b4-89dc-bb9049658931
+# ╔═╡ 0bd8bf4f-983c-4659-813e-750cbec30e25
 md"""
-!!! note "Changing the resolution"
-    The forward solver is based on the pseudo-transient method. While very efficient on GPUs, for strongly non-linear problems like SIA it might require resolution-dependent tuning of the iteration parameters. For much lower resolutions than 50m it is recommended reducing the damping parameters `dmp1` and `dmp2` to values < 0.1. These values can be passed to the `TimeDependentNumerics` constructor as keyword arguments.
+Define the resolution of the computational grid, note that the smaller the number is, the longer the simulation will take:
 """
 
-# ╔═╡ e05e846a-58c2-40c7-aa0b-c25209296136
+# ╔═╡ c0ed33ff-6279-443f-8300-b3ed3f95576e
+resolution = 50u"m" / L_REF |> NoUnits;
+
+# ╔═╡ bd264944-6101-4935-9023-608f44ce267a
 md"""
 ## Sliding parameter distribution
 
@@ -69,17 +74,28 @@ We will create a synthetic distribution of the sliding parameter:
                             \cos\left(\omega\frac{X}{L_x}\right)
                             \sin\left(\omega\frac{Y}{L_y}\right)~,
 ```
-where $A_{\mathrm{s}_0}$ is the background value, $A_{\mathrm{s}_\mathrm{a}}$ is the perturbations amplitude, and $\omega$ is the perturbations wavelength:
+where $A_{\mathrm{s}_0}$ is the background value, $A_{\mathrm{s}_\mathrm{a}}$ is the dimensionless perturbations amplitude, and $\omega$ is the perturbations wavelength:
 """
 
-# ╔═╡ 226790d3-127a-410c-9a7a-09ba01d85cf8
+# ╔═╡ b226f26c-2929-4a27-a465-62ab966806d4
 begin
-    As_0 = 1e-22
-    As_a = 2.0
-    ω    = 3π
+    Aₛ₀ = 1e-22u"Pa^-3*s^-1*m"
+    Aₛₐ = 2
+    ω   = 3π
 end;
 
-# ╔═╡ f50ce1aa-27f1-4fb3-8a27-e6550ddec3f4
+# ╔═╡ e2ae11d5-a587-4175-aaf4-09fae85048ce
+md"""
+The solver expects the values of $A$ and $A_\mathrm{s}$ to be premultiplied by $(\rho g)^n$:
+"""
+
+# ╔═╡ de9c71e5-d9b4-41d9-ab52-ba555b7a5781
+begin
+	ρgnA   = ((ρ * g)^n * A₀)  * (L_REF^n       * T_REF) |> NoUnits
+    ρgnAₛ₀ = ((ρ * g)^n * Aₛ₀) * (L_REF^(n - 1) * T_REF) |> NoUnits
+end;
+
+# ╔═╡ 80895b27-5f32-46ff-bb4e-fcc5436172c8
 md"""
 ## Bed elevation
 
@@ -97,15 +113,15 @@ B = B_0 + \frac{B_\mathrm{A}}{2}
 where $B_0$ is the background elevation, $B_\mathrm{A}$ is the mountain height, $W_1$ and $W_2$ are characteristic widths:
 """
 
-# ╔═╡ f564c689-a6af-4941-b250-ac83727907f7
+# ╔═╡ d2b31e07-282d-470e-b96f-676e09a0b70d
 begin
-    B_0 = 1000.0
-    B_a = 3000.0
-    W_1 = 1e4
-    W_2 = 3e3
+    B_0 = 1u"km"  / L_REF |> NoUnits
+    B_a = 3u"km"  / L_REF |> NoUnits
+    W_1 = 10u"km" / L_REF |> NoUnits
+    W_2 = 3u"km"  / L_REF |> NoUnits
 end;
 
-# ╔═╡ a309ad80-5f10-49d8-bbc9-de40f85048fa
+# ╔═╡ 9012c142-0570-4794-8ba8-2601ad2bd876
 md"""
 ## Surface mass balance
 
@@ -118,21 +134,21 @@ In Glaide.jl, the SMB model is based on the simple altitude-dependent parametris
 where $z$ is the altitude, $\beta$ is the rate of change of mass balance, $\mathrm{ELA}$ is the equilibrium line altitude where $\dot{b}=0$, and $\dot{b}_\mathrm{max}$ is the maximum accumulation rate.
 """
 
-# ╔═╡ f9dba7bb-a2a9-4b30-9fd2-5db2af34ef24
+# ╔═╡ 0a6ac215-6a0f-47ce-b2f6-93ba0302b1bc
 begin
-    β     = 0.01 / SECONDS_IN_YEAR
-    b_max = 2.5  / SECONDS_IN_YEAR
-    ela   = 1800.0
+    b      = 0.01u"yr^-1"  * T_REF              |> NoUnits
+    mb_max = 2.5u"m*yr^-1" * L_REF^(-1) * T_REF |> NoUnits
+    ela    = 1.8u"km"      * L_REF^(-1)         |> NoUnits
 end;
 
-# ╔═╡ bcbf9797-6a71-4001-8ce9-ba045648308a
+# ╔═╡ 0b42a811-ac66-426a-9054-1ed18ce45707
 md"""
 ## Preprocessing
 
 In this section, we define the variables describing the computational grid, i.e. number of grid cells in x and y direction, the grid spacing (equal to user-specified resolution), and coordinates of grid cells and nodes:
 """
 
-# ╔═╡ 463ddc92-690f-49d2-8be8-45d9e2ddb84f
+# ╔═╡ 473a8bf6-0b40-4d6f-a418-9245f575c9d7
 begin
     dx, dy = resolution, resolution
     nx, ny = ceil(Int, Lx / dx), ceil(Int, Ly / dy)
@@ -148,7 +164,7 @@ begin
     xv, yv = av1(xc), av1(yc)
 end;
 
-# ╔═╡ dab8104a-9d68-4526-84f2-18fb4ce3d870
+# ╔═╡ 064941af-0da5-49fc-b896-a64ad124d627
 md"""
 ## Generating the synthetic input data
 
@@ -165,13 +181,14 @@ We generate the inputs for Glaide.jl with the following processing seqence:
 9. Solve the model again, integrating the SIA equations for a period of 15 y.
 """
 
-# ╔═╡ 052648a6-6197-4cd5-b7bb-bbfaa2958103
+# ╔═╡ f9ab79f0-e826-402d-a61e-2e96b07be806
 model, V_old = let
     # default scalar parameters for a steady state (dt = ∞)
-    scalars = TimeDependentScalars(; lx, ly, dt=Inf, β, b_max, ela)
+    scalars = TimeDependentScalars(; n, ρgnA, lx, ly, dt=Inf, b, mb_max, ela)
 
     # default solver parameters
-    numerics = TimeDependentNumerics(xc, yc)
+	reg      = 5e-8u"s^-1" * T_REF |> NoUnits
+    numerics = TimeDependentNumerics(xc, yc; reg)
 
     model = TimeDependentSIA(scalars, numerics)
 
@@ -180,12 +197,12 @@ model, V_old = let
                                                 exp(-(xc / W_2)^2 - (yc' / W_1)^2)));
 
     # set As to the background value
-    fill!(model.fields.As, As_0)
+    fill!(model.fields.ρgnAs, ρgnAₛ₀)
 
     # accumulation allowed everywhere
     fill!(model.fields.mb_mask, 1.0)
 
-    # solve the model to steady state
+    # solve the model to the steady state
     solve!(model)
 
     # save geometry and surface velocity
@@ -193,15 +210,15 @@ model, V_old = let
     V_old 				= Array(model.fields.V)
 
     # sliding parameter perturbation
-    As_synthetic = @. 10^(log10(As_0) + As_a * cos(ω * xv  / lx) * sin(ω * yv' / ly))
+    ρgnAₛˢʸⁿ = @. 10^(log10(ρgnAₛ₀) + Aₛₐ * cos(ω * xc  / lx) * sin(ω * yc' / ly))
 
-    copy!(model.fields.As, As_synthetic)
+    copy!(model.fields.ρgnAs, ρgnAₛˢʸⁿ)
 
     # step change in mass balance (ELA +20%)
     model.scalars.ela = ela * 1.2
 
     # finite time step (15y)
-    model.scalars.dt  = 15 * SECONDS_IN_YEAR
+    model.scalars.dt  = 15u"yr" / T_REF |> NoUnits
 
     # solve again
     solve!(model)
@@ -209,80 +226,75 @@ model, V_old = let
     model, V_old
 end;
 
-# ╔═╡ 2a0cc261-ea6d-4f64-a4bb-c2b980b9396f
+# ╔═╡ c7fd5e5a-4a35-40e3-b98b-fb4487aea699
 md"""
 ## Saving data to disk
 
 After generating the synthetic input data, we copy the arrays from GPU to host memory:
 """
 
-# ╔═╡ f2a4541d-b524-41c1-afcd-6a233853961d
+# ╔═╡ f4e01694-5005-4c86-8cc0-5473903ab82d
 begin
     B       = Array(model.fields.B)
     H       = Array(model.fields.H)
     H_old   = Array(model.fields.H_old)
     V       = Array(model.fields.V)
-    As      = Array(model.fields.As)
+    ρgnAs   = Array(model.fields.ρgnAs)
     mb_mask = Array(model.fields.mb_mask)
 end;
 
-# ╔═╡ 6b358a59-26c4-434a-9a05-cc14c35fe2bb
+# ╔═╡ d5ea40bf-c1e2-4689-a980-d0dc1cac2203
 md"""
 Then, we save the fields, scalars, and numerical parameters as a JLD2 file in a format recognisable by Glaide.jl:
 """
 
-# ╔═╡ a1cdae82-f33c-48a8-a10f-02bb55e2d93f
+# ╔═╡ f4b05b52-1ea1-48be-93f1-cce7f476319f
 let
-    fields = (; B, H, H_old, V, V_old, As, mb_mask)
+    fields = (; B, H, H_old, V, V_old, ρgnAs, mb_mask)
 
     scalars = let
-        (; lx, ly, β, b_max, ela, dt, npow, A, ρgn) = model.scalars
+        (; lx, ly, b, mb_max, ela, dt, n, ρgnA) = model.scalars
     end
 
     numerics = (; nx, ny, dx, dy, xc, yc)
 
-    output_path = joinpath(datasets_dir, "synthetic_$(Int(resolution))m.jld2")
+	resolution_m = resolution * ustrip(u"m", L_REF)
+
+    output_path = joinpath(datasets_dir, "synthetic_$(Int(resolution_m))m.jld2")
 
     jldsave(output_path; fields, scalars, numerics)
 end
 
-# ╔═╡ 263ab006-a16a-446f-827b-e59bf9ee5622
+# ╔═╡ 27360bfc-9862-478e-803c-6e104f77d318
 md"""
 ## Visualisation
 
 Finally, we visualise the input data:
 """
 
-# ╔═╡ 6365ffea-405f-4941-9894-a566a1d0aa08
+# ╔═╡ f12ad11c-538a-4236-860e-e7d0b3528918
 with_theme(theme_latexfonts()) do
     ice_mask_old = H_old .== 0
     ice_mask     = H     .== 0
 
-    ice_mask_old_v = H_old[1:end-1, 1:end-1] .== 0 .||
-                     H_old[2:end  , 1:end-1] .== 0 .||
-                     H_old[1:end-1, 2:end  ] .== 0 .||
-                     H_old[2:end  , 2:end  ] .== 0
-
-
-    ice_mask_v = H[1:end-1, 1:end-1] .== 0 .||
-                 H[2:end  , 1:end-1] .== 0 .||
-                 H[1:end-1, 2:end  ] .== 0 .||
-                 H[2:end  , 2:end  ] .== 0
-
-    H_old_v = copy(H_old)
-    H_v     = copy(H)
-    As_v    = copy(As)
+	# convert to m
+	B_v     = copy(B)     .* ustrip(u"m", L_REF)
+    H_old_v = copy(H_old) .* ustrip(u"m", L_REF)
+    H_v     = copy(H)     .* ustrip(u"m", L_REF)
+	# convert to Pa^-3*s^-1*m
+    As_v    = copy(ρgnAs) .* ustrip.(u"Pa^-3*s^-1*m",
+		(L_REF^(-2) * T_REF^(-1) / (ρ * g)^n))
     # convert to m/a
-    V_old_v = copy(V_old) .* SECONDS_IN_YEAR
-    V_v     = copy(V)     .* SECONDS_IN_YEAR
+    V_old_v = copy(V_old) .* ustrip(u"m*yr^-1", L_REF / T_REF)
+    V_v     = copy(V)     .* ustrip(u"m*yr^-1", L_REF / T_REF)
 
     # mask out ice-free pixels
-    H_old_v[ice_mask_old]   .= NaN
-    V_old_v[ice_mask_old_v] .= NaN
+    H_old_v[ice_mask_old] .= NaN
+    V_old_v[ice_mask_old] .= NaN
 
-    H_v[ice_mask]    .= NaN
-    As_v[ice_mask_v] .= NaN
-    V_v[ice_mask_v]  .= NaN
+    H_v[ice_mask]  .= NaN
+    As_v[ice_mask] .= NaN
+    V_v[ice_mask]  .= NaN
 
     fig = Figure(; size=(800, 450), fontsize=16)
 
@@ -317,14 +329,18 @@ with_theme(theme_latexfonts()) do
     axs[6].title = L"V~\mathrm{[m/a]}"
 
     # convert to km for plotting
-    xc_km, yc_km = xc / 1e3, yc / 1e3
+    xc_km = xc .* ustrip(u"km", L_REF)
+	yc_km = yc .* ustrip(u"km", L_REF)
 
-    hms = (heatmap!(axs[1], xc_km, yc_km, B),
+    hms = (heatmap!(axs[1], xc_km, yc_km, B_v),
            heatmap!(axs[2], xc_km, yc_km, log10.(As_v)),
            heatmap!(axs[3], xc_km, yc_km, H_old_v),
            heatmap!(axs[4], xc_km, yc_km, H_v),
            heatmap!(axs[5], xc_km, yc_km, V_old_v),
            heatmap!(axs[6], xc_km, yc_km, V_v))
+
+	[contour!(axs[i], xc_km, yc_km, H_old; levels=0:0, linewidth=0.5, color=:black) for i=(1,3,5)]
+    [contour!(axs[i], xc_km, yc_km, H; levels=0:0, linewidth=0.5, color=:black) for i=(2,4,6)]
 
     # enable interpolation for smoother picture
     foreach(hms) do h
@@ -333,10 +349,10 @@ with_theme(theme_latexfonts()) do
 
     hms[1].colormap = :terrain
     hms[2].colormap = Reverse(:roma)
-    hms[3].colormap = :vik
-    hms[4].colormap = :vik
-    hms[5].colormap = :turbo
-    hms[6].colormap = :turbo
+    hms[3].colormap = :matter
+    hms[4].colormap = :matter
+    hms[5].colormap = Reverse(:ice)
+    hms[6].colormap = Reverse(:ice)
 
     hms[1].colorrange = (1000, 4000)
     hms[2].colorrange = (-24, -20)
@@ -356,27 +372,30 @@ with_theme(theme_latexfonts()) do
 end
 
 # ╔═╡ Cell order:
-# ╠═3b975e48-4794-11ef-3fc0-6deaeef86908
-# ╟─f0f3e0fa-d870-4ba8-84d8-bbe7f05035aa
-# ╠═0969205b-2d11-4ba2-b43a-f10fcd0dd85d
-# ╟─cef6480e-d715-42a8-93d7-fa676fad09c1
-# ╠═c4ebd113-cc41-4f66-87db-2b10383c03b9
-# ╟─3fa6bc48-1d64-4358-bc6b-086adab81805
-# ╠═62605691-13c4-4ed1-ba76-933f2aa8b9ba
-# ╟─ea677e88-1ab2-47b4-89dc-bb9049658931
-# ╟─e05e846a-58c2-40c7-aa0b-c25209296136
-# ╠═226790d3-127a-410c-9a7a-09ba01d85cf8
-# ╟─f50ce1aa-27f1-4fb3-8a27-e6550ddec3f4
-# ╠═f564c689-a6af-4941-b250-ac83727907f7
-# ╟─a309ad80-5f10-49d8-bbc9-de40f85048fa
-# ╠═f9dba7bb-a2a9-4b30-9fd2-5db2af34ef24
-# ╟─bcbf9797-6a71-4001-8ce9-ba045648308a
-# ╠═463ddc92-690f-49d2-8be8-45d9e2ddb84f
-# ╟─dab8104a-9d68-4526-84f2-18fb4ce3d870
-# ╠═052648a6-6197-4cd5-b7bb-bbfaa2958103
-# ╟─2a0cc261-ea6d-4f64-a4bb-c2b980b9396f
-# ╠═f2a4541d-b524-41c1-afcd-6a233853961d
-# ╟─6b358a59-26c4-434a-9a05-cc14c35fe2bb
-# ╠═a1cdae82-f33c-48a8-a10f-02bb55e2d93f
-# ╟─263ab006-a16a-446f-827b-e59bf9ee5622
-# ╠═6365ffea-405f-4941-9894-a566a1d0aa08
+# ╟─be4c2496-b7be-11ef-37b6-9d1804244625
+# ╟─9a39fbd3-752a-4e8c-91c2-e51333015325
+# ╠═3a5bf3aa-12c4-40d6-9235-ff530037e6da
+# ╟─dd5196d7-cfc0-4111-9c80-56ffa76cac0e
+# ╠═f6539cbb-119d-4fe9-97e6-c0549dd833fa
+# ╟─66eb63b7-41f5-481f-88b7-8c71e9f148b2
+# ╠═0d5f918b-383e-464f-a965-df84a73251ba
+# ╟─0bd8bf4f-983c-4659-813e-750cbec30e25
+# ╠═c0ed33ff-6279-443f-8300-b3ed3f95576e
+# ╟─bd264944-6101-4935-9023-608f44ce267a
+# ╠═b226f26c-2929-4a27-a465-62ab966806d4
+# ╟─e2ae11d5-a587-4175-aaf4-09fae85048ce
+# ╠═de9c71e5-d9b4-41d9-ab52-ba555b7a5781
+# ╟─80895b27-5f32-46ff-bb4e-fcc5436172c8
+# ╠═d2b31e07-282d-470e-b96f-676e09a0b70d
+# ╟─9012c142-0570-4794-8ba8-2601ad2bd876
+# ╠═0a6ac215-6a0f-47ce-b2f6-93ba0302b1bc
+# ╟─0b42a811-ac66-426a-9054-1ed18ce45707
+# ╠═473a8bf6-0b40-4d6f-a418-9245f575c9d7
+# ╟─064941af-0da5-49fc-b896-a64ad124d627
+# ╠═f9ab79f0-e826-402d-a61e-2e96b07be806
+# ╟─c7fd5e5a-4a35-40e3-b98b-fb4487aea699
+# ╠═f4e01694-5005-4c86-8cc0-5473903ab82d
+# ╟─d5ea40bf-c1e2-4689-a980-d0dc1cac2203
+# ╠═f4b05b52-1ea1-48be-93f1-cce7f476319f
+# ╟─27360bfc-9862-478e-803c-6e104f77d318
+# ╟─f12ad11c-538a-4236-860e-e7d0b3528918

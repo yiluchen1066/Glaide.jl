@@ -14,5 +14,8 @@ include("time_dependent_inversion.jl")
 @info "running forward Aletsch model"
 include("forward_aletsch.jl")
 
+@info "running benchmark"
+include("benchmark.jl")
+
 @info "making figures"
 include("make_figures.jl")

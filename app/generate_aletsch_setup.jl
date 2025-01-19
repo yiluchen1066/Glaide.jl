@@ -1,5 +1,5 @@
 ### A Pluto.jl notebook ###
-# v0.19.46
+# v0.20.4
 
 using Markdown
 using InteractiveUtils
@@ -11,14 +11,13 @@ begin
     Pkg.activate(Base.current_project())
     Pkg.instantiate()
 
-    using Rasters, ArchGDAL, NCDatasets, Extents
-    using CairoMakie
-    using DelimitedFiles
-    using JLD2
     using Glaide
+    using Rasters, ArchGDAL, NCDatasets, Extents
+    using DelimitedFiles, JLD2
+    using CairoMakie
+	using Printf, Unitful
 
-    using PlutoUI
-    TableOfContents()
+    using PlutoUI; TableOfContents()
 
     # disable memcheck
     Rasters.checkmem!(false)
@@ -251,7 +250,7 @@ function create_velocity(velocity_path, bedrock, thickness)
     velocity = resample(velocity; to=bedrock, method=:cubicspline)
 
     # convert units to m/s (original data is in m/a)
-    velocity ./= SECONDS_IN_YEAR
+    velocity .= ustrip.(u"m/s", velocity .* u"m/yr")
 
     # mask velocity to exclude areas where ice thickness is 0
     velocity = mask(velocity; with=thickness, missingval=0.0)
@@ -269,9 +268,9 @@ We use the function `laplacian_smoothing`, provided by Glaide.jl. Note that we c
 """
 
 # ╔═╡ 926569d4-fdc7-491e-8759-437c0f6c588e
-function smooth_rasters!(amount, resolution, rasters...)
-    for raster in rasters
-        laplacian_smoothing!(raster, amount, resolution, resolution)
+function smooth!(amount, resolution, fields...)
+    for field in fields
+        laplacian_smoothing!(field, amount, resolution, resolution)
     end
     return
 end;
@@ -302,11 +301,11 @@ function create_mass_balance_model(mass_balance_path)
     elevation_bands = LinRange(data[11], data[12], 26)
     ela             = data[8]
 
-    mb_rng    = (13+26):(13+2*26-1)
-    rho_w_i   = 1000 / 910
+    mb_rng  = (13+26):(13+2*26-1)
+    rho_w_i = 1000 / 910
 
     # convert from mm w.e./a to m/s
-    mass_balance = data[mb_rng] * 1e-3 * rho_w_i / SECONDS_IN_YEAR
+    mass_balance = ustrip.(u"m/s", data[mb_rng] * rho_w_i * u"mm/yr")
 
     # remove NaNs from the mass balance data
     nan_mask = .!isnan.(mass_balance)
@@ -324,13 +323,13 @@ function create_mass_balance_model(mass_balance_path)
     fit_rng = imin:imax-nskip
 
     # fit the slope of the line crossing the 0 mass balance at ela
-    β = lsq_fit(elevation_bands[fit_rng] .- ela, mass_balance[fit_rng])
+    b = lsq_fit(elevation_bands[fit_rng] .- ela, mass_balance[fit_rng])
 
     # fit the high altitude
     mass_balance_flat = mass_balance[(imax-nskip+1):end]
-    b_max = sum(mass_balance_flat) / length(mass_balance_flat)
+    mb_max = sum(mass_balance_flat) / length(mass_balance_flat)
 
-    return β, ela, b_max, elevation_bands, mass_balance
+    return b, ela, mb_max, elevation_bands, mass_balance
 end;
 
 # ╔═╡ 442e8496-850f-45b9-80ab-addf317f9e27
@@ -362,30 +361,41 @@ function create_input_file(resolution)
     velocity = create_velocity(velocity_path, bedrock, thickness_2017)
 
     # fit the mass balance model
-    β, ela, b_max, eb, mb = create_mass_balance_model(mass_balance_path)
+    b, ela, mb_max, eb, mb = create_mass_balance_model(mass_balance_path)
+	
 	# output for table in paper:
-	@show β*SECONDS_IN_YEAR, ela, b_max*SECONDS_IN_YEAR
+	@info @sprintf("b      = %s", uconvert(u"yr^-1", b      * u"s^-1"))
+	@info @sprintf("ela    = %s", uconvert(u"m"    , ela    * u"m"))
+	@info @sprintf("mb_max = %s", uconvert(u"m/yr" , mb_max * u"m/s"))
 
-    smooth_rasters!(smooth_amount, resolution, bedrock,
-                                               thickness_2016,
-                                               thickness_2017,
-                                               velocity)
-
-    B     = Array{Float64}(bedrock)
+	B     = Array{Float64}(bedrock)
     H_old = Array{Float64}(thickness_2016)
     H     = Array{Float64}(thickness_2017)
-
-    # av4 needed as velocity in Glaide.jl is defined on grid nodes
-    V = Array{Float64}(velocity) |> av4;
+    V     = Array{Float64}(velocity)
+	
+    smooth!(smooth_amount, resolution, B, H_old, H, V)
 
     S_old = B .+ H_old
 
     # the mask excludes areas where ice thickness is 0 and mass balance is positive
-    bool_mask = @. !((H_old[2:end-1, 2:end-1] == 0) &&
-                     (S_old[2:end-1, 2:end-1] - ela > 0))
+    bool_mask = @. !((H_old == 0) && (S_old - ela > 0))
 
     # convert to Float64
     mb_mask = convert(Matrix{Float64}, bool_mask)
+
+	# save resolution for later
+	resolution_m = resolution
+
+	# convert units
+	resolution = resolution * u"m"    * L_REF^(-1)         |> NoUnits
+	b          = b          * u"s^-1" * T_REF              |> NoUnits
+	ela        = ela        * u"m"    * L_REF^(-1)         |> NoUnits
+	mb_max     = mb_max     * u"m/s"  * L_REF^(-1) * T_REF |> NoUnits
+
+	@. B     = B     * u"m"   / L_REF         |> NoUnits
+	@. H_old = H_old * u"m"   / L_REF         |> NoUnits
+	@. H     = H     * u"m"   / L_REF         |> NoUnits
+	@. V     = V     * u"m/s" / L_REF * T_REF |> NoUnits
 
     # create fields (reverse the data to undo reversing done by GDAL)
     fields = map(x -> reverse(x, dims=2), (; H_old, H, B, V, mb_mask))
@@ -400,17 +410,19 @@ function create_input_file(resolution)
 
     numerics = (; nx, ny, dx, dy, xc, yc)
 
-    scalars = (ρgn  = RHOG_N,
-               A    = GLEN_A,
-               npow = GLEN_N,
-               dt   = 1.0 * SECONDS_IN_YEAR,
-               lx,
-               ly,
-               β,
-               b_max,
-               ela)
+	ρgnA = (RHOG)^GLEN_N * GLEN_A * (L_REF^GLEN_N * T_REF) |> NoUnits
+	dt   = 1.0u"yr" / T_REF                                |> NoUnits
 
-	output_path = joinpath(datasets_dir, "aletsch_$(resolution)m.jld2")
+    scalars = (; ρgnA,
+                 n = GLEN_N,
+                 dt,
+                 lx,
+                 ly,
+                 b,
+                 mb_max,
+                 ela)
+
+	output_path = joinpath(datasets_dir, "aletsch_$(resolution_m)m.jld2")
 
     # save elevation bands and mass balance data for visualisation
     jldsave(output_path; fields, scalars, numerics, eb, mb)
@@ -430,7 +442,7 @@ With all preparations done, let's generate the input files:
 
 # ╔═╡ b5624ea5-cd19-4b87-9634-8ab3682e2912
 for resolution in resolutions
-    @info "generating input files for resolution $resolution m"
+    @info "generating input file for resolution $resolution m"
     create_input_file(resolution)
 end;
 
@@ -449,17 +461,17 @@ with_theme(theme_latexfonts()) do
     vis_path = joinpath(datasets_dir, "aletsch_$(vis_resolution)m.jld2")
 
     fields, scalars, numerics, eb, mb = load(vis_path, "fields",
-                                                             "scalars",
-                                                             "numerics",
-                                                             "eb",
-                                                             "mb")
+                                                       "scalars",
+                                                       "numerics",
+                                                       "eb",
+                                                       "mb")
 
 
     fig = Figure(; size=(850, 550), fontsize=16)
 
     # convert to km
-    x_km = numerics.xc ./ 1e3
-    y_km = numerics.yc ./ 1e3
+    x_km = ustrip.(u"km", numerics.xc .* L_REF)
+    y_km = ustrip.(u"km", numerics.yc .* L_REF)
 
     axs = (Axis(fig[1, 1][1, 1]; aspect=DataAspect()),
            Axis(fig[1, 2][1, 1]; aspect=DataAspect()),
@@ -492,13 +504,15 @@ with_theme(theme_latexfonts()) do
     axs[2].ygridvisible=true
     axs[4].ygridvisible=true
 
-    # cut off everything where the ice thickness is less than 1m
-    ice_mask   = fields.H 	   .< 1.0
-    ice_mask_v = av4(fields.H) .< 1.0
+    fields.V     .= ustrip.(u"m/yr", fields.V     .* L_REF / T_REF)
+	fields.B     .= ustrip.(u"m"   , fields.B     .* L_REF)
+	fields.H_old .= ustrip.(u"m"   , fields.H_old .* L_REF)
+	fields.H     .= ustrip.(u"m"   , fields.H     .* L_REF)
 
-    fields.V .*= SECONDS_IN_YEAR
+	# cut off everything where the ice thickness is less than 1m
+    ice_mask = fields.H .< 1.0
 
-    fields.V[ice_mask_v]   .= NaN
+    fields.V[ice_mask]     .= NaN
     fields.H_old[ice_mask] .= NaN
     fields.H[ice_mask]     .= NaN
 
@@ -523,23 +537,27 @@ with_theme(theme_latexfonts()) do
     hms[3].colorrange = (0, 900)
     hms[4].colorrange = (-10, 0)
 
-    z = LinRange(1900, 4150, 1000)
-    b = @. min(scalars.β * (z - scalars.ela), scalars.b_max)
+    z    = (LinRange(1900, 4150, 1000) * u"m") ./ L_REF .|> NoUnits
+    mb_f = @. min(scalars.b * (z - scalars.ela), scalars.mb_max)
 
     # observational mass balance data
-    scatter!(axs[6], eb ./ 1e3,
-                     mb .* SECONDS_IN_YEAR; markersize=7,
-                                            color=:red,
-                                            label="data")
+    scatter!(axs[6], ustrip.(u"km"  , eb * u"m"),
+                     ustrip.(u"m/yr", mb * u"m/s"); markersize=7,
+                                                    color=:red,
+                                                    label="data")
 
     # parametrised model
-    lines!(axs[6], z ./ 1e3, b .* SECONDS_IN_YEAR; linewidth=2, label="model")
+    lines!(axs[6], ustrip.(u"km"  , z    * L_REF),
+				   ustrip.(u"m/yr", mb_f * L_REF / T_REF); linewidth=2,
+				   										   label="model")
 
-    scatter!(axs[6], scalars.ela / 1e3, 0; strokecolor=:black,
-                                           strokewidth=2,
-                                              color=:transparent,
-                                              marker=:diamond,
-                                              label="ELA")
+	ela = ustrip(u"km", scalars.ela * L_REF)
+
+    scatter!(axs[6], ela, 0; strokecolor=:black,
+							 strokewidth=2,
+                             color=:transparent,
+                             marker=:diamond,
+                             label="ELA")
 
     axislegend(axs[6]; position=:rb)
 

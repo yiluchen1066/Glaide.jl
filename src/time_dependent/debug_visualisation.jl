@@ -2,15 +2,21 @@
 
 function create_debug_visualisation(model)
     # unpack
-    (; H, B, As, V)    = model.fields
-    (; A, ρgn, npow)   = model.scalars
-    (; dx, dy, xc, yc) = model.numerics
+    (; H, B, ρgnAs, V)  = model.fields
+    (; lx, ly, ρgnA, n) = model.scalars
+    (; nx, ny)          = model.numerics
 
-    surface_velocity!(V, H, B, As, A, ρgn, npow, dx, dy)
+    # preprocessing
+    dx, dy = lx / nx, ly / ny
 
-    vis_fields = (V  = Array(V),
-                  H  = Array(H),
-                  As = Array(log10.(As)))
+    xc = LinRange(-lx / 2 + dx / 2, lx / 2 - dx / 2, nx)
+    yc = LinRange(-ly / 2 + dy / 2, ly / 2 - dy / 2, ny)
+
+    surface_velocity!(V, H, B, ρgnAs, ρgnA, n, dx, dy)
+
+    vis_fields = (V     = Array(V),
+                  H     = Array(H),
+                  ρgnAs = Array(log10.(ρgnAs)))
 
     conv_hist = (err_abs = Point2{Float64}[],
                  err_rel = Point2{Float64}[])
@@ -27,8 +33,8 @@ function create_debug_visualisation(model)
 
     # make heatmaps
     hms = (heatmap!(axs[1], xc, yc, vis_fields.H; colormap=:turbo),
-           heatmap!(axs[2], xc, yc, vis_fields.V; colormap=:turbo, colorrange=(0, 1e-5)),
-           heatmap!(axs[3], xc, yc, vis_fields.As; colormap=:turbo))
+           heatmap!(axs[2], xc, yc, vis_fields.V; colormap=:turbo),
+           heatmap!(axs[3], xc, yc, vis_fields.ρgnAs; colormap=:turbo))
 
     # make line plots
     plt = (scatterlines!(axs[4], conv_hist.err_abs; label="absolute"),
@@ -48,11 +54,14 @@ function update_debug_visualisation!(vis, model, iter, errs)
     (; fig, axs, hms, plt, vis_fields, conv_hist) = vis
 
     # unpack
-    (; H, B, As, V)  = model.fields
-    (; A, ρgn, npow) = model.scalars
-    (; dx, dy)       = model.numerics
+    (; H, B, ρgnAs, V)  = model.fields
+    (; lx, ly, ρgnA, n) = model.scalars
+    (; nx, ny)          = model.numerics
 
-    surface_velocity!(V, H, B, As, A, ρgn, npow, dx, dy)
+    # preprocessing
+    dx, dy = lx / nx, ly / ny
+
+    surface_velocity!(V, H, B, ρgnAs, ρgnA, n, dx, dy)
 
     # update convergence history
     push!(conv_hist.err_abs, Point2(iter, errs.err_abs))
@@ -61,12 +70,12 @@ function update_debug_visualisation!(vis, model, iter, errs)
     # copy data from GPU to CPU for visualisation
     copy!(vis_fields.H, H)
     copy!(vis_fields.V, V)
-    copy!(vis_fields.As, log10.(As))
+    copy!(vis_fields.ρgnAs, log10.(ρgnAs))
 
     # update heatmaps
     hms[1][3] = vis_fields.H
     hms[2][3] = vis_fields.V
-    hms[3][3] = vis_fields.As
+    hms[3][3] = vis_fields.ρgnAs
 
     # update plots
     plt[1][1] = conv_hist.err_abs
@@ -83,8 +92,14 @@ end
 
 function create_adjoint_debug_visualisation(model)
     # unpack
-    (; ψ, H̄)   = model.adjoint_fields
-    (; xc, yc) = model.numerics
+    (; ψ, H̄) = model.adjoint_fields
+    (; lx, ly) = model.scalars
+    (; nx, ny) = model.numerics
+
+    # preprocessing
+    dx, dy = lx / nx, ly / ny
+    xc = LinRange(-lx / 2 + dx / 2, lx / 2 - dx / 2, nx)
+    yc = LinRange(-ly / 2 + dy / 2, ly / 2 - dy / 2, ny)
 
     vis_fields = (ψ=Array(ψ),
                   H̄=Array(H̄))

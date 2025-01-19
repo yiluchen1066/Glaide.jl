@@ -25,44 +25,42 @@ export laplacian_smoothing, laplacian_smoothing!
 export remove_components, remove_components!
 
 # constants
-export SECONDS_IN_YEAR, GLEN_A, GLEN_N, RHOG_N
+export L_REF, T_REF, GLEN_N, GLEN_A, RHOG
 
 using LinearAlgebra
 using Printf
 using CairoMakie
 using CUDA
 using Enzyme
+using StaticArrays
 using JLD2
 using ZipArchives
 using Downloads
 using Rasters
 using ImageMorphology
+using LLVM
+using Unitful
+using Logging
 
-# define consntants
-const SECONDS_IN_YEAR = 3600 * 24 * 365
-const GLEN_A          = 2.5e-24
-const GLEN_N          = 3
-const RHOG_N          = (910 * 9.81)^3
+# characteristic scales
+const L_REF  = 1u"hm"
+const T_REF  = 1u"yr"
+const GLEN_N = 3
+const GLEN_A = 2.5e-24u"Pa^-3*s^-1"
+const RHOG   = 910u"kg/m^3" * 9.81u"m/s^2"
 
 # surface mass balance model
-ela_mass_balance(z, β, ela, b_max) = min(β * (z - ela), b_max)
+@inline ela_mass_balance(z, b, ela, mb_max) = min(b * (z - ela), mb_max)
 
-# CUDA launch configuration heuristics in 1D
-function launch_config(sz::Integer)
-    nthreads = 256
-    nblocks  = cld(sz, nthreads)
-    return nthreads, nblocks
-end
-
-# CUDA launch configuration heuristics in 2D
-function launch_config(sz::NTuple{2,Integer})
-    nthreads = 32, 8
+# CUDA launch configuration heuristics
+function launch_config(sz::NTuple{2,Integer}, ty=4)
+    nthreads = 32, ty
     nblocks  = cld.(sz, nthreads)
     return nthreads, nblocks
 end
 
 # Enzyme utils
-@inline ∇(fun, args...) = (Enzyme.autodiff_deferred(Enzyme.Reverse, fun, Const, args...); return)
+∇(fun, args...) = (Enzyme.autodiff_deferred(Enzyme.Reverse, Const(fun), Const, args...); return)
 const DupNN = DuplicatedNoNeed
 
 # helper functions to simplify the data processing
@@ -71,8 +69,8 @@ include("utils.jl")
 # helper macros for calculating finite differences
 include("macros.jl")
 
-# homogeneous and non-homogeneous Neumann boundary conditions
-include("boundary_conditions.jl")
+# finite difference operators
+include("finite_difference.jl")
 
 # SIA model and adjoint calls
 include("sia.jl")
