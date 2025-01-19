@@ -23,7 +23,7 @@ Constructs a time-dependent forward solver object.
 """
 function TimeDependentSIA(scalars, numerics, adjoint_numerics=nothing; debug_vis=false)
     if isnothing(adjoint_numerics)
-        adjoint_numerics = TimeDependentAdjointNumerics(numerics.xc, numerics.yc)
+        adjoint_numerics = TimeDependentAdjointNumerics()
     end
 
     fields         = TimeDependentFields(numerics.nx, numerics.ny)
@@ -32,23 +32,20 @@ function TimeDependentSIA(scalars, numerics, adjoint_numerics=nothing; debug_vis
     return TimeDependentSIA(fields, scalars, numerics, adjoint_fields, adjoint_numerics, debug_vis)
 end
 
-function TimeDependentSIA(path::AbstractString, adjoint_numerics=nothing; debug_vis=false, numeric_overrides...)
+function TimeDependentSIA(path::AbstractString; debug_vis=false, forward_overrides=(), adjoint_overrides=())
     data = load(path)
 
     dfields = data["fields"]
 
-    (; nx, ny, xc, yc)                      = data["numerics"]
+    (; nx, ny)                              = data["numerics"]
     (; lx, ly, n, ρgnA, b, mb_max, ela, dt) = data["scalars"]
 
     fields   = TimeDependentFields(nx, ny)
     scalars  = TimeDependentScalars(lx, ly, n, ρgnA, b, mb_max, ela, dt)
-    numerics = TimeDependentNumerics(xc, yc; numeric_overrides...)
+    numerics = TimeDependentNumerics(nx, ny; forward_overrides...)
 
-    adjoint_fields = TimeDependentAdjointFields(nx, ny)
-
-    if isnothing(adjoint_numerics)
-        adjoint_numerics = TimeDependentAdjointNumerics(xc, yc)
-    end
+    adjoint_fields   = TimeDependentAdjointFields(nx, ny)
+    adjoint_numerics = TimeDependentAdjointNumerics(; adjoint_overrides...)
 
     copy!(fields.H, dfields.H)
     copy!(fields.B, dfields.B)
@@ -68,12 +65,16 @@ The surface velocity is also computed.
 function solve!(model::TimeDependentSIA)
     # unpack SIA parameters
     (; B, H, H_old, V, mb_mask, ρgnAs, r, r0, z, p, d) = model.fields
-    (; ρgnA, n, b, mb_max, ela, dt)                    = model.scalars
+    (; lx, ly, ρgnA, n, b, mb_max, ela, dt)            = model.scalars
 
     # unpack numerical parameters
-    (; nx, ny, dx, dy, α, reg, dmpswitch, ndmp, maxiter, ncheck, εtol) = model.numerics
+    (; nx, ny, α, reg, maxf, checkf, εtol, dmptol) = model.numerics
 
-    N = max(nx, ny)
+    # preprocessing
+    N       = max(nx, ny)
+    dx, dy  = lx / nx, ly / ny
+    ncheck  = ceil(Int, checkf * N)
+    maxiter = ceil(Int, maxf * N)
 
     # create debug visualisation
     if model.debug_vis
@@ -85,10 +86,11 @@ function solve!(model::TimeDependentSIA)
     copy!(p, z)
 
     # iterative loop
-    iter            = 1
-    stop_iterations = false
-    converged       = false
-    β               = 0.0
+    iter               = 1
+    stop_iterations    = false
+    converged          = false
+    β                  = 0.0
+    accelerate_damping = false
     while !stop_iterations
         # save ice thickness to check relative change
         (iter % ncheck == 0) && copy!(d, H)
@@ -96,16 +98,18 @@ function solve!(model::TimeDependentSIA)
         update_ice_thickness!(H, p, α)
 
         # save previous residual
-        if (iter > dmpswitch) && (iter % ndmp == 0)
+        if accelerate_damping
             copy!(r0, r)
         end
 
         residual!(r, z, B, H, H_old, ρgnAs, mb_mask, ρgnA, n, b, mb_max, ela, dt, dx, dy, reg, ComputePreconditionedResidual())
 
-        if (iter > dmpswitch) && (iter % ndmp == 0)
+        if accelerate_damping
             dkyk, yy = mapreduce((_r, _r0, _p) -> (_p * (_r - _r0), (_r - _r0)^2), (x, y) -> x .+ y, r, r0, p; init=(0.0, 0.0))
             β₀       = mapreduce((_r, _r0, _p, _z) -> (_r - _r0 + (2yy / dkyk) * _p) * _z, +, r, r0, p, z) / dkyk
             β        = clamp(β₀, 0, 1)
+        else
+            β = 0.0
         end
 
         @. p = p * β + z
@@ -133,6 +137,8 @@ function solve!(model::TimeDependentSIA)
             model.debug_vis && update_debug_visualisation!(vis, model, iter / N, (; err_abs, err_rel))
 
             converged = (err_rel < εtol)
+
+            accelerate_damping = (err_rel < dmptol)
         end
 
         stop_iterations = converged || (iter > maxiter - 1)
@@ -155,16 +161,19 @@ end
 function solve_adjoint!(ρgnĀs, model::TimeDependentSIA)
     # unpack forward parameters
     (; B, H, H_old, V, mb_mask, ρgnAs, r, r0, z, p, d) = model.fields
-    (; ρgnA, n, b, mb_max, ela, dt)                    = model.scalars
+    (; lx, ly, ρgnA, n, b, mb_max, ela, dt)            = model.scalars
 
     # unpack adjoint state and shadows
     (; ψ, r̄, z̄, H̄, V̄, ∂J_∂H) = model.adjoint_fields
 
     # unpack numerical parameters
-    (; nx, ny, dx, dy, reg, dmpswitch, ndmp) = model.numerics
-    (; α, maxiter, ncheck, εtol)             = model.adjoint_numerics
+    (; nx, ny, reg)                   = model.numerics
+    (; α, maxf, checkf, εtol, dmptol) = model.adjoint_numerics
 
-    N = max(nx, ny)
+    N       = max(nx, ny)
+    dx, dy  = lx / nx, ly / ny
+    ncheck  = ceil(Int, checkf * N)
+    maxiter = ceil(Int, maxf * N)
 
     # create debug visualisation
     if model.debug_vis
@@ -186,7 +195,6 @@ function solve_adjoint!(ρgnĀs, model::TimeDependentSIA)
                        Const(B), DupNN(ρgnAs, ρgnĀs),
                        ρgnA, n, dx, dy)
 
-
     # compute preconditioner
     residual!(r, z, B, H, H_old, ρgnAs, mb_mask, ρgnA, n, b, mb_max, ela, dt, dx, dy, reg, ComputePreconditioner())
 
@@ -204,10 +212,11 @@ function solve_adjoint!(ρgnĀs, model::TimeDependentSIA)
     copy!(p, z̄)
 
     # iterative loop
-    iter            = 1
-    stop_iterations = false
-    converged       = false
-    β               = 0.0
+    iter               = 1
+    stop_iterations    = false
+    converged          = false
+    β                  = 0.0
+    accelerate_damping = false
     while !stop_iterations
         # save adjoint state to check relative change
         (iter % ncheck == 0) && copy!(d, ψ)
@@ -215,7 +224,7 @@ function solve_adjoint!(ρgnĀs, model::TimeDependentSIA)
         update_adjoint_state!(ψ, p, α)
 
         # residual
-        if (iter > dmpswitch) && (iter % ndmp == 0)
+        if accelerate_damping
             copy!(r0, H̄)
         end
 
@@ -231,10 +240,12 @@ function solve_adjoint!(ρgnĀs, model::TimeDependentSIA)
 
         @. z̄ = z * H̄
 
-        if (iter > dmpswitch) && (iter % ndmp == 0)
+        if accelerate_damping
             dkyk, yy = mapreduce((_r, _r0, _p) -> (_p * (_r - _r0), (_r - _r0)^2), (x, y) -> x .+ y, H̄, r0, p; init=(0.0, 0.0))
             β₀       = mapreduce((_r, _r0, _p, _z) -> (_r - _r0 + (2yy / dkyk) * _p) * _z, +, H̄, r0, p, z̄) / dkyk
             β        = clamp(β₀, 0, 1)
+        else
+            β = 0.0
         end
 
         @. p = p * β + z̄
@@ -256,6 +267,8 @@ function solve_adjoint!(ρgnĀs, model::TimeDependentSIA)
             model.debug_vis && update_adjoint_debug_visualisation!(vis, model, iter / N, (; err_rel))
 
             converged = (err_rel < εtol)
+
+            accelerate_damping = (err_rel < dmptol)
         end
 
         stop_iterations = converged || (iter > maxiter - 1)

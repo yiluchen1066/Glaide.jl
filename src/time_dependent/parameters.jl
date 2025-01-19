@@ -55,44 +55,38 @@ end
 end
 
 # numerics
-mutable struct TimeDependentNumerics{T<:Real,I<:Integer,R}
+mutable struct TimeDependentNumerics{T<:Real,I<:Integer}
     nx::I
     ny::I
-    dx::T
-    dy::T
-    xc::R
-    yc::R
-    εtol::T
-    α::T
     reg::T
-    dmpswitch::I
-    ndmp::I
-    maxiter::I
-    ncheck::I
+    εtol::T
+    dmptol::T
+    α::T
+    maxf::T
+    checkf::T
 end
-function TimeDependentNumerics(xc, yc;
+function TimeDependentNumerics(nx, ny;
                                reg,
-                               εtol      = 1e-8,
-                               α         = 1.0,
-                               dmpswitch = ceil(Int, 5max(length(xc), length(yc))),
-                               ndmp      = 1,
-                               maxiter   = 100max(length(xc), length(yc)),
-                               ncheck    = ceil(Int, 0.25max(length(xc), length(yc))))
-    nx, ny = length(xc), length(yc)
-    dx, dy = step(xc), step(yc)
-    return TimeDependentNumerics(nx, ny, dx, dy, xc, yc, εtol, α, reg, dmpswitch, ndmp, maxiter, ncheck)
+                               εtol   = 1e-8,
+                               dmptol = 1e-4,
+                               α      = 1.0,
+                               maxf   = 100.0,
+                               checkf = 0.25)
+    return TimeDependentNumerics(nx, ny, reg, εtol, dmptol, α, maxf, checkf)
 end
 
-mutable struct TimeDependentAdjointNumerics{T<:Real,I<:Integer}
+mutable struct TimeDependentAdjointNumerics{T<:Real}
     εtol::T
+    dmptol::T
     α::T
-    maxiter::I
-    ncheck::I
+    maxf::T
+    checkf::T
 end
-function TimeDependentAdjointNumerics(xc, yc;
-                                      εtol    = 1e-8,
-                                      α       = 1.0,
-                                      maxiter = 100max(length(xc), length(yc)),
-                                      ncheck  = ceil(Int, 0.25max(length(xc), length(yc))))
-    return TimeDependentAdjointNumerics(εtol, α, maxiter, ncheck)
+function TimeDependentAdjointNumerics(;
+                                      εtol   = 1e-8,
+                                      dmptol = 1e-4,
+                                      α      = 1.0,
+                                      maxf   = 100.0,
+                                      checkf = 0.25)
+    return TimeDependentAdjointNumerics(εtol, dmptol, α, maxf, checkf)
 end

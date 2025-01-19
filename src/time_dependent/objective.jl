@@ -10,7 +10,11 @@ function J(log_ρgnAs, objective::TimeDependentObjective, model::TimeDependentSI
     # unpack
     (; ωₕ, ωᵥ, H_obs, V_obs, γ_reg) = objective
     (; H, V)                        = model.fields
-    (; dx, dy)                      = model.numerics
+    (; lx, ly)                      = model.scalars
+    (; nx, ny)                      = model.numerics
+
+    # preprocessing
+    dx, dy = lx / nx, ly / ny
 
     # copy the field to the model state
     @. model.fields.ρgnAs = exp(log_ρgnAs)
@@ -31,8 +35,12 @@ function ∇J!(log_ρgnĀs, log_ρgnAs, objective::TimeDependentObjective, mode
     # unpack
     (; ωₕ, ωᵥ, H_obs, V_obs, γ_reg) = objective
     (; H, V)                        = model.fields
-    (; H̄, V̄)                        = model.adjoint_fields
-    (; dx, dy)                      = model.numerics
+    (; H̄, V̄)                      = model.adjoint_fields
+    (; lx, ly)                      = model.scalars
+    (; nx, ny)                      = model.numerics
+
+    # preprocessing
+    dx, dy = lx / nx, ly / ny
 
     # copy the field to the model state
     @. model.fields.ρgnAs = exp(log_ρgnAs)

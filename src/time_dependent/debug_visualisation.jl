@@ -2,9 +2,15 @@
 
 function create_debug_visualisation(model)
     # unpack
-    (; H, B, ρgnAs, V) = model.fields
-    (; ρgnA, n)        = model.scalars
-    (; dx, dy, xc, yc) = model.numerics
+    (; H, B, ρgnAs, V)  = model.fields
+    (; lx, ly, ρgnA, n) = model.scalars
+    (; nx, ny)          = model.numerics
+
+    # preprocessing
+    dx, dy = lx / nx, ly / ny
+
+    xc = LinRange(-lx / 2 + dx / 2, lx / 2 - dx / 2, nx)
+    yc = LinRange(-ly / 2 + dy / 2, ly / 2 - dy / 2, ny)
 
     surface_velocity!(V, H, B, ρgnAs, ρgnA, n, dx, dy)
 
@@ -48,9 +54,12 @@ function update_debug_visualisation!(vis, model, iter, errs)
     (; fig, axs, hms, plt, vis_fields, conv_hist) = vis
 
     # unpack
-    (; H, B, ρgnAs, V) = model.fields
-    (; ρgnA, n)        = model.scalars
-    (; dx, dy)         = model.numerics
+    (; H, B, ρgnAs, V)  = model.fields
+    (; lx, ly, ρgnA, n) = model.scalars
+    (; nx, ny)          = model.numerics
+
+    # preprocessing
+    dx, dy = lx / nx, ly / ny
 
     surface_velocity!(V, H, B, ρgnAs, ρgnA, n, dx, dy)
 
@@ -84,7 +93,13 @@ end
 function create_adjoint_debug_visualisation(model)
     # unpack
     (; ψ, H̄) = model.adjoint_fields
-    (; xc, yc) = model.numerics
+    (; lx, ly) = model.scalars
+    (; nx, ny) = model.numerics
+
+    # preprocessing
+    dx, dy = lx / nx, ly / ny
+    xc = LinRange(-lx / 2 + dx / 2, lx / 2 - dx / 2, nx)
+    yc = LinRange(-ly / 2 + dy / 2, ly / 2 - dy / 2, ny)
 
     vis_fields = (ψ=Array(ψ),
                   H̄=Array(H̄))
