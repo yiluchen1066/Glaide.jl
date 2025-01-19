@@ -5,7 +5,7 @@ const SECONDS_IN_YEAR = 60 * 60 * 24 * 365
 
 define_input() = (Lx  = 20e3,    # meters
                   Ly  = 20e3,    # meters
-                  res = 25.0,    # meters
+                  res = 100.0,    # meters
                   B_0 = 1000.0,  # meters
                   B_a = 3000.0,  # meters
                   W_1 = 1e4,

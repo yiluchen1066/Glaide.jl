@@ -1,14 +1,9 @@
 using CairoMakie
 using NCDatasets
 
-include("generate_synthetic_setup.jl")
-
-function visualise(input, filename::String, output::String)
-
-    Lx ,Ly ,res ,B_0 ,B_a ,W_1 ,W_2 = input
-
+function visualise(filename::String, output::String)
     # Read the NetCDF file
-    ds = NCDataset("input_glaide.nc", "r")
+    ds = NCDataset("pism_input.nc", "r")
     B  = ds["bedrock_elevation"][:, :] # dimensions: x, y
     xc = ds["x"][:] # dimensions: x
     yc = ds["y"][:] # dimensions: y
@@ -24,16 +19,16 @@ function visualise(input, filename::String, output::String)
     @info "maximum ice thickness (m): $(maximum(H))"
 
     # Plotting
-    fig = Figure(size = (500, 800))
-    axs = (Axis(fig[1, 1][1, 1]; aspect=DataAspect(), title="Bedrock elevation", ylabel="y"),
-           Axis(fig[2, 1][1, 1]; aspect=DataAspect(), title="Sirface elevation", ylabel="y"),
-           Axis(fig[3, 1][1, 1]; aspect=DataAspect(), title="Ice thickness", xlabel="x", ylabel="y"))
+    fig = Figure(size = (1100, 300))
+    axs = (Axis(fig[1, 1][1, 1]; aspect=DataAspect(), title="Bedrock elevation", xlabel="x", ylabel="y"),
+           Axis(fig[1, 2][1, 1]; aspect=DataAspect(), title="Surface elevation", xlabel="x"),
+           Axis(fig[1, 3][1, 1]; aspect=DataAspect(), title="Ice thickness", xlabel="x"))
     hms = (heatmap!(axs[1], xc, yc, B; colormap=:roma),
            heatmap!(axs[2], xc, yc, S; colormap=:davos),
            heatmap!(axs[3], xc, yc, H; colormap=:turbo))
     cbs = (Colorbar(fig[1, 1][1, 2], hms[1]),
-           Colorbar(fig[2, 1][1, 2], hms[2]),
-           Colorbar(fig[3, 1][1, 2], hms[3]))
+           Colorbar(fig[1, 2][1, 2], hms[2]),
+           Colorbar(fig[1, 3][1, 2], hms[3]))
 
     save(output, fig)
 end
@@ -42,6 +37,6 @@ function (@main)(ARGS)
 
     filename, output = ARGS[1:2]
 
-    visualise(define_input(), filename, output)
+    visualise(filename, output)
     return
 end

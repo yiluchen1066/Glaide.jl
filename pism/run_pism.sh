@@ -14,7 +14,7 @@ pismr \
   -surface elevation -climatic_mass_balance -13.0,2.5,500,1800,2050 \
   -grid.Lz 200 \
   -grid.Mz 41 \
-  -i input_glaide.nc \
+  -i pism_input.nc \
   -output.extra.file ex.nc \
   -output.extra.times 1 \
   -output.extra.vars ${variables} \

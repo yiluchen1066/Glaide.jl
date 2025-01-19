@@ -5,10 +5,11 @@
 spack load pism@2.1.1
 
 # cleanup
-rm -f *.nc *.log *~
+rm -f *.png *.nc *.log *~
 
 # create input
-julia --project generate_synthetic_setup.jl input_pism.nc
+julia --project -e "using Pkg; Pkg.instantiate()"
+julia --project generate_synthetic_setup.jl pism_input.nc
 
 # run PISM
 time bash -x run_pism.sh
@@ -16,4 +17,4 @@ time bash -x run_pism.sh
 echo "PISM run done"
 
 # visualise
-julia --project plot_results.jl pism_output.nc figure_jl.png
+julia --project visualise_results.jl pism_output.nc pism_out.png
