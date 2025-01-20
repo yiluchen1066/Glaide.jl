@@ -1,7 +1,7 @@
 # Glaide.jl
 | code | data |
 | :--- | :--- |
-| [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.13793630.svg)](https://doi.org/10.5281/zenodo.13793630) | [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.13133070.svg)](https://doi.org/10.5281/zenodo.13133070) |
+| [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.14697420.svg)](https://doi.org/10.5281/zenodo.14697420) | [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.13133070.svg)](https://doi.org/10.5281/zenodo.13133070) |
 
 **Gla**cier sl**ide** &ndash; Snapshot and time-dependent inversions of glacier basal sliding using automatic generation of adjoint code on graphics processing units.
 
