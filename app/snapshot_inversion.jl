@@ -1,5 +1,5 @@
 ### A Pluto.jl notebook ###
-# v0.20.4
+# v0.20.6
 
 using Markdown
 using InteractiveUtils
@@ -12,7 +12,7 @@ begin
     Pkg.instantiate()
 
     using Glaide, CairoMakie, Printf, JLD2, CUDA, Unitful
-	
+
     using PlutoUI; TableOfContents()
 end
 
@@ -52,8 +52,8 @@ end;
 md"""
 !!! warning "Prerequisites"
     Before running this notebook, make sure input files exist on your filesystem.
-	- To generate the input files for the synthetic setup, run the notebook [`generate_synthetic_setup.jl`](./open?path=app/generate_synthetic_setup.jl).
-	- To generate the input files for the Aletsch setup, run the notebook [`generate_aletsch_setup.jl`](./open?path=app/generate_synthetic_setup.jl).
+    - To generate the input files for the synthetic setup, run the notebook [`generate_synthetic_setup.jl`](./open?path=app/generate_synthetic_setup.jl).
+    - To generate the input files for the Aletsch setup, run the notebook [`generate_aletsch_setup.jl`](./open?path=app/generate_synthetic_setup.jl).
 """
 
 # ╔═╡ c69c5ce6-a8af-49e4-8100-398d8df0b0b3
@@ -174,23 +174,23 @@ begin
             axs[5].ylabel = "J"
 
             xc_km = ustrip.(u"km", model.numerics.xc .* L_REF)
-			yc_km = ustrip.(u"km", model.numerics.yc .* L_REF)
+            yc_km = ustrip.(u"km", model.numerics.yc .* L_REF)
 
-			n     = model.scalars.n
-			ρgnAs = model.fields.ρgnAs
-			V     = model.fields.V
+            n     = model.scalars.n
+            ρgnAs = model.fields.ρgnAs
+            V     = model.fields.V
 
-			As_v    = ustrip.(u"Pa^-3*s^-1*m", ρgnAs .* (L_REF^(1-n) * T_REF^(-1) / RHOG^n))
-			V_obs_v = ustrip.(u"m/yr", V_obs .* (L_REF / T_REF))
-			V_v     = ustrip.(u"m/yr", V     .* (L_REF / T_REF))
+            As_v    = ustrip.(u"Pa^-3*s^-1*m", ρgnAs .* (L_REF^(1-n) * T_REF^(-1) / RHOG^n))
+            V_obs_v = ustrip.(u"m/yr", V_obs .* (L_REF / T_REF))
+            V_v     = ustrip.(u"m/yr", V     .* (L_REF / T_REF))
 
             hms = (heatmap!(axs[1], xc_km, yc_km, Array(log10.(As_v))),
                    heatmap!(axs[2], xc_km, yc_km, Array(log10.(As_v))),
                    heatmap!(axs[3], xc_km, yc_km, Array(V_obs_v)),
                    heatmap!(axs[4], xc_km, yc_km, Array(V_v)))
 
-            hms[1].colormap = Reverse(:roma)
-            hms[2].colormap = Reverse(:roma)
+            hms[1].colormap = Makie.Reverse(:roma)
+            hms[2].colormap = Makie.Reverse(:roma)
             hms[3].colormap = :turbo
             hms[4].colormap = :turbo
 
@@ -236,15 +236,15 @@ begin
                       state.x_change,
                       state.α)
 
-			n     = cb.model.scalars.n
-			ρgnAs = cb.model.fields.ρgnAs
-			V     = cb.model.fields.V
+            n     = cb.model.scalars.n
+            ρgnAs = cb.model.fields.ρgnAs
+            V     = cb.model.fields.V
 
-			coef = (L_REF^(1-n) * T_REF^(-1) / RHOG^n)
+            coef = (L_REF^(1-n) * T_REF^(-1) / RHOG^n)
 
-		    As_v = ustrip.(u"Pa^-3*s^-1*m", ρgnAs .* coef)
-			V_v  = ustrip.(u"m/yr", V .* (L_REF / T_REF))
-			
+            As_v = ustrip.(u"Pa^-3*s^-1*m", ρgnAs .* coef)
+            V_v  = ustrip.(u"m/yr", V .* (L_REF / T_REF))
+
 
             cb.hms[1][3] = Array(log10.(As_v))
             cb.hms[2][3] = Array(state.X̄ ./ log10(ℯ))
@@ -289,10 +289,10 @@ function run_inversion(scenario::InversionScenarioSnapshot)
     callback = Callback(model, scenario, V_obs)
     options  = OptimisationOptions(; line_search, callback, maxiter)
 
-	n = model.scalars.n
-	
+    n = model.scalars.n
+
     # initial guess
-	ρgnAs_init = RHOG^n * As_init * (L_REF^(n-1) * T_REF) |> NoUnits
+    ρgnAs_init = RHOG^n * As_init * (L_REF^(n-1) * T_REF) |> NoUnits
     log_ρgnAs0 = CUDA.fill(log(ρgnAs_init), size(V_obs))
 
     # inversion
