@@ -15,7 +15,7 @@ begin
     using Rasters, ArchGDAL, NCDatasets, Extents
     using DelimitedFiles, JLD2
     using CairoMakie
-	using Printf, Unitful
+    using Printf, Unitful
 
     using PlutoUI; TableOfContents()
 
@@ -41,7 +41,7 @@ We will perform the following steps:
 md"""
 !!! warning "System memory (RAM) and internet connection requirements"
     - Fetching the various input data will download ~4 GB of data. Make sure to have a sufficiently good internet connection and some time ahead.
-	- Generating the Aletsch dataset for various spatial resolutions may consume up to 10 GB of system RAM. Make sure to have sufficient free memory (to avoid failures with Rasters.jl, we've set `Rasters.checkmem!(false)`).
+    - Generating the Aletsch dataset for various spatial resolutions may consume up to 10 GB of system RAM. Make sure to have sufficient free memory (to avoid failures with Rasters.jl, we've set `Rasters.checkmem!(false)`).
 """
 
 # ╔═╡ 8bc9c1af-6f5e-40f7-9afb-a9134c56412a
@@ -362,17 +362,17 @@ function create_input_file(resolution)
 
     # fit the mass balance model
     b, ela, mb_max, eb, mb = create_mass_balance_model(mass_balance_path)
-	
-	# output for table in paper:
-	@info @sprintf("b      = %s", uconvert(u"yr^-1", b      * u"s^-1"))
-	@info @sprintf("ela    = %s", uconvert(u"m"    , ela    * u"m"))
-	@info @sprintf("mb_max = %s", uconvert(u"m/yr" , mb_max * u"m/s"))
 
-	B     = Array{Float64}(bedrock)
+    # output for table in paper:
+    @info @sprintf("b      = %s", uconvert(u"yr^-1", b      * u"s^-1"))
+    @info @sprintf("ela    = %s", uconvert(u"m"    , ela    * u"m"))
+    @info @sprintf("mb_max = %s", uconvert(u"m/yr" , mb_max * u"m/s"))
+
+    B     = Array{Float64}(bedrock)
     H_old = Array{Float64}(thickness_2016)
     H     = Array{Float64}(thickness_2017)
     V     = Array{Float64}(velocity)
-	
+
     smooth!(smooth_amount, resolution, B, H_old, H, V)
 
     S_old = B .+ H_old
@@ -383,19 +383,19 @@ function create_input_file(resolution)
     # convert to Float64
     mb_mask = convert(Matrix{Float64}, bool_mask)
 
-	# save resolution for later
-	resolution_m = resolution
+    # save resolution for later
+    resolution_m = resolution
 
-	# convert units
-	resolution = resolution * u"m"    * L_REF^(-1)         |> NoUnits
-	b          = b          * u"s^-1" * T_REF              |> NoUnits
-	ela        = ela        * u"m"    * L_REF^(-1)         |> NoUnits
-	mb_max     = mb_max     * u"m/s"  * L_REF^(-1) * T_REF |> NoUnits
+    # convert units
+    resolution = resolution * u"m"    * L_REF^(-1)         |> NoUnits
+    b          = b          * u"s^-1" * T_REF              |> NoUnits
+    ela        = ela        * u"m"    * L_REF^(-1)         |> NoUnits
+    mb_max     = mb_max     * u"m/s"  * L_REF^(-1) * T_REF |> NoUnits
 
-	@. B     = B     * u"m"   / L_REF         |> NoUnits
-	@. H_old = H_old * u"m"   / L_REF         |> NoUnits
-	@. H     = H     * u"m"   / L_REF         |> NoUnits
-	@. V     = V     * u"m/s" / L_REF * T_REF |> NoUnits
+    @. B     = B     * u"m"   / L_REF         |> NoUnits
+    @. H_old = H_old * u"m"   / L_REF         |> NoUnits
+    @. H     = H     * u"m"   / L_REF         |> NoUnits
+    @. V     = V     * u"m/s" / L_REF * T_REF |> NoUnits
 
     # create fields (reverse the data to undo reversing done by GDAL)
     fields = map(x -> reverse(x, dims=2), (; H_old, H, B, V, mb_mask))
@@ -410,8 +410,8 @@ function create_input_file(resolution)
 
     numerics = (; nx, ny, dx, dy, xc, yc)
 
-	ρgnA = (RHOG)^GLEN_N * GLEN_A * (L_REF^GLEN_N * T_REF) |> NoUnits
-	dt   = 1.0u"yr" / T_REF                                |> NoUnits
+    ρgnA = (RHOG)^GLEN_N * GLEN_A * (L_REF^GLEN_N * T_REF) |> NoUnits
+    dt   = 1.0u"yr" / T_REF                                |> NoUnits
 
     scalars = (; ρgnA,
                  n = GLEN_N,
@@ -422,7 +422,7 @@ function create_input_file(resolution)
                  mb_max,
                  ela)
 
-	output_path = joinpath(datasets_dir, "aletsch_$(resolution_m)m.jld2")
+    output_path = joinpath(datasets_dir, "aletsch_$(resolution_m)m.jld2")
 
     # save elevation bands and mass balance data for visualisation
     jldsave(output_path; fields, scalars, numerics, eb, mb)
@@ -505,11 +505,11 @@ with_theme(theme_latexfonts()) do
     axs[4].ygridvisible=true
 
     fields.V     .= ustrip.(u"m/yr", fields.V     .* L_REF / T_REF)
-	fields.B     .= ustrip.(u"m"   , fields.B     .* L_REF)
-	fields.H_old .= ustrip.(u"m"   , fields.H_old .* L_REF)
-	fields.H     .= ustrip.(u"m"   , fields.H     .* L_REF)
+    fields.B     .= ustrip.(u"m"   , fields.B     .* L_REF)
+    fields.H_old .= ustrip.(u"m"   , fields.H_old .* L_REF)
+    fields.H     .= ustrip.(u"m"   , fields.H     .* L_REF)
 
-	# cut off everything where the ice thickness is less than 1m
+    # cut off everything where the ice thickness is less than 1m
     ice_mask = fields.H .< 1.0
 
     fields.V[ice_mask]     .= NaN
@@ -548,13 +548,13 @@ with_theme(theme_latexfonts()) do
 
     # parametrised model
     lines!(axs[6], ustrip.(u"km"  , z    * L_REF),
-				   ustrip.(u"m/yr", mb_f * L_REF / T_REF); linewidth=2,
-				   										   label="model")
+                   ustrip.(u"m/yr", mb_f * L_REF / T_REF); linewidth=2,
+                                                              label="model")
 
-	ela = ustrip(u"km", scalars.ela * L_REF)
+    ela = ustrip(u"km", scalars.ela * L_REF)
 
     scatter!(axs[6], ela, 0; strokecolor=:black,
-							 strokewidth=2,
+                             strokewidth=2,
                              color=:transparent,
                              marker=:diamond,
                              label="ELA")

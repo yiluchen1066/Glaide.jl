@@ -7,11 +7,11 @@ using InteractiveUtils
 # ╔═╡ be4c2496-b7be-11ef-37b6-9d1804244625
 # ╠═╡ show_logs = false
 begin
-	import Pkg
+    import Pkg
     Pkg.activate(Base.current_project())
     Pkg.instantiate()
 
-	using Glaide, JLD2, CairoMakie, Unitful
+    using Glaide, JLD2, CairoMakie, Unitful
 
     using PlutoUI; TableOfContents()
 end
@@ -37,10 +37,10 @@ Define basic physical constants, i.e., the power law exponent $n$, the ice densi
 
 # ╔═╡ f6539cbb-119d-4fe9-97e6-c0549dd833fa
 begin
-	n  = 3
+    n  = 3
     ρ  = 910.0u"kg/m^3"
     g  = 9.81u"m/s^2"
-	A₀ = 2.5e-24u"Pa^-3*s^-1"
+    A₀ = 2.5e-24u"Pa^-3*s^-1"
 end;
 
 # ╔═╡ 66eb63b7-41f5-481f-88b7-8c71e9f148b2
@@ -50,8 +50,8 @@ Define the extents of the computational domain:
 
 # ╔═╡ 0d5f918b-383e-464f-a965-df84a73251ba
 begin
-	Lx = 20u"km" / L_REF |> NoUnits
-	Ly = 20u"km" / L_REF |> NoUnits
+    Lx = 20u"km" / L_REF |> NoUnits
+    Ly = 20u"km" / L_REF |> NoUnits
 end;
 
 # ╔═╡ 0bd8bf4f-983c-4659-813e-750cbec30e25
@@ -91,7 +91,7 @@ The solver expects the values of $A$ and $A_\mathrm{s}$ to be premultiplied by $
 
 # ╔═╡ de9c71e5-d9b4-41d9-ab52-ba555b7a5781
 begin
-	ρgnA   = ((ρ * g)^n * A₀)  * (L_REF^n       * T_REF) |> NoUnits
+    ρgnA   = ((ρ * g)^n * A₀) * (L_REF^n       * T_REF) |> NoUnits
     ρgnAₛ₀ = ((ρ * g)^n * Aₛ₀) * (L_REF^(n - 1) * T_REF) |> NoUnits
 end;
 
@@ -187,8 +187,8 @@ model, V_old = let
     scalars = TimeDependentScalars(; n, ρgnA, lx, ly, dt=Inf, b, mb_max, ela)
 
     # default solver parameters
-	reg      = 5e-8u"s^-1" * T_REF |> NoUnits
-    numerics = TimeDependentNumerics(xc, yc; reg)
+    reg      = 5e-8u"s^-1" * T_REF |> NoUnits
+    numerics = TimeDependentNumerics(nx, ny; reg)
 
     model = TimeDependentSIA(scalars, numerics)
 
@@ -207,7 +207,7 @@ model, V_old = let
 
     # save geometry and surface velocity
     model.fields.H_old .= model.fields.H
-    V_old 				= Array(model.fields.V)
+    V_old               = Array(model.fields.V)
 
     # sliding parameter perturbation
     ρgnAₛˢʸⁿ = @. 10^(log10(ρgnAₛ₀) + Aₛₐ * cos(ω * xc  / lx) * sin(ω * yc' / ly))
@@ -258,7 +258,7 @@ let
 
     numerics = (; nx, ny, dx, dy, xc, yc)
 
-	resolution_m = resolution * ustrip(u"m", L_REF)
+    resolution_m = resolution * ustrip(u"m", L_REF)
 
     output_path = joinpath(datasets_dir, "synthetic_$(Int(resolution_m))m.jld2")
 
@@ -277,13 +277,13 @@ with_theme(theme_latexfonts()) do
     ice_mask_old = H_old .== 0
     ice_mask     = H     .== 0
 
-	# convert to m
-	B_v     = copy(B)     .* ustrip(u"m", L_REF)
+    # convert to m
+    B_v     = copy(B)     .* ustrip(u"m", L_REF)
     H_old_v = copy(H_old) .* ustrip(u"m", L_REF)
     H_v     = copy(H)     .* ustrip(u"m", L_REF)
-	# convert to Pa^-3*s^-1*m
+    # convert to Pa^-3*s^-1*m
     As_v    = copy(ρgnAs) .* ustrip.(u"Pa^-3*s^-1*m",
-		(L_REF^(-2) * T_REF^(-1) / (ρ * g)^n))
+        (L_REF^(-2) * T_REF^(-1) / (ρ * g)^n))
     # convert to m/a
     V_old_v = copy(V_old) .* ustrip(u"m*yr^-1", L_REF / T_REF)
     V_v     = copy(V)     .* ustrip(u"m*yr^-1", L_REF / T_REF)
@@ -330,7 +330,7 @@ with_theme(theme_latexfonts()) do
 
     # convert to km for plotting
     xc_km = xc .* ustrip(u"km", L_REF)
-	yc_km = yc .* ustrip(u"km", L_REF)
+    yc_km = yc .* ustrip(u"km", L_REF)
 
     hms = (heatmap!(axs[1], xc_km, yc_km, B_v),
            heatmap!(axs[2], xc_km, yc_km, log10.(As_v)),
@@ -339,7 +339,7 @@ with_theme(theme_latexfonts()) do
            heatmap!(axs[5], xc_km, yc_km, V_old_v),
            heatmap!(axs[6], xc_km, yc_km, V_v))
 
-	[contour!(axs[i], xc_km, yc_km, H_old; levels=0:0, linewidth=0.5, color=:black) for i=(1,3,5)]
+    [contour!(axs[i], xc_km, yc_km, H_old; levels=0:0, linewidth=0.5, color=:black) for i=(1,3,5)]
     [contour!(axs[i], xc_km, yc_km, H; levels=0:0, linewidth=0.5, color=:black) for i=(2,4,6)]
 
     # enable interpolation for smoother picture
@@ -348,11 +348,11 @@ with_theme(theme_latexfonts()) do
     end
 
     hms[1].colormap = :terrain
-    hms[2].colormap = Reverse(:roma)
+    hms[2].colormap = Makie.Reverse(:roma)
     hms[3].colormap = :matter
     hms[4].colormap = :matter
-    hms[5].colormap = Reverse(:ice)
-    hms[6].colormap = Reverse(:ice)
+    hms[5].colormap = Makie.Reverse(:ice)
+    hms[6].colormap = Makie.Reverse(:ice)
 
     hms[1].colorrange = (1000, 4000)
     hms[2].colorrange = (-24, -20)
