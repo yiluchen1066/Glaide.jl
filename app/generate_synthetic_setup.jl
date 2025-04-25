@@ -91,7 +91,7 @@ The solver expects the values of $A$ and $A_\mathrm{s}$ to be premultiplied by $
 
 # ╔═╡ de9c71e5-d9b4-41d9-ab52-ba555b7a5781
 begin
-    ρgnA   = ((ρ * g)^n * A₀)  * (L_REF^n       * T_REF) |> NoUnits
+    ρgnA   = ((ρ * g)^n * A₀) * (L_REF^n       * T_REF) |> NoUnits
     ρgnAₛ₀ = ((ρ * g)^n * Aₛ₀) * (L_REF^(n - 1) * T_REF) |> NoUnits
 end;
 
@@ -207,7 +207,7 @@ model, V_old = let
 
     # save geometry and surface velocity
     model.fields.H_old .= model.fields.H
-    V_old 				= Array(model.fields.V)
+    V_old               = Array(model.fields.V)
 
     # sliding parameter perturbation
     ρgnAₛˢʸⁿ = @. 10^(log10(ρgnAₛ₀) + Aₛₐ * cos(ω * xc  / lx) * sin(ω * yc' / ly))
