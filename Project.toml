@@ -1,7 +1,24 @@
+authors = ["Yilu Chen <yilchen@ethz.ch>, Ivan Utkin <iutkin@ethz.ch>, Ludovic Raess <ludovic.rass@gmail.com>, Mauro Werder <mwerder@ethz.ch>"]
 name = "Glaide"
 uuid = "86ebb91d-c5a7-4194-9fc7-3d0b981bb521"
-authors = ["Yilu Chen <yilchen@ethz.ch>, Ivan Utkin <iutkin@ethz.ch>, Ludovic Raess <ludovic.rass@gmail.com>, Mauro Werder <mwerder@ethz.ch>"]
 version = "0.2.2"
+
+[compat]
+ArchGDAL = "0.10"
+CUDA = "5.6"
+CairoMakie = "0.12"
+Downloads = "1.6"
+Enzyme = "0.13"
+Extents = "0.1"
+HDF5_jll = "=1.14.3"
+ImageMorphology = "0.4"
+JLD2 = "0.5"
+NCDatasets = "0.14"
+Pluto = "0.20"
+PlutoUI = "0.7"
+Rasters = "0.13"
+StaticArrays = "1.9"
+ZipArchives = "2.3"
 
 [deps]
 ArchGDAL = "c9ce4bd3-c3d5-55b8-8973-c0e20141b8c3"
@@ -27,19 +44,5 @@ TimerOutputs = "a759f4b9-e2f1-59dc-863e-4aeb61b1ea8f"
 Unitful = "1986cc42-f94f-5a68-af5c-568840ba703d"
 ZipArchives = "49080126-0e18-4c2a-b176-c102e4b3760c"
 
-[compat]
-ArchGDAL = "0.10"
-CUDA = "5.6"
-CairoMakie = "0.12"
-Downloads = "1.6"
-Enzyme = "0.13"
-Extents = "0.1"
-HDF5_jll = "=1.14.3"
-ImageMorphology = "0.4"
-JLD2 = "0.5"
-NCDatasets = "0.14"
-Pluto = "0.20"
-PlutoUI = "0.7"
-Rasters = "0.13"
-StaticArrays = "1.9"
-ZipArchives = "2.3"
+[extras]
+CUDA_Runtime_jll = "76a88914-d11a-5bdc-97e0-2f5a05c973a2"

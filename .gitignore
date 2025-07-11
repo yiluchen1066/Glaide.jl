@@ -1,5 +1,6 @@
 # Julia-specific
 Manifest*.toml
+LocalPreferences.toml
 
 # Project-specific
 datasets/
